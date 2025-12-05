@@ -23,191 +23,196 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      body: Column(
-        children: [
-          // Header Image Section
-          Expanded(
-            flex: 3,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                Image.network(
-                  'https://images.unsplash.com/photo-1504328345606-18bbc8c9d7d1?w=800',
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) {
-                    return Container(color: Colors.grey[900]);
-                  },
-                ),
-                Container(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        Colors.black.withOpacity(0.1),
-                        Colors.black.withOpacity(0.6),
-                        Colors.black.withOpacity(0.8),
-                      ],
-                    ),
-                  ),
-                  padding: EdgeInsets.all(24.w),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'سوقك للمواهب الاحترافية',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 28.fz,
-                          fontWeight: FontWeight.bold,
-                          height: 1.2,
-                        ),
-                      ),
-                      SizedBox(height: 8.h),
-                      Text(
-                        'تواصل مع أفضل المستقلين لإنجاز مشاريعك',
-                        style: TextStyle(
-                          color: Colors.white70,
-                          fontSize: 16.fz,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // Carousel Section
-          Expanded(
-            flex: 4,
-            child: PageView(
-              controller: _pageController,
-              padEnds: false,
-              children: [
-                _buildFeatureCard(
-                  title: 'ابحث عن خبراء',
-                  subtitle: 'اعثر على المحترفين المناسبين لمشروعك بسهولة',
-                  imageUrl:
-                      'https://images.unsplash.com/photo-1521737711867-e3b97375f902?w=800',
-                ),
-                _buildFeatureCard(
-                  title: 'مدفوعات آمنة',
-                  subtitle: 'نضمن لك معاملات آمنة وموثوقة لكل خدمة',
-                  imageUrl:
-                      'https://images.unsplash.com/photo-1580519542036-c47de6196ba5?w=800',
-                ),
-                _buildFeatureCard(
-                  title: 'جودة مضمونة',
-                  subtitle: 'خبراء معتمدون لضمان أفضل النتائج لمشاريعك',
-                  imageUrl:
-                      'https://images.unsplash.com/photo-1513224502586-d254a5245511?w=800',
-                ),
-              ],
-            ),
-          ),
-
-          // Button Group Section
-          Expanded(
-            flex: 3,
-            child: SingleChildScrollView(
-              child: Padding(
-                padding: EdgeInsets.all(24.0.w),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    ElevatedButton(
-                      onPressed: () {
-                        context.push('/register');
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF13b6ec),
-                        foregroundColor: Colors.white,
-                        padding: EdgeInsets.symmetric(vertical: 16.h),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12.r),
-                        ),
-                        elevation: 0,
-                      ),
-                      child: Text(
-                        'إنشاء حساب',
-                        style: TextStyle(
-                          fontSize: 16.fz,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                    SizedBox(height: 12.h),
-                    Row(
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          return SingleChildScrollView(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: constraints.maxHeight),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Header Image Section
+                  SizedBox(
+                    height: 280,
+                    child: Stack(
+                      fit: StackFit.expand,
                       children: [
-                        Expanded(
-                          child: SocialAuthButton(
-                            text: 'جوجل',
-                            icon: Icons.g_mobiledata,
-                            iconColor: Colors.red,
-                            onPressed: () {},
-                          ),
+                        Image.network(
+                          'https://images.unsplash.com/photo-1504328345606-18bbc8c9d7d1?w=800',
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return Container(color: Colors.grey[900]);
+                          },
                         ),
-                        SizedBox(width: 12.w),
-                        Expanded(
-                          child: SocialAuthButton(
-                            text: 'فيسبوك',
-                            icon: Icons.facebook,
-                            iconColor: Colors.blue,
-                            onPressed: () {},
+                        Container(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [
+                                Colors.black.withOpacity(0.1),
+                                Colors.black.withOpacity(0.6),
+                                Colors.black.withOpacity(0.8),
+                              ],
+                            ),
+                          ),
+                          padding: EdgeInsets.all(24.w),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'سوقك للمواهب الاحترافية',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 28.fz,
+                                  fontWeight: FontWeight.bold,
+                                  height: 1.2,
+                                ),
+                              ),
+                              SizedBox(height: 8.h),
+                              Text(
+                                'تواصل مع أفضل المستقلين لإنجاز مشاريعك',
+                                style: TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 16.fz,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ],
                     ),
-                    SizedBox(height: 12.h),
-                    TextButton(
-                      onPressed: () => context.push('/login'),
-                      child: Text(
-                        'تسجيل الدخول',
-                        style: TextStyle(
-                          color: const Color(0xFF13b6ec),
-                          fontSize: 16.fz,
-                          fontWeight: FontWeight.bold,
+                  ),
+
+                  // Carousel Section
+                  SizedBox(
+                    height: 280,
+                    child: PageView(
+                      controller: _pageController,
+                      padEnds: false,
+                      children: [
+                        _buildFeatureCard(
+                          title: 'ابحث عن خبراء',
+                          subtitle: 'اعثر على المحترفين المناسبين لمشروعك بسهولة',
+                          imageUrl:
+                              'https://images.unsplash.com/photo-1521737711867-e3b97375f902?w=800',
                         ),
-                      ),
+                        _buildFeatureCard(
+                          title: 'مدفوعات آمنة',
+                          subtitle: 'نضمن لك معاملات آمنة وموثوقة لكل خدمة',
+                          imageUrl:
+                              'https://images.unsplash.com/photo-1580519542036-c47de6196ba5?w=800',
+                        ),
+                        _buildFeatureCard(
+                          title: 'جودة مضمونة',
+                          subtitle: 'خبراء معتمدون لضمان أفضل النتائج لمشاريعك',
+                          imageUrl:
+                              'https://images.unsplash.com/photo-1513224502586-d254a5245511?w=800',
+                        ),
+                      ],
                     ),
-                    SizedBox(height: 24.h),
-                    // Technician Login Option
-                    Center(
-                      child: TextButton(
-                        onPressed: () {
-                          context.push('/technician/landing');
-                        },
-                        style: TextButton.styleFrom(
-                          foregroundColor: Colors.grey[600],
+                  ),
+
+                  // Button Group Section
+                  Padding(
+                    padding: EdgeInsets.all(24.0.w),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        ElevatedButton(
+                          onPressed: () {
+                            context.push('/register');
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF13b6ec),
+                            foregroundColor: Colors.white,
+                            padding: EdgeInsets.symmetric(vertical: 16.h),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12.r),
+                            ),
+                            elevation: 0,
+                          ),
+                          child: Text(
+                            'إنشاء حساب',
+                            style: TextStyle(
+                              fontSize: 16.fz,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                         ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
+                        SizedBox(height: 12.h),
+                        Row(
                           children: [
-                            Icon(Icons.engineering, size: 18.s),
-                            SizedBox(width: 8.w),
-                            Text(
-                              'هل أنت فني؟ سجل دخولك من هنا',
-                              style: TextStyle(fontSize: 14.fz),
+                            Expanded(
+                              child: SocialAuthButton(
+                                text: 'جوجل',
+                                icon: Icons.g_mobiledata,
+                                iconColor: Colors.red,
+                                onPressed: () {},
+                              ),
+                            ),
+                            SizedBox(width: 12.w),
+                            Expanded(
+                              child: SocialAuthButton(
+                                text: 'فيسبوك',
+                                icon: Icons.facebook,
+                                iconColor: Colors.blue,
+                                onPressed: () {},
+                              ),
                             ),
                           ],
                         ),
-                      ),
+                        SizedBox(height: 12.h),
+                        TextButton(
+                          onPressed: () => context.push('/login'),
+                          child: Text(
+                            'تسجيل الدخول',
+                            style: TextStyle(
+                              color: const Color(0xFF13b6ec),
+                              fontSize: 16.fz,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        SizedBox(height: 24.h),
+                        // Technician Login Option
+                        Center(
+                          child: TextButton(
+                            onPressed: () {
+                              context.push('/technician/landing');
+                            },
+                            style: TextButton.styleFrom(
+                              foregroundColor: Colors.grey[600],
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.engineering, size: 18.s),
+                                SizedBox(width: 8.w),
+                                Text(
+                                  'هل أنت فني؟ سجل دخولك من هنا',
+                                  style: TextStyle(fontSize: 14.fz),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        SizedBox(height: 8.h),
+                        Text(
+                          'بالمتابعة، أنت توافق على شروط الخدمة وسياسة الخصوصية.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: Colors.grey, fontSize: 12.fz),
+                        ),
+                      ],
                     ),
-                    SizedBox(height: 8.h),
-                    Text(
-                      'بالمتابعة، أنت توافق على شروط الخدمة وسياسة الخصوصية.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: Colors.grey, fontSize: 12.fz),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
-          ),
-        ],
+          );
+        },
       ),
     );
   }

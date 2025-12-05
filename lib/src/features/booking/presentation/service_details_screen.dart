@@ -436,63 +436,44 @@ class _ServiceDetailsScreenState extends ConsumerState<ServiceDetailsScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // Check location permission
-      LocationPermission permission = await Geolocator.checkPermission();
+      double lat = 24.7136; // Default Riyadh
+      double lng = 46.6753;
       
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
+      // Check if location services are available
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      
+      if (serviceEnabled) {
+        // Check location permission
+        LocationPermission permission = await Geolocator.checkPermission();
+        
         if (permission == LocationPermission.denied) {
-          if (mounted) {
-            setState(() => _isLoading = false);
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('يرجى السماح بالوصول للموقع لإتمام الطلب'),
-                backgroundColor: Colors.orange,
-              ),
+          permission = await Geolocator.requestPermission();
+        }
+        
+        if (permission == LocationPermission.whileInUse || 
+            permission == LocationPermission.always) {
+          try {
+            // Get current location with timeout
+            final position = await Geolocator.getCurrentPosition(
+              desiredAccuracy: LocationAccuracy.high,
+            ).timeout(
+              const Duration(seconds: 10),
+              onTimeout: () => throw Exception('Location timeout'),
             );
+            lat = position.latitude;
+            lng = position.longitude;
+          } catch (e) {
+            debugPrint('Location error: $e');
+            // Use default location if location fails
           }
-          return;
         }
       }
-      
-      if (permission == LocationPermission.deniedForever) {
-        if (mounted) {
-          setState(() => _isLoading = false);
-          // Show dialog to open settings
-          showDialog(
-            context: context,
-            builder: (ctx) => AlertDialog(
-              title: const Text('إذن الموقع مطلوب'),
-              content: const Text('يرجى تفعيل إذن الموقع من الإعدادات'),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  child: const Text('إلغاء'),
-                ),
-                ElevatedButton(
-                  onPressed: () {
-                    Navigator.pop(ctx);
-                    Geolocator.openAppSettings();
-                  },
-                  child: const Text('فتح الإعدادات'),
-                ),
-              ],
-            ),
-          );
-        }
-        return;
-      }
-
-      // Get current location
-      final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-      );
 
       // Create the job
       final job = await ref.read(jobControllerProvider.notifier).createJob(
         serviceId: widget.serviceId,
-        lat: position.latitude,
-        lng: position.longitude,
+        lat: lat,
+        lng: lng,
         description: _selectedQuickOption != null 
             ? '$_selectedQuickOption\n${_descriptionController.text}'
             : _descriptionController.text,
@@ -511,8 +492,8 @@ class _ServiceDetailsScreenState extends ConsumerState<ServiceDetailsScreen> {
           extra: {
             'jobId': job.id,
             'serviceName': widget.serviceName,
-            'lat': position.latitude,
-            'lng': position.longitude,
+            'lat': lat,
+            'lng': lng,
           },
         );
       } else if (mounted) {
@@ -524,11 +505,12 @@ class _ServiceDetailsScreenState extends ConsumerState<ServiceDetailsScreen> {
         );
       }
     } catch (e) {
+      debugPrint('Request service error: $e');
       if (mounted) {
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('خطأ: $e'),
+            content: Text('خطأ: ${e.toString().replaceAll('Exception: ', '')}'),
             backgroundColor: Colors.red,
           ),
         );

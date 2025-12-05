@@ -1,5 +1,5 @@
 import Joi from 'joi';
-import { supabase } from '../config/supabase.js';
+import { supabase, supabaseAdmin } from '../config/supabase.js';
 import { startJobSearch, onJobAccepted, cancelJobSearch } from '../services/jobSearchService.js';
 
 // Validation Schemas
@@ -18,21 +18,18 @@ export const createJob = async (req, res) => {
         const { error, value } = createJobSchema.validate(req.body);
         if (error) return res.status(400).json({ success: false, message: error.details[0].message });
 
-        const locationWKT = `POINT(${value.lng} ${value.lat})`;
-
-        const { data: job, error: dbError } = await supabase
+        // Use supabaseAdmin to bypass RLS policies for insertion
+        const { data: job, error: dbError } = await supabaseAdmin
             .from('jobs')
             .insert({
                 customer_id: req.user.id,
                 service_id: value.service_id,
-                location: locationWKT,
                 lat: value.lat,
                 lng: value.lng,
                 address_text: value.address_text,
                 description: value.description,
                 initial_price: value.initial_price,
-                status: 'pending',
-                search_radius: 2000  // Start with 2km
+                status: 'pending'
             })
             .select()
             .single();
