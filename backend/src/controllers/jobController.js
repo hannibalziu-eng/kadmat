@@ -66,37 +66,37 @@ export const createJob = async (req, res) => {
     }
 };
 
-// 2. Get Nearby Jobs (For Technicians)
+// 2. Get Nearby Jobs (For Technicians) with Pagination
 export const getNearbyJobs = async (req, res) => {
     try {
-        const { lat, lng, radius = 5000 } = req.query;
+        const { lat, lng, radius = 5000, page = 1, limit = 20 } = req.query;
 
         if (!lat || !lng) {
             return res.status(400).json({ success: false, message: 'Location (lat, lng) is required' });
         }
 
-        // We use a raw RPC call or a spatial query. 
-        // Since we didn't create a specific RPC for "get_nearby_jobs", we can query the table directly 
-        // using Supabase's filter if it supports PostGIS filters, or write a new RPC.
-        // For now, let's assume we fetch pending jobs and filter (not efficient for millions, but ok for MVP)
-        // OR better: Let's create an RPC for this later. 
-        // For this moment, let's just return all pending jobs (MVP Hack) or use a simple match.
+        const pageNum = parseInt(page, 10) || 1;
+        const limitNum = Math.min(parseInt(limit, 10) || 20, 50); // Max 50
+        const offset = (pageNum - 1) * limitNum;
 
-        // Better approach: Use the `st_dwithin` filter if Supabase client supports it (it does via filters).
-        // But `location` is a geography column.
-
-        // Let's stick to a simple query for now: All pending jobs.
-        // TODO: Add `get_nearby_jobs` RPC for production.
-
-        const { data: jobs, error } = await supabase
+        // Get pending jobs with pagination
+        const { data: jobs, error, count } = await supabase
             .from('jobs')
-            .select('*, service:services(name, icon_url), customer:users!customer_id(full_name, rating)')
+            .select('*, service:services(name, icon_url), customer:users!customer_id(full_name, rating)', { count: 'exact' })
             .eq('status', 'pending')
-            .order('created_at', { ascending: false });
+            .order('created_at', { ascending: false })
+            .range(offset, offset + limitNum - 1);
 
         if (error) throw error;
 
-        res.json({ success: true, count: jobs.length, jobs });
+        res.json({
+            success: true,
+            count: jobs.length,
+            total: count,
+            page: pageNum,
+            totalPages: Math.ceil((count || 0) / limitNum),
+            jobs
+        });
 
     } catch (error) {
         res.status(500).json({ success: false, message: 'Server error', error: error.message });

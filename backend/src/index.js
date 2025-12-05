@@ -11,6 +11,7 @@ import jobRoutes from './routes/jobRoutes.js';
 import walletRoutes from './routes/walletRoutes.js';
 import technicianRoutes from './routes/technicianRoutes.js';
 import serviceRoutes from './routes/serviceRoutes.js';
+import notificationRoutes from './routes/notificationRoutes.js';
 
 // Import Error Handlers
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
@@ -60,6 +61,16 @@ app.use('/api/jobs', jobRoutes);
 app.use('/api/wallet', walletRoutes);
 app.use('/api/technician', technicianRoutes);
 app.use('/api/services', serviceRoutes);
+app.use('/api/notifications', notificationRoutes);
+
+// Health Check Endpoint
+app.get('/health', (req, res) => {
+    res.json({
+        status: 'healthy',
+        uptime: process.uptime(),
+        timestamp: new Date().toISOString()
+    });
+});
 
 // =============================================
 // Error Handling
