@@ -1,0 +1,62 @@
+# Flutter/Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+build/
+*.g.dart
+*.freezed.dart
+
+# iOS
+ios/Pods/
+ios/.symlinks/
+ios/Flutter/App.framework
+ios/Flutter/Flutter.framework
+ios/Flutter/Flutter.podspec
+ios/Flutter/.last_build_id
+ios/Runner/GeneratedPluginRegistrant.*
+*.xcworkspace/xcuserdata/
+*.xcuserdata
+**/DerivedData/
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Android
+android/.gradle/
+android/captures/
+android/gradlew
+android/gradlew.bat
+android/local.properties
+android/**/generated/
+*.apk
+*.aab
+
+# IDE
+.idea/
+*.iml
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Backend
+backend/node_modules/
+backend/.env
+backend/coverage/
+backend/*.log
+
+# General
+*.log
+*.tmp
+*.temp
+.env
+.env.local
+.env.*.local
+
+# Generated files
+*.g.dart
+*.freezed.dart
+*.mocks.dart
