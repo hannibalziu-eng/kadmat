@@ -234,3 +234,276 @@ export const completeJob = async (req, res) => {
         res.status(500).json({ success: false, message: 'Server error', error: error.message });
     }
 };
+
+// 6. Set Price (Technician proposes price after inspecting the job)
+export const setPrice = async (req, res) => {
+    const { id } = req.params;
+    const technicianId = req.user.id;
+    const { price, notes } = req.body;
+
+    try {
+        // Validate price
+        if (!price || price <= 0) {
+            return res.status(400).json({ success: false, message: 'Price must be a positive number' });
+        }
+
+        // Verify job belongs to this technician and is in accepted status
+        const { data: job, error: fetchError } = await supabase
+            .from('jobs')
+            .select('*')
+            .eq('id', id)
+            .eq('technician_id', technicianId)
+            .eq('status', 'accepted')
+            .single();
+
+        if (fetchError || !job) {
+            return res.status(404).json({
+                success: false,
+                message: 'Job not found, not assigned to you, or not in correct status'
+            });
+        }
+
+        // Update job with proposed price
+        const { data: updatedJob, error: updateError } = await supabase
+            .from('jobs')
+            .update({
+                technician_price: price,
+                price_notes: notes || null,
+                status: 'price_pending'  // Waiting for customer confirmation
+            })
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (updateError) throw updateError;
+
+        res.json({
+            success: true,
+            message: 'Price submitted successfully. Waiting for customer confirmation.',
+            job: updatedJob
+        });
+
+    } catch (error) {
+        console.error('Set Price Error:', error);
+        res.status(500).json({ success: false, message: 'Server error', error: error.message });
+    }
+};
+
+// 7. Confirm Price (Customer accepts or rejects the proposed price)
+export const confirmPrice = async (req, res) => {
+    const { id } = req.params;
+    const customerId = req.user.id;
+    const { accepted, counter_offer } = req.body;
+
+    try {
+        // Verify job belongs to this customer and is waiting for price confirmation
+        const { data: job, error: fetchError } = await supabase
+            .from('jobs')
+            .select('*')
+            .eq('id', id)
+            .eq('customer_id', customerId)
+            .eq('status', 'price_pending')
+            .single();
+
+        if (fetchError || !job) {
+            return res.status(404).json({
+                success: false,
+                message: 'Job not found or not waiting for price confirmation'
+            });
+        }
+
+        if (accepted) {
+            // Customer accepts the price - move to in_progress
+            const { data: updatedJob, error: updateError } = await supabase
+                .from('jobs')
+                .update({
+                    status: 'in_progress',
+                    price_confirmed_at: new Date().toISOString()
+                })
+                .eq('id', id)
+                .select()
+                .single();
+
+            if (updateError) throw updateError;
+
+            res.json({
+                success: true,
+                message: 'Price accepted! Technician is now on the way.',
+                job: updatedJob
+            });
+        } else {
+            // Customer rejects - either cancel or send counter offer
+            if (counter_offer && counter_offer > 0) {
+                // Send counter offer back to technician
+                const { data: updatedJob, error: updateError } = await supabase
+                    .from('jobs')
+                    .update({
+                        customer_offer: counter_offer,
+                        status: 'counter_offer'
+                    })
+                    .eq('id', id)
+                    .select()
+                    .single();
+
+                if (updateError) throw updateError;
+
+                res.json({
+                    success: true,
+                    message: 'Counter offer sent to technician.',
+                    job: updatedJob
+                });
+            } else {
+                // Customer rejects without counter - release technician
+                const { error: updateError } = await supabase
+                    .from('jobs')
+                    .update({
+                        status: 'pending',
+                        technician_id: null,
+                        technician_price: null,
+                        price_notes: null
+                    })
+                    .eq('id', id);
+
+                if (updateError) throw updateError;
+
+                res.json({
+                    success: true,
+                    message: 'Price rejected. Looking for another technician.'
+                });
+            }
+        }
+
+    } catch (error) {
+        console.error('Confirm Price Error:', error);
+        res.status(500).json({ success: false, message: 'Server error', error: error.message });
+    }
+};
+
+// 8. Rate Job (Customer rates the technician after completion)
+export const rateJob = async (req, res) => {
+    const { id } = req.params;
+    const customerId = req.user.id;
+    const { rating, review } = req.body;
+
+    try {
+        // Validate rating
+        if (!rating || rating < 1 || rating > 5) {
+            return res.status(400).json({ success: false, message: 'Rating must be between 1 and 5' });
+        }
+
+        // Verify job belongs to customer and is completed
+        const { data: job, error: fetchError } = await supabase
+            .from('jobs')
+            .select('*')
+            .eq('id', id)
+            .eq('customer_id', customerId)
+            .eq('status', 'completed')
+            .single();
+
+        if (fetchError || !job) {
+            return res.status(404).json({
+                success: false,
+                message: 'Job not found or not completed yet'
+            });
+        }
+
+        if (job.customer_rating) {
+            return res.status(400).json({ success: false, message: 'Job already rated' });
+        }
+
+        // Update job with rating
+        const { data: updatedJob, error: updateError } = await supabase
+            .from('jobs')
+            .update({
+                customer_rating: rating,
+                customer_review: review || null,
+                rated_at: new Date().toISOString()
+            })
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (updateError) throw updateError;
+
+        // Update technician's average rating
+        const { data: techJobs } = await supabase
+            .from('jobs')
+            .select('customer_rating')
+            .eq('technician_id', job.technician_id)
+            .not('customer_rating', 'is', null);
+
+        if (techJobs && techJobs.length > 0) {
+            const avgRating = techJobs.reduce((sum, j) => sum + j.customer_rating, 0) / techJobs.length;
+
+            await supabase
+                .from('users')
+                .update({ rating: Math.round(avgRating * 10) / 10 })
+                .eq('id', job.technician_id);
+        }
+
+        res.json({
+            success: true,
+            message: 'Thank you for your rating!',
+            job: updatedJob
+        });
+
+    } catch (error) {
+        console.error('Rate Job Error:', error);
+        res.status(500).json({ success: false, message: 'Server error', error: error.message });
+    }
+};
+
+// 9. Cancel Job (Either party can cancel before completion)
+export const cancelJob = async (req, res) => {
+    const { id } = req.params;
+    const userId = req.user.id;
+    const { reason } = req.body;
+
+    try {
+        // Find the job
+        const { data: job, error: fetchError } = await supabase
+            .from('jobs')
+            .select('*')
+            .eq('id', id)
+            .single();
+
+        if (fetchError || !job) {
+            return res.status(404).json({ success: false, message: 'Job not found' });
+        }
+
+        // Check permission
+        if (job.customer_id !== userId && job.technician_id !== userId) {
+            return res.status(403).json({ success: false, message: 'Not authorized to cancel this job' });
+        }
+
+        // Can't cancel completed jobs
+        if (job.status === 'completed') {
+            return res.status(400).json({ success: false, message: 'Cannot cancel completed job' });
+        }
+
+        // Update job status
+        const { error: updateError } = await supabase
+            .from('jobs')
+            .update({
+                status: 'cancelled',
+                cancelled_by: userId,
+                cancel_reason: reason || null,
+                cancelled_at: new Date().toISOString()
+            })
+            .eq('id', id);
+
+        if (updateError) throw updateError;
+
+        // Stop the search if still active
+        cancelJobSearch(id);
+
+        res.json({
+            success: true,
+            message: 'Job cancelled successfully'
+        });
+
+    } catch (error) {
+        console.error('Cancel Job Error:', error);
+        res.status(500).json({ success: false, message: 'Server error', error: error.message });
+    }
+};

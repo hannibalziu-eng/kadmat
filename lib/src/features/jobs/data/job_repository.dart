@@ -72,14 +72,42 @@ class JobRepository {
     }
   }
 
-  Future<void> acceptJob(String jobId) async {
+  Future<Job> acceptJob(String jobId) async {
     try {
-      await _client.post(Endpoints.acceptJob(jobId));
+      final response = await _client.post(Endpoints.acceptJob(jobId));
+      return Job.fromJson(response.data['job']);
     } catch (e) {
       if (e is DioException && e.response?.statusCode == 409) {
         throw Exception('عذراً، تم قبول الطلب من فني آخر');
       }
       throw Exception('فشل قبول الطلب');
+    }
+  }
+
+  Future<Job> setPrice(String jobId, double price, {String? notes}) async {
+    try {
+      final response = await _client.post(
+        Endpoints.setPrice(jobId),
+        data: {'price': price, 'notes': notes},
+      );
+      return Job.fromJson(response.data['job']);
+    } catch (e) {
+      throw Exception('فشل تحديد السعر');
+    }
+  }
+
+  Future<Job> confirmPrice(String jobId, bool accepted, {double? counterOffer}) async {
+    try {
+      final response = await _client.post(
+        Endpoints.confirmPrice(jobId),
+        data: {
+          'accepted': accepted,
+          if (counterOffer != null) 'counter_offer': counterOffer,
+        },
+      );
+      return Job.fromJson(response.data['job']);
+    } catch (e) {
+      throw Exception('فشل تأكيد السعر');
     }
   }
 
@@ -91,16 +119,29 @@ class JobRepository {
     }
   }
 
-  Future<void> cancelJob(String jobId) async {
+  Future<Job> rateJob(String jobId, int rating, {String? review}) async {
     try {
-      await Supabase.instance.client
-          .from('jobs')
-          .update({'status': 'cancelled'})
-          .eq('id', jobId);
+      final response = await _client.post(
+        Endpoints.rateJob(jobId),
+        data: {'rating': rating, 'review': review},
+      );
+      return Job.fromJson(response.data['job']);
+    } catch (e) {
+      throw Exception('فشل إرسال التقييم');
+    }
+  }
+
+  Future<void> cancelJob(String jobId, {String? reason}) async {
+    try {
+      await _client.post(
+        Endpoints.cancelJob(jobId),
+        data: {'reason': reason},
+      );
     } catch (e) {
       throw Exception('فشل إلغاء الطلب');
     }
   }
+
   Stream<Job> watchJob(String jobId) {
     return Supabase.instance.client
         .from('jobs')
@@ -114,13 +155,6 @@ class JobRepository {
     required double lng,
     double radius = 5000,
   }) {
-    // Note: Supabase Realtime doesn't support complex PostGIS filters directly in the stream definition easily without Row Level Security policies filtering the data for us.
-    // However, since we fixed the RLS to allow technicians to see pending jobs, we can listen to the 'jobs' table.
-    // For a true "nearby" stream, we'd ideally rely on the backend to filter, but Realtime is "dumb" in that it pushes changes matching basic filters.
-    // A common workaround is to listen to all pending jobs (if volume is low) and filter client-side, OR rely on RLS to only send us relevant rows.
-    // Given the previous RLS fix "Technicians can view pending jobs", we will receive all pending jobs.
-    // We will filter them client-side for distance for now to keep it responsive.
-    
     return Supabase.instance.client
         .from('jobs')
         .stream(primaryKey: ['id'])
@@ -128,8 +162,22 @@ class JobRepository {
         .order('created_at', ascending: false)
         .map((data) {
           final jobs = data.map((e) => Job.fromJson(e)).toList();
-          // TODO: Add client-side distance filtering here if needed
           return jobs;
+        });
+  }
+
+  Stream<List<Job>> watchMyActiveJobs(String userId) {
+    return Supabase.instance.client
+        .from('jobs')
+        .stream(primaryKey: ['id'])
+        .order('created_at', ascending: false)
+        .map((data) {
+          return data
+              .map((e) => Job.fromJson(e))
+              .where((j) => 
+                  (j.customerId == userId || j.technicianId == userId) &&
+                  !['completed', 'cancelled'].contains(j.status))
+              .toList();
         });
   }
 }

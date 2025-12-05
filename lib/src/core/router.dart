@@ -18,6 +18,9 @@ import '../features/orders/presentation/customer_price_confirmation_dialog.dart'
 import '../features/technician/presentation/technician_main_screen.dart';
 import '../features/profile/presentation/customer_wallet_screen.dart';
 import '../features/jobs/presentation/searching_for_technician_screen.dart';
+import '../features/jobs/presentation/customer_active_job_screen.dart';
+import '../features/jobs/presentation/rating_screen.dart';
+import '../features/technician/presentation/jobs/technician_job_detail_screen.dart';
 import 'package:flutter/material.dart';
 
 part 'router.g.dart';
@@ -95,6 +98,13 @@ GoRouter goRouter(GoRouterRef ref) {
         path: '/technician/home',
         builder: (context, state) => const TechnicianMainScreen(),
       ),
+      GoRoute(
+        path: '/technician/job/:jobId',
+        builder: (context, state) {
+          final jobId = state.pathParameters['jobId']!;
+          return TechnicianJobDetailScreen(jobId: jobId);
+        },
+      ),
       GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
       GoRoute(
         path: '/',
@@ -171,6 +181,20 @@ GoRouter goRouter(GoRouterRef ref) {
             lat: extra?['lat'] as double?,
             lng: extra?['lng'] as double?,
           );
+        },
+      ),
+      GoRoute(
+        path: '/active-job/:jobId',
+        builder: (context, state) {
+          final jobId = state.pathParameters['jobId']!;
+          return CustomerActiveJobScreen(jobId: jobId);
+        },
+      ),
+      GoRoute(
+        path: '/rate-job/:jobId',
+        builder: (context, state) {
+          final jobId = state.pathParameters['jobId']!;
+          return RatingScreen(jobId: jobId);
         },
       ),
       GoRoute(
