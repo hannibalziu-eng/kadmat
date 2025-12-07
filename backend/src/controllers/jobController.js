@@ -54,7 +54,11 @@ export const getNearbyJobs = async (req, res) => {
 
         const { data: jobs, error, count } = await supabase
             .from('jobs')
-            .select('*, service:services(name, icon_url), customer:users!customer_id(full_name, rating)', { count: 'exact' })
+            .select(`
+                *,
+                service:services(id, name, icon_url, base_price),
+                customer:users!customer_id(id, full_name, phone, profile_image_url, rating)
+            `, { count: 'exact' })
             .eq('status', 'pending')
             .gt('created_at', twelveHoursAgo)
             .order('created_at', { ascending: false })
@@ -88,21 +92,56 @@ export const acceptJob = async (req, res) => {
     }
 };
 
-// 4. Get My Jobs
+// 4. Get My Jobs (Enhanced with full data & pagination)
 export const getMyJobs = async (req, res) => {
     try {
-        const { data: jobs, error } = await supabase
+        const { status, page = 1, limit = 20 } = req.query;
+        const pageNum = parseInt(page, 10) || 1;
+        const limitNum = Math.min(parseInt(limit, 10) || 20, 50);
+        const offset = (pageNum - 1) * limitNum;
+
+        // Build query with full relations
+        let query = supabase
             .from('jobs')
-            .select('*, service:services(name)')
+            .select(`
+                *,
+                service:services(id, name, icon_url, base_price),
+                customer:users!customer_id(id, full_name, phone, profile_image_url, rating),
+                technician:users!technician_id(id, full_name, phone, profile_image_url, rating)
+            `, { count: 'exact' })
             .or(`customer_id.eq.${req.user.id},technician_id.eq.${req.user.id}`)
-            .neq('status', 'cancelled')
-            .order('created_at', { ascending: false });
+            .neq('status', 'cancelled');
+
+        // Optional status filter
+        if (status) {
+            query = query.eq('status', status);
+        }
+
+        // Execute query with pagination
+        const { data: jobs, error, count } = await query
+            .order('created_at', { ascending: false })
+            .range(offset, offset + limitNum - 1);
 
         if (error) throw error;
 
-        res.json({ success: true, jobs });
+        res.json({
+            success: true,
+            data: jobs,
+            pagination: {
+                page: pageNum,
+                limit: limitNum,
+                total: count || 0,
+                totalPages: Math.ceil((count || 0) / limitNum),
+                hasMore: offset + limitNum < (count || 0)
+            }
+        });
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        console.error('Get My Jobs Error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Server error',
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 };
 
