@@ -14,10 +14,12 @@ class TechnicianJobDetailScreen extends ConsumerStatefulWidget {
   const TechnicianJobDetailScreen({super.key, required this.jobId});
 
   @override
-  ConsumerState<TechnicianJobDetailScreen> createState() => _TechnicianJobDetailScreenState();
+  ConsumerState<TechnicianJobDetailScreen> createState() =>
+      _TechnicianJobDetailScreenState();
 }
 
-class _TechnicianJobDetailScreenState extends ConsumerState<TechnicianJobDetailScreen> {
+class _TechnicianJobDetailScreenState
+    extends ConsumerState<TechnicianJobDetailScreen> {
   final _priceController = TextEditingController();
   final _notesController = TextEditingController();
   bool _isLoading = false;
@@ -79,33 +81,17 @@ class _TechnicianJobDetailScreenState extends ConsumerState<TechnicianJobDetailS
               icon: Icons.build_circle,
               child: Text(
                 _job!.service?['name'] ?? 'خدمة',
-                style: TextStyle(fontSize: 18.fz, fontWeight: FontWeight.bold, color: Colors.white),
+                style: TextStyle(
+                  fontSize: 18.fz,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
               ),
             ),
             SizedBox(height: 12.h),
 
-            // Customer Info
-            _buildInfoCard(
-              title: 'العميل',
-              icon: Icons.person,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    _job!.customer?['full_name'] ?? 'عميل',
-                    style: TextStyle(fontSize: 16.fz, color: Colors.white),
-                  ),
-                  if (_job!.customer?['rating'] != null)
-                    Row(
-                      children: [
-                        Icon(Icons.star, color: Colors.amber, size: 16.s),
-                        SizedBox(width: 4.w),
-                        Text('${_job!.customer?['rating']}', style: TextStyle(color: Colors.white70)),
-                      ],
-                    ),
-                ],
-              ),
-            ),
+            // Customer Info - Enhanced
+            _buildCustomerInfoCard(),
             SizedBox(height: 12.h),
 
             // Location
@@ -141,6 +127,38 @@ class _TechnicianJobDetailScreenState extends ConsumerState<TechnicianJobDetailS
                 child: Text(
                   _job!.description!,
                   style: TextStyle(fontSize: 14.fz, color: Colors.white70),
+                ),
+              ),
+            SizedBox(height: 12.h),
+
+            // Job Images
+            if (_job?.images != null && _job!.images!.isNotEmpty)
+              _buildInfoCard(
+                title: 'صور المشكلة',
+                icon: Icons.image,
+                child: SizedBox(
+                  height: 120.h,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: _job!.images!.length,
+                    separatorBuilder: (context, index) => SizedBox(width: 12.w),
+                    itemBuilder: (context, index) {
+                      final image = _job!.images![index];
+                      return Container(
+                        width: 120.w,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12.r),
+                          border: Border.all(
+                            color: Colors.white.withOpacity(0.1),
+                          ),
+                          image: DecorationImage(
+                            image: NetworkImage(image.imageUrl),
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
                 ),
               ),
             SizedBox(height: 24.h),
@@ -205,7 +223,11 @@ class _TechnicianJobDetailScreenState extends ConsumerState<TechnicianJobDetailS
           SizedBox(width: 8.w),
           Text(
             text,
-            style: TextStyle(fontSize: 16.fz, fontWeight: FontWeight.bold, color: color),
+            style: TextStyle(
+              fontSize: 16.fz,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
           ),
         ],
       ),
@@ -240,6 +262,137 @@ class _TechnicianJobDetailScreenState extends ConsumerState<TechnicianJobDetailS
     );
   }
 
+  Widget _buildCustomerInfoCard() {
+    final customerName = _job!.customer?['full_name'] ?? 'العميل';
+    final customerPhone = _job!.customer?['phone'] ?? '';
+    final customerRating = _job!.customer?['rating']?.toString() ?? '5.0';
+    final customerPhoto = _job!.customer?['avatar_url'];
+
+    return Container(
+      padding: EdgeInsets.all(16.w),
+      decoration: AppTheme.glassDecoration(radius: 16.r),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          Row(
+            children: [
+              Icon(Icons.person, color: AppTheme.primaryColor, size: 20.s),
+              SizedBox(width: 8.w),
+              Text(
+                'العميل',
+                style: TextStyle(fontSize: 14.fz, color: Colors.white60),
+              ),
+            ],
+          ),
+          SizedBox(height: 12.h),
+
+          // Customer Info Row
+          Row(
+            children: [
+              // Photo
+              CircleAvatar(
+                radius: 30.r,
+                backgroundColor: AppTheme.primaryColor.withOpacity(0.3),
+                backgroundImage: customerPhoto != null
+                    ? NetworkImage(customerPhoto)
+                    : null,
+                child: customerPhoto == null
+                    ? Icon(Icons.person, size: 30.s, color: Colors.white70)
+                    : null,
+              ),
+              SizedBox(width: 12.w),
+
+              // Name & Rating
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      customerName,
+                      style: TextStyle(
+                        fontSize: 18.fz,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                    SizedBox(height: 4.h),
+                    Row(
+                      children: [
+                        Icon(Icons.star, color: Colors.amber, size: 16.s),
+                        SizedBox(width: 4.w),
+                        Text(
+                          customerRating,
+                          style: TextStyle(
+                            fontSize: 14.fz,
+                            color: Colors.white70,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+
+              // Call Button
+              if (customerPhone.isNotEmpty)
+                IconButton(
+                  onPressed: () => _callCustomer(customerPhone),
+                  icon: Container(
+                    padding: EdgeInsets.all(10.w),
+                    decoration: BoxDecoration(
+                      color: Colors.green,
+                      borderRadius: BorderRadius.circular(12.r),
+                    ),
+                    child: Icon(Icons.phone, color: Colors.white, size: 22.s),
+                  ),
+                ),
+            ],
+          ),
+
+          // Phone number display
+          if (customerPhone.isNotEmpty) ...[
+            SizedBox(height: 12.h),
+            Container(
+              padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 8.h),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8.r),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.phone_android, size: 16.s, color: Colors.white60),
+                  SizedBox(width: 8.w),
+                  Text(
+                    customerPhone,
+                    style: TextStyle(fontSize: 14.fz, color: Colors.white70),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  void _callCustomer(String phone) async {
+    final uri = Uri.parse('tel:$phone');
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri);
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('لا يمكن الاتصال بـ $phone'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   Widget _buildActionButtons() {
     final status = _job!.status;
 
@@ -263,11 +416,16 @@ class _TechnicianJobDetailScreenState extends ConsumerState<TechnicianJobDetailS
       style: ElevatedButton.styleFrom(
         backgroundColor: AppTheme.primaryColor,
         padding: EdgeInsets.symmetric(vertical: 16.h),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12.r),
+        ),
       ),
       child: _isLoading
           ? const CircularProgressIndicator(color: Colors.white)
-          : Text('قبول الطلب', style: TextStyle(fontSize: 18.fz, fontWeight: FontWeight.bold)),
+          : Text(
+              'قبول الطلب',
+              style: TextStyle(fontSize: 18.fz, fontWeight: FontWeight.bold),
+            ),
     );
   }
 
@@ -282,7 +440,11 @@ class _TechnicianJobDetailScreenState extends ConsumerState<TechnicianJobDetailS
             children: [
               Text(
                 'تحديد السعر',
-                style: TextStyle(fontSize: 16.fz, fontWeight: FontWeight.bold, color: Colors.white),
+                style: TextStyle(
+                  fontSize: 16.fz,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
               ),
               SizedBox(height: 12.h),
               TextField(
@@ -292,7 +454,10 @@ class _TechnicianJobDetailScreenState extends ConsumerState<TechnicianJobDetailS
                 decoration: InputDecoration(
                   hintText: 'أدخل السعر (ريال)',
                   hintStyle: TextStyle(color: Colors.white38),
-                  prefixIcon: const Icon(Icons.attach_money, color: AppTheme.primaryColor),
+                  prefixIcon: const Icon(
+                    Icons.attach_money,
+                    color: AppTheme.primaryColor,
+                  ),
                   filled: true,
                   fillColor: Colors.white.withOpacity(0.1),
                   border: OutlineInputBorder(
@@ -326,7 +491,9 @@ class _TechnicianJobDetailScreenState extends ConsumerState<TechnicianJobDetailS
           style: ElevatedButton.styleFrom(
             backgroundColor: AppTheme.primaryColor,
             padding: EdgeInsets.symmetric(vertical: 16.h),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12.r),
+            ),
           ),
           child: _isLoading
               ? const CircularProgressIndicator(color: Colors.white)
@@ -335,7 +502,13 @@ class _TechnicianJobDetailScreenState extends ConsumerState<TechnicianJobDetailS
                   children: [
                     const Icon(Icons.send),
                     SizedBox(width: 8.w),
-                    Text('إرسال السعر للعميل', style: TextStyle(fontSize: 16.fz, fontWeight: FontWeight.bold)),
+                    Text(
+                      'إرسال السعر للعميل',
+                      style: TextStyle(
+                        fontSize: 16.fz,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ],
                 ),
         ),
@@ -363,7 +536,11 @@ class _TechnicianJobDetailScreenState extends ConsumerState<TechnicianJobDetailS
           SizedBox(height: 8.h),
           Text(
             '${_job!.technicianPrice ?? 0} ريال',
-            style: TextStyle(fontSize: 24.fz, fontWeight: FontWeight.bold, color: Colors.purple),
+            style: TextStyle(
+              fontSize: 24.fz,
+              fontWeight: FontWeight.bold,
+              color: Colors.purple,
+            ),
           ),
         ],
       ),
@@ -398,7 +575,9 @@ class _TechnicianJobDetailScreenState extends ConsumerState<TechnicianJobDetailS
           style: ElevatedButton.styleFrom(
             backgroundColor: Colors.green,
             padding: EdgeInsets.symmetric(vertical: 16.h),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12.r),
+            ),
           ),
           child: _isLoading
               ? const CircularProgressIndicator(color: Colors.white)
@@ -407,7 +586,13 @@ class _TechnicianJobDetailScreenState extends ConsumerState<TechnicianJobDetailS
                   children: [
                     const Icon(Icons.done_all),
                     SizedBox(width: 8.w),
-                    Text('إتمام الخدمة', style: TextStyle(fontSize: 18.fz, fontWeight: FontWeight.bold)),
+                    Text(
+                      'إتمام الخدمة',
+                      style: TextStyle(
+                        fontSize: 18.fz,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ],
                 ),
         ),
@@ -421,7 +606,10 @@ class _TechnicianJobDetailScreenState extends ConsumerState<TechnicianJobDetailS
       await ref.read(jobRepositoryProvider).acceptJob(widget.jobId);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('تم قبول الطلب! أدخل السعر الآن.'), backgroundColor: Colors.green),
+          const SnackBar(
+            content: Text('تم قبول الطلب! أدخل السعر الآن.'),
+            backgroundColor: Colors.green,
+          ),
         );
       }
     } catch (e) {
@@ -439,17 +627,25 @@ class _TechnicianJobDetailScreenState extends ConsumerState<TechnicianJobDetailS
     final price = double.tryParse(_priceController.text);
     if (price == null || price <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('أدخل سعر صحيح'), backgroundColor: Colors.orange),
+        const SnackBar(
+          content: Text('أدخل سعر صحيح'),
+          backgroundColor: Colors.orange,
+        ),
       );
       return;
     }
 
     setState(() => _isLoading = true);
     try {
-      await ref.read(jobRepositoryProvider).setPrice(widget.jobId, price, notes: _notesController.text);
+      await ref
+          .read(jobRepositoryProvider)
+          .setPrice(widget.jobId, price, notes: _notesController.text);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('تم إرسال السعر للعميل'), backgroundColor: Colors.green),
+          const SnackBar(
+            content: Text('تم إرسال السعر للعميل'),
+            backgroundColor: Colors.green,
+          ),
         );
       }
     } catch (e) {
@@ -469,7 +665,10 @@ class _TechnicianJobDetailScreenState extends ConsumerState<TechnicianJobDetailS
       await ref.read(jobRepositoryProvider).completeJob(widget.jobId);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('🎉 تم إتمام الخدمة بنجاح!'), backgroundColor: Colors.green),
+          const SnackBar(
+            content: Text('🎉 تم إتمام الخدمة بنجاح!'),
+            backgroundColor: Colors.green,
+          ),
         );
         context.go('/technician/home');
       }
@@ -486,7 +685,9 @@ class _TechnicianJobDetailScreenState extends ConsumerState<TechnicianJobDetailS
 
   void _openMaps() async {
     if (_job?.lat != null && _job?.lng != null) {
-      final url = Uri.parse('https://www.google.com/maps/dir/?api=1&destination=${_job!.lat},${_job!.lng}');
+      final url = Uri.parse(
+        'https://www.google.com/maps/dir/?api=1&destination=${_job!.lat},${_job!.lng}',
+      );
       if (await canLaunchUrl(url)) {
         await launchUrl(url);
       }

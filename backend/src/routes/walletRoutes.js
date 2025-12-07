@@ -1,12 +1,12 @@
 import express from 'express';
-import { getMyWallet, getTransactions } from '../controllers/walletController.js';
+import { getWallet, getWalletTransactions } from '../controllers/walletController.js';
 import { protect } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
 router.use(protect);
 
-router.get('/', getMyWallet);
-router.get('/transactions', getTransactions);
+router.get('/', getWallet);
+router.get('/transactions', getWalletTransactions);
 
 export default router;

@@ -1,4 +1,5 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../data/auth_repository.dart';
 
 part 'auth_controller.g.dart';
@@ -17,12 +18,16 @@ class AuthController extends _$AuthController {
   }) async {
     state = const AsyncValue.loading();
     state = await AsyncValue.guard(
-        () => _authenticate(email, password, requiredUserType));
+      () => _authenticate(email, password, requiredUserType),
+    );
     return state.hasError == false;
   }
 
   Future<void> _authenticate(
-      String email, String password, String? requiredUserType) {
+    String email,
+    String password,
+    String? requiredUserType,
+  ) {
     final authRepository = ref.read(authRepositoryProvider);
     return authRepository.signInWithEmailAndPassword(
       email,
@@ -37,6 +42,7 @@ class AuthController extends _$AuthController {
     required String phone,
     required String fullName,
     String userType = 'customer',
+    String? serviceId,
   }) async {
     state = const AsyncValue.loading();
     state = await AsyncValue.guard(
@@ -46,6 +52,7 @@ class AuthController extends _$AuthController {
         phone: phone,
         fullName: fullName,
         userType: userType,
+        serviceId: serviceId,
       ),
     );
     return state.hasError == false;
@@ -57,6 +64,7 @@ class AuthController extends _$AuthController {
     required String phone,
     required String fullName,
     required String userType,
+    String? serviceId,
   }) {
     final authRepository = ref.read(authRepositoryProvider);
     return authRepository.register(
@@ -65,6 +73,7 @@ class AuthController extends _$AuthController {
       phone: phone,
       fullName: fullName,
       userType: userType,
+      serviceId: serviceId,
     );
   }
 
@@ -77,5 +86,19 @@ class AuthController extends _$AuthController {
   Future<void> _authenticateAsGuest() {
     final authRepository = ref.read(authRepositoryProvider);
     return authRepository.signInAsGuest();
+  }
+}
+
+@riverpod
+Future<List<Map<String, dynamic>>> activeServices(ActiveServicesRef ref) async {
+  try {
+    final response = await Supabase.instance.client
+        .from('services')
+        .select('id, name, name_ar')
+        .eq('is_active', true);
+
+    return List<Map<String, dynamic>>.from(response);
+  } catch (e) {
+    return [];
   }
 }

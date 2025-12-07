@@ -11,7 +11,8 @@ const createJobSchema = Joi.object({
     address_text: Joi.string().required(),
     description: Joi.string().optional(),
     initial_price: Joi.number().required(),
-    metadata: Joi.object().optional()
+    metadata: Joi.object().optional(),
+    images: Joi.array().items(Joi.string()).optional()
 });
 
 // 1. Create a New Job
@@ -49,10 +50,13 @@ export const getNearbyJobs = async (req, res) => {
         const limitNum = Math.min(parseInt(limit, 10) || 20, 50);
         const offset = (pageNum - 1) * limitNum;
 
+        const twelveHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString();
+
         const { data: jobs, error, count } = await supabase
             .from('jobs')
             .select('*, service:services(name, icon_url), customer:users!customer_id(full_name, rating)', { count: 'exact' })
             .eq('status', 'pending')
+            .gt('created_at', twelveHoursAgo)
             .order('created_at', { ascending: false })
             .range(offset, offset + limitNum - 1);
 
@@ -91,6 +95,7 @@ export const getMyJobs = async (req, res) => {
             .from('jobs')
             .select('*, service:services(name)')
             .or(`customer_id.eq.${req.user.id},technician_id.eq.${req.user.id}`)
+            .neq('status', 'cancelled')
             .order('created_at', { ascending: false });
 
         if (error) throw error;

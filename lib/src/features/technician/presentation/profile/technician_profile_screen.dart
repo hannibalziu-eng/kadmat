@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../../auth/data/auth_repository.dart';
 import 'edit_technician_profile_screen.dart';
 import 'add_portfolio_work_screen.dart';
+import '../../../../common_widgets/badge_widget.dart';
 
 class TechnicianProfileScreen extends ConsumerWidget {
   const TechnicianProfileScreen({super.key});
@@ -40,7 +41,7 @@ class TechnicianProfileScreen extends ConsumerWidget {
                 ),
               );
             },
-          )
+          ),
         ],
       ),
       body: SingleChildScrollView(
@@ -93,6 +94,25 @@ class TechnicianProfileScreen extends ConsumerWidget {
                 ),
               ],
             ).animate().fadeIn().slideX(),
+
+            // Badges Section
+            if (userProfile != null &&
+                userProfile['badges'] != null &&
+                (userProfile['badges'] as List).isNotEmpty) ...[
+              SizedBox(height: 16.h),
+              Wrap(
+                spacing: 8.w,
+                runSpacing: 8.h,
+                children: (userProfile['badges'] as List).map((badge) {
+                  return BadgeWidget(
+                    label: badge['label'] ?? '',
+                    iconName: badge['icon_name'] ?? '',
+                    badgeType: badge['badge_type'] ?? '',
+                  );
+                }).toList(),
+              ).animate().fadeIn(delay: 100.ms),
+            ],
+
             SizedBox(height: 24.h),
 
             // Professional Experience Card
@@ -148,7 +168,7 @@ class TechnicianProfileScreen extends ConsumerWidget {
                         child: Column(
                           children: [
                             Text(
-                              '150+',
+                              '${userProfile?['reviews_count'] ?? 0}+',
                               style: TextStyle(
                                 fontSize: 24.fz,
                                 fontWeight: FontWeight.bold,
@@ -157,7 +177,7 @@ class TechnicianProfileScreen extends ConsumerWidget {
                             ),
                             SizedBox(height: 4.h),
                             Text(
-                              'مشروع منجز',
+                              'تقييم إيجابي',
                               style: TextStyle(
                                 fontSize: 12.fz,
                                 color: Colors.grey,

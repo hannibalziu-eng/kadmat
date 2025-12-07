@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_scalify/flutter_scalify.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../../../wallet/presentation/wallet_controller.dart';
-import '../../../wallet/domain/wallet.dart';
 
 class TechnicianWalletScreen extends ConsumerWidget {
   const TechnicianWalletScreen({super.key});

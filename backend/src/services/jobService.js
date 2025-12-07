@@ -32,7 +32,7 @@ class JobService {
         };
 
         // 3. Insert into DB
-        const { data: job, error } = await supabase
+        const { data: job, error } = await supabaseAdmin
             .from('jobs')
             .insert(jobData)
             .select()
@@ -40,17 +40,50 @@ class JobService {
 
         if (error) throw error;
 
+        // 4. Insert Images (if any)
+        if (data.images && data.images.length > 0) {
+            const imageRecords = data.images.map(url => ({
+                job_id: job.id,
+                image_url: url,
+                media_type: 'image'
+            }));
+
+            const { error: imagesError } = await supabaseAdmin
+                .from('job_images')
+                .insert(imageRecords);
+
+            if (imagesError) {
+                console.error('Error inserting job images:', imagesError);
+                // Don't fail the job creation, just log error
+            }
+        }
+
         return job;
     }
 
     /**
      * Accept a job (Technician)
-     * Transition: pending -> accepted
+     * Transition: pending/searching -> accepted
      */
     async accept(jobId, technicianId) {
-        // 1. Atomic Check & Update
-        // We ensure the job is still pending and not taken by someone else
-        const { data: job, error } = await supabase
+        // 1. First check if the job is in an acceptable state
+        const { data: existingJob, error: checkError } = await supabaseAdmin
+            .from('jobs')
+            .select('id, status')
+            .eq('id', jobId)
+            .single();
+
+        if (checkError || !existingJob) {
+            throw new Error('Job not found');
+        }
+
+        // Accept jobs that are 'pending' or 'searching'
+        if (!['pending', 'searching'].includes(existingJob.status)) {
+            throw new Error('Job is no longer available or already taken');
+        }
+
+        // 2. Atomic Update
+        const { data: job, error } = await supabaseAdmin
             .from('jobs')
             .update({
                 technician_id: technicianId,
@@ -58,7 +91,7 @@ class JobService {
                 accepted_at: new Date().toISOString()
             })
             .eq('id', jobId)
-            .eq('status', 'pending') // Optimistic locking
+            .in('status', ['pending', 'searching']) // Accept both statuses
             .select()
             .single();
 

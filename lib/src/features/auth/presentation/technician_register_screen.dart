@@ -23,14 +23,6 @@ class _TechnicianRegisterScreenState
   String? _selectedService;
   bool _isSocialLogin = false;
 
-  final List<String> _services = [
-    'السباكة',
-    'الكهرباء',
-    'النجارة',
-    'تكييف وتبريد',
-    'أخرى',
-  ];
-
   void _simulateSocialLogin() {
     setState(() {
       _isSocialLogin = true;
@@ -66,6 +58,7 @@ class _TechnicianRegisterScreenState
             phone: _phoneController.text,
             fullName: _nameController.text,
             userType: 'technician',
+            serviceId: _selectedService,
           );
 
       if (success && mounted) {
@@ -216,22 +209,43 @@ class _TechnicianRegisterScreenState
 
                 // Specialty
                 _buildLabel('مجال التخصص'),
-                DropdownButtonFormField<String>(
-                  value: _selectedService,
-                  decoration: const InputDecoration(hintText: 'اختر تخصصك'),
-                  items: _services.map((String service) {
-                    return DropdownMenuItem<String>(
-                      value: service,
-                      child: Text(service),
+                // Specialty
+                _buildLabel('مجال التخصص'),
+                Consumer(
+                  builder: (context, ref, child) {
+                    final servicesAsync = ref.watch(activeServicesProvider);
+
+                    return servicesAsync.when(
+                      data: (services) {
+                        return DropdownButtonFormField<String>(
+                          value: _selectedService,
+                          decoration: const InputDecoration(
+                            hintText: 'اختر تخصصك',
+                          ),
+                          items: services.map((service) {
+                            final name =
+                                service['name_ar'] as String? ??
+                                service['name'] as String;
+                            return DropdownMenuItem<String>(
+                              value: service['id'] as String,
+                              child: Text(name),
+                            );
+                          }).toList(),
+                          onChanged: (String? newValue) {
+                            setState(() {
+                              _selectedService = newValue;
+                            });
+                          },
+                          validator: (value) =>
+                              value == null ? 'الرجاء اختيار التخصص' : null,
+                        );
+                      },
+                      loading: () =>
+                          const Center(child: CircularProgressIndicator()),
+                      error: (err, stack) =>
+                          Text('خطأ في تحميل التخصصات: $err'),
                     );
-                  }).toList(),
-                  onChanged: (String? newValue) {
-                    setState(() {
-                      _selectedService = newValue;
-                    });
                   },
-                  validator: (value) =>
-                      value == null ? 'الرجاء اختيار التخصص' : null,
                 ),
                 const SizedBox(height: 16),
 

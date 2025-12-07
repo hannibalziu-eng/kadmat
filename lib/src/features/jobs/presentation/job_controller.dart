@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../data/job_repository.dart';
 import '../domain/job.dart';
@@ -21,14 +22,16 @@ class JobController extends _$JobController {
   }) async {
     state = const AsyncValue.loading();
     try {
-      final job = await ref.read(jobRepositoryProvider).createJob(
-        serviceId: serviceId,
-        lat: lat,
-        lng: lng,
-        addressText: addressText,
-        initialPrice: initialPrice,
-        description: description,
-      );
+      final job = await ref
+          .read(jobRepositoryProvider)
+          .createJob(
+            serviceId: serviceId,
+            lat: lat,
+            lng: lng,
+            addressText: addressText,
+            initialPrice: initialPrice,
+            description: description,
+          );
       state = const AsyncValue.data(null);
       return job;
     } catch (e) {
@@ -37,12 +40,18 @@ class JobController extends _$JobController {
     }
   }
 
+  /// Accept a job - this is a side-effect operation, no state changes needed
   Future<bool> acceptJob(String jobId) async {
-    state = const AsyncValue.loading();
-    state = await AsyncValue.guard(
-      () => ref.read(jobRepositoryProvider).acceptJob(jobId),
-    );
-    return state.hasError == false;
+    debugPrint('🟡 JobController.acceptJob: Starting for $jobId');
+    try {
+      debugPrint('🟡 JobController.acceptJob: Calling repository...');
+      final result = await ref.read(jobRepositoryProvider).acceptJob(jobId);
+      debugPrint('🟡 JobController.acceptJob: Success! Job ID: ${result.id}');
+      return true;
+    } catch (e) {
+      debugPrint('🔴 JobController.acceptJob: Error: $e');
+      return false;
+    }
   }
 
   Future<bool> completeJob(String jobId) async {
@@ -78,6 +87,9 @@ Stream<List<Job>> watchNearbyJobsStream(
   WatchNearbyJobsStreamRef ref, {
   required double lat,
   required double lng,
+  String? serviceId,
 }) {
-  return ref.watch(jobRepositoryProvider).watchNearbyJobs(lat: lat, lng: lng);
+  return ref
+      .watch(jobRepositoryProvider)
+      .watchNearbyJobs(lat: lat, lng: lng, serviceId: serviceId);
 }

@@ -7,7 +7,9 @@ const registerSchema = Joi.object({
     password: Joi.string().min(6).required(),
     phone: Joi.string().required(),
     full_name: Joi.string().required(),
-    user_type: Joi.string().valid('customer', 'technician').default('customer')
+    full_name: Joi.string().required(),
+    user_type: Joi.string().valid('customer', 'technician').default('customer'),
+    service_id: Joi.string().optional()
 });
 
 const loginSchema = Joi.object({
@@ -21,7 +23,7 @@ export const register = async (req, res) => {
         const { error, value } = registerSchema.validate(req.body);
         if (error) return res.status(400).json({ success: false, message: error.details[0].message });
 
-        const { email, password, phone, full_name, user_type } = value;
+        const { email, password, phone, full_name, user_type, service_id } = value;
 
         // 2. Create User in Supabase Auth
         // The database trigger 'handle_new_user' will automatically create the user profile and wallet
@@ -29,7 +31,7 @@ export const register = async (req, res) => {
             email,
             password,
             email_confirm: true, // Auto confirm for now
-            user_metadata: { phone, full_name, user_type }
+            user_metadata: { phone, full_name, user_type, service_id }
         });
 
         if (authError) {

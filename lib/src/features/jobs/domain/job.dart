@@ -10,7 +10,8 @@ class Job with _$Job {
     @JsonKey(name: 'customer_id') required String customerId,
     @JsonKey(name: 'service_id') required String serviceId,
     @JsonKey(name: 'technician_id') String? technicianId,
-    required String status, // pending, accepted, price_pending, in_progress, completed, cancelled
+    required String
+    status, // pending, accepted, price_pending, in_progress, completed, cancelled
     required double lat,
     required double lng,
     @JsonKey(name: 'address_text') String? addressText,
@@ -38,8 +39,20 @@ class Job with _$Job {
     Map<String, dynamic>? customer, // Nested customer object
     @JsonKey(name: 'technician')
     Map<String, dynamic>? technician, // Nested technician object
+    @JsonKey(name: 'job_images') List<JobImage>? images, // Nested images
   }) = _Job;
 
   factory Job.fromJson(Map<String, dynamic> json) => _$JobFromJson(json);
 }
 
+@freezed
+class JobImage with _$JobImage {
+  const factory JobImage({
+    required String id,
+    @JsonKey(name: 'image_url') required String imageUrl,
+    @JsonKey(name: 'media_type') String? mediaType,
+  }) = _JobImage;
+
+  factory JobImage.fromJson(Map<String, dynamic> json) =>
+      _$JobImageFromJson(json);
+}

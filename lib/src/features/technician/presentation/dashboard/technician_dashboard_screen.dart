@@ -16,18 +16,79 @@ class TechnicianDashboardScreen extends ConsumerStatefulWidget {
       _TechnicianDashboardScreenState();
 }
 
-class _TechnicianDashboardScreenState extends ConsumerState<TechnicianDashboardScreen> {
+class _TechnicianDashboardScreenState
+    extends ConsumerState<TechnicianDashboardScreen> {
   bool _isOnline = true;
+
+  void _refreshJobs() {
+    final userProfile = ref.read(authRepositoryProvider).userProfile;
+    final serviceId = userProfile?['service_id'] as String?;
+
+    ref.invalidate(
+      watchNearbyJobsStreamProvider(
+        lat: 24.7136,
+        lng: 46.6753,
+        serviceId: serviceId,
+      ),
+    );
+    ref.invalidate(myJobsProvider);
+  }
 
   @override
   Widget build(BuildContext context) {
     final userProfile = ref.watch(authRepositoryProvider).userProfile;
     final userName = userProfile?['full_name'] ?? 'الفني';
-    
+    final serviceId = userProfile?['service_id'] as String?;
+
     // Watch for real-time nearby jobs using the stream
     // Using hardcoded Riyadh location for MVP
     final nearbyJobsStream = ref.watch(
-      watchNearbyJobsStreamProvider(lat: 24.7136, lng: 46.6753),
+      watchNearbyJobsStreamProvider(
+        lat: 24.7136,
+        lng: 46.6753,
+        serviceId: serviceId,
+      ),
+    );
+
+    // Listen for new jobs to show notification
+    // Listen for new jobs to show notification
+    ref.listen(
+      watchNearbyJobsStreamProvider(
+        lat: 24.7136,
+        lng: 46.6753,
+        serviceId: serviceId,
+      ),
+      (previous, next) {
+        if (next is AsyncData && next.value != null) {
+          final newJobs = next.value!;
+          final oldJobs = previous?.value ?? [];
+
+          // If we have more jobs than before, show notification
+          if (newJobs.length > oldJobs.length) {
+            // Only show if it's not the initial load (previous is not null or loading)
+            if (previous is AsyncData) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Row(
+                    children: [
+                      const Icon(
+                        Icons.notifications_active,
+                        color: Colors.white,
+                      ),
+                      SizedBox(width: 8.w),
+                      const Text('🔔 يوجد طلب جديد بالقرب منك!'),
+                    ],
+                  ),
+                  backgroundColor: Colors.green,
+                  behavior: SnackBarBehavior.floating,
+                  margin: EdgeInsets.all(16.w),
+                  duration: const Duration(seconds: 4),
+                ),
+              );
+            }
+          }
+        }
+      },
     );
 
     return Scaffold(
@@ -44,70 +105,87 @@ class _TechnicianDashboardScreenState extends ConsumerState<TechnicianDashboardS
           SizedBox(width: 16.w),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: EdgeInsets.all(16.w),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Greeting with real name
-            Text(
-              'مرحباً، $userName 👋',
-              style: TextStyle(
-                fontSize: 24.fz,
-                fontWeight: FontWeight.bold,
-                color: Theme.of(context).textTheme.bodyLarge?.color,
-              ),
-            ).animate().fadeIn().slideX(),
-            SizedBox(height: 8.h),
-            Text(
-              _isOnline ? 'أنت متصل الآن وتستقبل الطلبات' : 'أنت غير متصل',
-              style: TextStyle(
-                fontSize: 14.fz,
-                color: _isOnline ? Colors.green : Colors.grey,
-              ),
-            ).animate().fadeIn().slideX(delay: 100.ms),
-            SizedBox(height: 24.h),
-
-            // Stats Grid - Use real data from myJobs
-            _buildStatsSection(),
-            
-            SizedBox(height: 24.h),
-
-            // New Requests Section
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'طلبات جديدة قريبة',
-                  style: TextStyle(fontSize: 18.fz, fontWeight: FontWeight.bold),
+      body: RefreshIndicator(
+        onRefresh: () async {
+          _refreshJobs();
+          // Small delay to allow the stream to reconnect
+          await Future.delayed(const Duration(milliseconds: 500));
+        },
+        child: SingleChildScrollView(
+          physics:
+              const AlwaysScrollableScrollPhysics(), // Ensure scroll even if content is short
+          padding: EdgeInsets.all(16.w),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Greeting with real name
+              Text(
+                'مرحباً، $userName 👋',
+                style: TextStyle(
+                  fontSize: 24.fz,
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context).textTheme.bodyLarge?.color,
                 ),
-                TextButton(
-                  onPressed: () {
-                    // Navigate to requests tab
-                  },
-                  child: const Text('عرض الكل'),
+              ).animate().fadeIn().slideX(),
+              SizedBox(height: 8.h),
+              Text(
+                _isOnline ? 'أنت متصل الآن وتستقبل الطلبات' : 'أنت غير متصل',
+                style: TextStyle(
+                  fontSize: 14.fz,
+                  color: _isOnline ? Colors.green : Colors.grey,
                 ),
-              ],
-            ).animate().fadeIn(delay: 300.ms),
-            SizedBox(height: 12.h),
-            
-            // Real-time jobs list
-            nearbyJobsStream.when(
-              data: (jobs) {
-                if (jobs.isEmpty) {
-                  return _buildEmptyJobsCard();
-                }
-                return Column(
-                  children: jobs.take(3).map((job) => Padding(
-                    padding: EdgeInsets.only(bottom: 12.h),
-                    child: _buildJobCard(job),
-                  )).toList(),
-                );
-              },
-              loading: () => _buildJobsShimmer(),
-              error: (err, _) => _buildErrorCard(err.toString()),
-            ),
-          ],
+              ).animate().fadeIn().slideX(delay: 100.ms),
+              SizedBox(height: 24.h),
+
+              // Stats Grid - Use real data from myJobs
+              _buildStatsSection(),
+
+              SizedBox(height: 24.h),
+
+              // New Requests Section
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'طلبات جديدة قريبة',
+                    style: TextStyle(
+                      fontSize: 18.fz,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      // Navigate to requests tab
+                    },
+                    child: const Text('عرض الكل'),
+                  ),
+                ],
+              ).animate().fadeIn(delay: 300.ms),
+              SizedBox(height: 12.h),
+
+              // Real-time jobs list
+              nearbyJobsStream.when(
+                data: (jobs) {
+                  if (jobs.isEmpty) {
+                    return _buildEmptyJobsCard();
+                  }
+                  return Column(
+                    children: jobs
+                        .take(3)
+                        .map(
+                          (job) => Padding(
+                            padding: EdgeInsets.only(bottom: 12.h),
+                            child: _buildJobCard(job),
+                          ),
+                        )
+                        .toList(),
+                  );
+                },
+                loading: () => _buildJobsShimmer(),
+                error: (err, _) => _buildErrorCard(err.toString()),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -115,18 +193,22 @@ class _TechnicianDashboardScreenState extends ConsumerState<TechnicianDashboardS
 
   Widget _buildStatsSection() {
     final myJobsAsync = ref.watch(myJobsProvider);
-    
+
     return myJobsAsync.when(
       data: (jobs) {
-        final todayJobs = jobs.where((j) => 
-          j.completedAt != null && 
-          j.completedAt!.day == DateTime.now().day
-        ).toList();
-        
+        final todayJobs = jobs
+            .where(
+              (j) =>
+                  j.completedAt != null &&
+                  j.completedAt!.day == DateTime.now().day,
+            )
+            .toList();
+
         final todayEarnings = todayJobs.fold<double>(
-          0, (sum, job) => sum + (job.technicianPrice ?? job.initialPrice ?? 0)
+          0,
+          (sum, job) => sum + (job.technicianPrice ?? job.initialPrice ?? 0),
         );
-        
+
         return Row(
           children: [
             Expanded(
@@ -189,14 +271,17 @@ class _TechnicianDashboardScreenState extends ConsumerState<TechnicianDashboardS
       baseColor: Colors.grey[800]!,
       highlightColor: Colors.grey[600]!,
       child: Column(
-        children: List.generate(2, (_) => Container(
-          height: 120.h,
-          margin: EdgeInsets.only(bottom: 12.h),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16.r),
+        children: List.generate(
+          2,
+          (_) => Container(
+            height: 120.h,
+            margin: EdgeInsets.only(bottom: 12.h),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16.r),
+            ),
           ),
-        )),
+        ),
       ),
     );
   }
@@ -247,14 +332,19 @@ class _TechnicianDashboardScreenState extends ConsumerState<TechnicianDashboardS
           ),
           IconButton(
             icon: const Icon(Icons.refresh, color: Colors.red),
-            onPressed: () => ref.invalidate(watchNearbyJobsStreamProvider),
+            onPressed: () => _refreshJobs(),
           ),
         ],
       ),
     );
   }
 
+  // Track jobs currently being accepted to prevent double-clicks
+  final Set<String> _processingJobs = {};
+
   Widget _buildJobCard(Job job) {
+    final isProcessing = _processingJobs.contains(job.id);
+
     return Container(
       padding: EdgeInsets.all(16.w),
       decoration: BoxDecoration(
@@ -342,24 +432,113 @@ class _TechnicianDashboardScreenState extends ConsumerState<TechnicianDashboardS
             children: [
               Expanded(
                 child: ElevatedButton.icon(
-                  onPressed: () async {
-                    final success = await ref
-                        .read(jobControllerProvider.notifier)
-                        .acceptJob(job.id);
-                    if (success && mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('✅ تم قبول الطلب بنجاح!'),
-                          backgroundColor: Colors.green,
-                        ),
-                      );
-                    }
-                  },
-                  icon: const Icon(Icons.check_circle_outline),
-                  label: const Text('قبول'),
+                  onPressed: isProcessing
+                      ? null
+                      : () async {
+                          debugPrint(
+                            '🔵 STEP 1: Button pressed for job ${job.id}',
+                          );
+                          setState(() {
+                            _processingJobs.add(job.id);
+                          });
+
+                          try {
+                            debugPrint('🔵 STEP 2: Calling acceptJob...');
+                            final success = await ref
+                                .read(jobControllerProvider.notifier)
+                                .acceptJob(job.id);
+
+                            debugPrint(
+                              '🔵 STEP 3: acceptJob returned: $success',
+                            );
+
+                            if (success && mounted) {
+                              debugPrint(
+                                '🔵 STEP 4: Success! Invalidating providers...',
+                              );
+                              _refreshJobs();
+                              debugPrint('🔵 STEP 5: Providers invalidated');
+
+                              if (mounted) {
+                                debugPrint(
+                                  '🔵 STEP 6: Showing success snackbar',
+                                );
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: const Text(
+                                      '✅ تم قبول الطلب! انتقل إلى "طلباتي" لبدء العمل',
+                                    ),
+                                    backgroundColor: Colors.green,
+                                    duration: const Duration(seconds: 3),
+                                    action: SnackBarAction(
+                                      label: 'ذهاب',
+                                      textColor: Colors.white,
+                                      onPressed: () {
+                                        if (context.mounted) {
+                                          context.push(
+                                            '/technician/job/${job.id}',
+                                          );
+                                        }
+                                      },
+                                    ),
+                                  ),
+                                );
+                              }
+                            } else if (mounted) {
+                              debugPrint(
+                                '🔴 STEP 4: Failure! Reading error state...',
+                              );
+                              final errorState = ref.read(
+                                jobControllerProvider,
+                              );
+                              debugPrint('🔴 Error: ${errorState.error}');
+
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    '❌ فشل قبول الطلب: ${errorState.error ?? "خطأ غير معروف"}',
+                                  ),
+                                  backgroundColor: Colors.red,
+                                ),
+                              );
+                            }
+                          } catch (e, stack) {
+                            debugPrint('🔴 EXCEPTION in acceptance button: $e');
+                            debugPrint('🔴 Stack trace: $stack');
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('❌ حدث خطأ: $e'),
+                                  backgroundColor: Colors.red,
+                                ),
+                              );
+                            }
+                          } finally {
+                            debugPrint(
+                              '🔵 STEP FINAL: Cleaning up processing state',
+                            );
+                            if (mounted) {
+                              setState(() {
+                                _processingJobs.remove(job.id);
+                              });
+                            }
+                          }
+                        },
+                  icon: isProcessing
+                      ? SizedBox(
+                          width: 20.w,
+                          height: 20.w,
+                          child: const CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(Icons.check_circle_outline),
+                  label: Text(isProcessing ? 'جاري القبول...' : 'قبول'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.green,
                     foregroundColor: Colors.white,
+                    disabledBackgroundColor: Colors.green.withOpacity(0.6),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12.r),
                     ),

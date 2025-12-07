@@ -9,12 +9,12 @@ class ErrorDialog extends StatelessWidget {
   final String? technicalDetails;
 
   const ErrorDialog({
-    Key? key,
+    super.key,
     this.title = 'خطأ',
     required this.message,
     this.onRetry,
     this.technicalDetails,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

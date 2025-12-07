@@ -145,18 +145,21 @@ class _HomeScreenContentState extends ConsumerState<HomeScreenContent> {
                 data: (services) => _buildServicesList(services),
                 loading: () => _buildServicesShimmer(),
                 error: (err, _) => Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.error_outline, size: 48.s, color: Colors.grey),
-                      SizedBox(height: 16.h),
-                      Text('فشل تحميل الخدمات', style: TextStyle(fontSize: 16.fz)),
-                      SizedBox(height: 8.h),
-                      ElevatedButton(
-                        onPressed: () => ref.invalidate(allServicesProvider),
-                        child: const Text('إعادة المحاولة'),
-                      ),
-                    ],
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.error_outline, size: 48.s, color: Colors.grey),
+                        SizedBox(height: 16.h),
+                        Text('فشل تحميل الخدمات', style: TextStyle(fontSize: 16.fz)),
+                        SizedBox(height: 8.h),
+                        ElevatedButton(
+                          onPressed: () => ref.invalidate(allServicesProvider),
+                          child: const Text('إعادة المحاولة'),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),

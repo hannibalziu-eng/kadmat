@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/api/endpoints.dart';
 
@@ -28,9 +29,9 @@ class AuthRepository {
     // we might need to fetch it again or store basic info.
     // For simplicity in this fix, we'll assume the user needs to login to get fresh data,
     // or we could fetch it here. Let's fetch it if we have a token.
-    
+
     if (token != null) {
-      _currentUser = 'user'; 
+      _currentUser = 'user';
       _userType = userType;
       // Ideally fetch profile here, but for now let's just set state
       _authStateController.add(_currentUser);
@@ -60,6 +61,30 @@ class AuthRepository {
       final user = response.data['user'];
       final type = user['user_type'] ?? 'customer';
 
+      // Fetch extended profile including badges (if technician)
+      // This is a temporary direct Supabase call until the API returns full nested data
+      final userId = user['id'];
+      Map<String, dynamic> fullProfile = Map<String, dynamic>.from(user);
+
+      /*
+      try {
+        if (type == 'technician') {
+          // Fetch badges
+          final badgesData = await Supabase.instance.client
+              .from('technician_badges')
+              .select('badge_type, label, icon_name')
+              .eq('technician_id', userId);
+
+          if (badgesData.isNotEmpty) {
+            fullProfile['badges'] = badgesData;
+          }
+        }
+      } catch (e) {
+        print('Error fetching badges: $e');
+        // Continue without badges if fetch fails
+      }
+      */
+
       // Enforce User Type Check
       if (requiredUserType != null && type != requiredUserType) {
         throw Exception(
@@ -74,7 +99,7 @@ class AuthRepository {
 
       _currentUser = user['email'];
       _userType = type;
-      _userProfile = user; // Store the full user profile
+      _userProfile = fullProfile; // Store the full user profile
       _authStateController.add(_currentUser);
     } catch (e) {
       if (e is DioException) {
@@ -82,10 +107,11 @@ class AuthRepository {
         final statusCode = e.response?.statusCode;
         final rawData = e.response?.data;
         throw Exception(
-            '$message (Status: $statusCode, Data: $rawData, Error: ${e.message})');
+          '$message (Status: $statusCode, Data: $rawData, Error: ${e.message})',
+        );
       }
       // Re-throw if it's already an Exception (like our user type check)
-      throw e;
+      rethrow;
     }
   }
 
@@ -95,6 +121,7 @@ class AuthRepository {
     required String phone,
     required String fullName,
     String userType = 'customer',
+    String? serviceId,
   }) async {
     try {
       await _client.post(
@@ -105,6 +132,7 @@ class AuthRepository {
           'phone': phone,
           'full_name': fullName,
           'user_type': userType,
+          if (serviceId != null) 'service_id': serviceId,
         },
       );
 
@@ -115,7 +143,9 @@ class AuthRepository {
         final message = e.response?.data['message'] ?? 'فشل إنشاء الحساب';
         final statusCode = e.response?.statusCode;
         final rawData = e.response?.data;
-        throw Exception('$message (Status: $statusCode, Data: $rawData, Error: ${e.message})');
+        throw Exception(
+          '$message (Status: $statusCode, Data: $rawData, Error: ${e.message})',
+        );
       }
       throw Exception('حدث خطأ غير متوقع: $e');
     }

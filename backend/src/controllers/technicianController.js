@@ -1,4 +1,4 @@
-import { supabase } from '../config/supabase.js';
+import { supabase, supabaseAdmin } from '../config/supabase.js';
 import Joi from 'joi';
 
 export const updateLocation = async (req, res) => {
@@ -19,19 +19,22 @@ export const updateLocation = async (req, res) => {
         // Update technician location in the database
         // Assuming 'technicians' table has a 'location' column of type geography(Point)
         // PostGIS syntax: 'POINT(long lat)'
-        const { data, error: dbError } = await supabase
-            .from('technicians')
+        const { data, error: dbError } = await supabaseAdmin
+            .from('users')
             .update({
-                location: `POINT(${longitude} ${latitude})`,
-                last_location_update: new Date().toISOString(),
+                location: `POINT(${longitude} ${latitude})`
             })
             .eq('id', userId)
             .select()
-            .single();
+            .maybeSingle();
 
         if (dbError) {
             console.error('Database error:', dbError);
             return res.status(500).json({ error: 'Failed to update location' });
+        }
+
+        if (!data) {
+            return res.status(404).json({ error: 'User not found or permission denied' });
         }
 
         res.json({ message: 'Location updated successfully', data });
@@ -55,16 +58,20 @@ export const toggleStatus = async (req, res) => {
             return res.status(400).json({ error: error.details[0].message });
         }
 
-        const { data, error: dbError } = await supabase
-            .from('technicians')
+        const { data, error: dbError } = await supabaseAdmin
+            .from('users')
             .update({ is_online: isOnline })
             .eq('id', userId)
             .select()
-            .single();
+            .maybeSingle();
 
         if (dbError) {
             console.error('Database error:', dbError);
             return res.status(500).json({ error: 'Failed to update status' });
+        }
+
+        if (!data) {
+            return res.status(404).json({ error: 'User not found or permission denied' });
         }
 
         res.json({ message: 'Status updated successfully', data });

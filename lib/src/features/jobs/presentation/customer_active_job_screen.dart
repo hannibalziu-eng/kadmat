@@ -13,10 +13,12 @@ class CustomerActiveJobScreen extends ConsumerStatefulWidget {
   const CustomerActiveJobScreen({super.key, required this.jobId});
 
   @override
-  ConsumerState<CustomerActiveJobScreen> createState() => _CustomerActiveJobScreenState();
+  ConsumerState<CustomerActiveJobScreen> createState() =>
+      _CustomerActiveJobScreenState();
 }
 
-class _CustomerActiveJobScreenState extends ConsumerState<CustomerActiveJobScreen> {
+class _CustomerActiveJobScreenState
+    extends ConsumerState<CustomerActiveJobScreen> {
   StreamSubscription? _jobSubscription;
   Job? _job;
   bool _isLoading = false;
@@ -106,7 +108,11 @@ class _CustomerActiveJobScreenState extends ConsumerState<CustomerActiveJobScree
             SizedBox(height: 32.h),
             Text(
               'جاري البحث عن فني...',
-              style: TextStyle(fontSize: 20.fz, fontWeight: FontWeight.bold, color: Colors.white),
+              style: TextStyle(
+                fontSize: 20.fz,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
             ),
             SizedBox(height: 12.h),
             Text(
@@ -117,7 +123,10 @@ class _CustomerActiveJobScreenState extends ConsumerState<CustomerActiveJobScree
             TextButton.icon(
               onPressed: _cancelJob,
               icon: const Icon(Icons.close, color: Colors.red),
-              label: const Text('إلغاء الطلب', style: TextStyle(color: Colors.red)),
+              label: const Text(
+                'إلغاء الطلب',
+                style: TextStyle(color: Colors.red),
+              ),
             ),
           ],
         ),
@@ -143,7 +152,11 @@ class _CustomerActiveJobScreenState extends ConsumerState<CustomerActiveJobScree
             SizedBox(height: 24.h),
             Text(
               'تم قبول طلبك! ✨',
-              style: TextStyle(fontSize: 22.fz, fontWeight: FontWeight.bold, color: Colors.white),
+              style: TextStyle(
+                fontSize: 22.fz,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
             ),
             SizedBox(height: 12.h),
             Text(
@@ -168,7 +181,11 @@ class _CustomerActiveJobScreenState extends ConsumerState<CustomerActiveJobScree
           SizedBox(height: 24.h),
           Text(
             'عرض السعر',
-            style: TextStyle(fontSize: 22.fz, fontWeight: FontWeight.bold, color: Colors.white),
+            style: TextStyle(
+              fontSize: 22.fz,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
           ),
           SizedBox(height: 32.h),
 
@@ -180,10 +197,18 @@ class _CustomerActiveJobScreenState extends ConsumerState<CustomerActiveJobScree
               children: [
                 Text(
                   '${_job!.technicianPrice ?? 0}',
-                  style: TextStyle(fontSize: 48.fz, fontWeight: FontWeight.bold, color: AppTheme.primaryColor),
+                  style: TextStyle(
+                    fontSize: 48.fz,
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.primaryColor,
+                  ),
                 ),
-                Text('ريال', style: TextStyle(fontSize: 18.fz, color: Colors.white60)),
-                if (_job!.priceNotes != null && _job!.priceNotes!.isNotEmpty) ...[
+                Text(
+                  'ريال',
+                  style: TextStyle(fontSize: 18.fz, color: Colors.white60),
+                ),
+                if (_job!.priceNotes != null &&
+                    _job!.priceNotes!.isNotEmpty) ...[
                   SizedBox(height: 16.h),
                   Text(
                     _job!.priceNotes!,
@@ -253,7 +278,11 @@ class _CustomerActiveJobScreenState extends ConsumerState<CustomerActiveJobScree
             SizedBox(height: 24.h),
             Text(
               'الفني في الطريق! 🚗',
-              style: TextStyle(fontSize: 22.fz, fontWeight: FontWeight.bold, color: Colors.white),
+              style: TextStyle(
+                fontSize: 22.fz,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
             ),
             SizedBox(height: 12.h),
             Text(
@@ -276,9 +305,41 @@ class _CustomerActiveJobScreenState extends ConsumerState<CustomerActiveJobScree
                   SizedBox(width: 8.w),
                   Text(
                     'السعر المتفق عليه: ${_job!.technicianPrice ?? 0} ريال',
-                    style: TextStyle(fontSize: 16.fz, color: Colors.green, fontWeight: FontWeight.bold),
+                    style: TextStyle(
+                      fontSize: 16.fz,
+                      color: Colors.green,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ],
+              ),
+            ),
+            SizedBox(height: 24.h),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  context.push(
+                    '/tracking/${widget.jobId}',
+                    extra: {
+                      'technicianId': _job!.technicianId,
+                      'lat': _job!.lat,
+                      'lng': _job!.lng,
+                    },
+                  );
+                },
+                icon: const Icon(Icons.map, color: Colors.white),
+                label: const Text(
+                  'تتبع الفني على الخريطة',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blueAccent,
+                  padding: EdgeInsets.symmetric(vertical: 16.h),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12.r),
+                  ),
+                ),
               ),
             ),
           ],
@@ -305,7 +366,11 @@ class _CustomerActiveJobScreenState extends ConsumerState<CustomerActiveJobScree
             SizedBox(height: 24.h),
             Text(
               'تم إكمال الخدمة! 🎉',
-              style: TextStyle(fontSize: 22.fz, fontWeight: FontWeight.bold, color: Colors.white),
+              style: TextStyle(
+                fontSize: 22.fz,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
             ),
             SizedBox(height: 32.h),
             if (_job!.customerRating == null)
@@ -313,18 +378,29 @@ class _CustomerActiveJobScreenState extends ConsumerState<CustomerActiveJobScree
                 onPressed: () => context.push('/rate-job/${widget.jobId}'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.amber,
-                  padding: EdgeInsets.symmetric(horizontal: 32.w, vertical: 16.h),
+                  padding: EdgeInsets.symmetric(
+                    horizontal: 32.w,
+                    vertical: 16.h,
+                  ),
                 ),
-                child: const Text('قيّم الخدمة ⭐', style: TextStyle(color: Colors.black)),
+                child: const Text(
+                  'قيّم الخدمة ⭐',
+                  style: TextStyle(color: Colors.black),
+                ),
               )
             else
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(5, (i) => Icon(
-                  i < (_job!.customerRating ?? 0) ? Icons.star : Icons.star_border,
-                  color: Colors.amber,
-                  size: 32.s,
-                )),
+                children: List.generate(
+                  5,
+                  (i) => Icon(
+                    i < (_job!.customerRating ?? 0)
+                        ? Icons.star
+                        : Icons.star_border,
+                    color: Colors.amber,
+                    size: 32.s,
+                  ),
+                ),
               ),
           ],
         ),
@@ -343,7 +419,11 @@ class _CustomerActiveJobScreenState extends ConsumerState<CustomerActiveJobScree
             SizedBox(height: 24.h),
             Text(
               'تم إلغاء الطلب',
-              style: TextStyle(fontSize: 22.fz, fontWeight: FontWeight.bold, color: Colors.white),
+              style: TextStyle(
+                fontSize: 22.fz,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
             ),
             SizedBox(height: 32.h),
             ElevatedButton(
@@ -380,7 +460,11 @@ class _CustomerActiveJobScreenState extends ConsumerState<CustomerActiveJobScree
                 ),
                 Text(
                   'فني محترف', // Would be from backend
-                  style: TextStyle(fontSize: 16.fz, fontWeight: FontWeight.bold, color: Colors.white),
+                  style: TextStyle(
+                    fontSize: 16.fz,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
                 ),
               ],
             ),
@@ -409,7 +493,10 @@ class _CustomerActiveJobScreenState extends ConsumerState<CustomerActiveJobScree
       await ref.read(jobRepositoryProvider).confirmPrice(widget.jobId, true);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('تم قبول السعر! الفني في الطريق.'), backgroundColor: Colors.green),
+          const SnackBar(
+            content: Text('تم قبول السعر! الفني في الطريق.'),
+            backgroundColor: Colors.green,
+          ),
         );
       }
     } catch (e) {
@@ -429,7 +516,10 @@ class _CustomerActiveJobScreenState extends ConsumerState<CustomerActiveJobScree
       builder: (ctx) => AlertDialog(
         backgroundColor: AppTheme.surfaceDark,
         title: const Text('رفض السعر', style: TextStyle(color: Colors.white)),
-        content: const Text('هل تريد البحث عن فني آخر؟', style: TextStyle(color: Colors.white70)),
+        content: const Text(
+          'هل تريد البحث عن فني آخر؟',
+          style: TextStyle(color: Colors.white70),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -450,7 +540,10 @@ class _CustomerActiveJobScreenState extends ConsumerState<CustomerActiveJobScree
         await ref.read(jobRepositoryProvider).confirmPrice(widget.jobId, false);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('جاري البحث عن فني آخر...'), backgroundColor: Colors.orange),
+            const SnackBar(
+              content: Text('جاري البحث عن فني آخر...'),
+              backgroundColor: Colors.orange,
+            ),
           );
         }
       } catch (e) {
@@ -471,7 +564,10 @@ class _CustomerActiveJobScreenState extends ConsumerState<CustomerActiveJobScree
       builder: (ctx) => AlertDialog(
         backgroundColor: AppTheme.surfaceDark,
         title: const Text('إلغاء الطلب', style: TextStyle(color: Colors.white)),
-        content: const Text('هل أنت متأكد من إلغاء الطلب؟', style: TextStyle(color: Colors.white70)),
+        content: const Text(
+          'هل أنت متأكد من إلغاء الطلب؟',
+          style: TextStyle(color: Colors.white70),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),

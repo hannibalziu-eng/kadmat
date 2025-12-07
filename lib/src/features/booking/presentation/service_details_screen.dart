@@ -5,7 +5,10 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_scalify/flutter_scalify.dart';
 import 'package:geolocator/geolocator.dart';
-import '../../jobs/presentation/job_controller.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:uuid/uuid.dart';
+import 'package:path/path.dart' as path;
+import '../../jobs/data/job_repository.dart';
 
 class ServiceDetailsScreen extends ConsumerStatefulWidget {
   final String serviceId;
@@ -18,7 +21,8 @@ class ServiceDetailsScreen extends ConsumerStatefulWidget {
   });
 
   @override
-  ConsumerState<ServiceDetailsScreen> createState() => _ServiceDetailsScreenState();
+  ConsumerState<ServiceDetailsScreen> createState() =>
+      _ServiceDetailsScreenState();
 }
 
 class _ServiceDetailsScreenState extends ConsumerState<ServiceDetailsScreen> {
@@ -44,7 +48,6 @@ class _ServiceDetailsScreenState extends ConsumerState<ServiceDetailsScreen> {
         });
       }
     } catch (e) {
-      // Handle error
       debugPrint('Error picking images: $e');
     }
   }
@@ -56,7 +59,6 @@ class _ServiceDetailsScreenState extends ConsumerState<ServiceDetailsScreen> {
   }
 
   List<Map<String, dynamic>> _getQuickOptions() {
-    // Different options based on service type
     if (widget.serviceName.contains('سباك') ||
         widget.serviceName.contains('سباكة')) {
       return [
@@ -91,6 +93,144 @@ class _ServiceDetailsScreenState extends ConsumerState<ServiceDetailsScreen> {
     }
   }
 
+  Future<List<String>> _uploadImages() async {
+    if (_selectedImages.isEmpty) return [];
+
+    final urls = <String>[];
+    final storage = Supabase.instance.client.storage;
+    final uuid = const Uuid().v4();
+
+    for (var i = 0; i < _selectedImages.length; i++) {
+      final image = _selectedImages[i];
+      final ext = path.extension(image.path);
+      final fileName = '${uuid}_$i$ext'; // Unique filename
+
+      try {
+        await storage
+            .from('job_images')
+            .upload(
+              fileName,
+              File(image.path),
+              fileOptions: const FileOptions(
+                cacheControl: '3600',
+                upsert: false,
+              ),
+            );
+
+        final publicUrl = storage.from('job_images').getPublicUrl(fileName);
+        urls.add(publicUrl);
+      } catch (e) {
+        debugPrint('⚠️ Error uploading image ${image.path}: $e');
+        // Continue with other images
+      }
+    }
+    return urls;
+  }
+
+  Future<void> _requestService() async {
+    // Validate location
+    if (!_locationConfirmed) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('يرجى تأكيد موقعك أولاً'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    if (_isLoading) return; // Prevent double tap
+
+    setState(() => _isLoading = true);
+
+    try {
+      double lat = 24.7136; // Default Riyadh
+      double lng = 46.6753;
+
+      // Check if location services are available
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+
+      if (serviceEnabled) {
+        // Check location permission
+        LocationPermission permission = await Geolocator.checkPermission();
+
+        if (permission == LocationPermission.denied) {
+          permission = await Geolocator.requestPermission();
+        }
+
+        if (permission == LocationPermission.whileInUse ||
+            permission == LocationPermission.always) {
+          try {
+            debugPrint('📍 Getting location...');
+            final position = await Geolocator.getCurrentPosition(
+              desiredAccuracy: LocationAccuracy.high,
+            );
+            debugPrint(
+              '📍 Location found: ${position.latitude}, ${position.longitude}',
+            );
+            lat = position.latitude;
+            lng = position.longitude;
+          } catch (e) {
+            debugPrint('❌ Location error: $e');
+          }
+        }
+      }
+
+      // Upload images first
+      final imageUrls = await _uploadImages();
+
+      // Create the job
+      final job = await ref
+          .read(jobRepositoryProvider)
+          .createJob(
+            serviceId: widget.serviceId,
+            lat: lat,
+            lng: lng,
+            description: _selectedQuickOption != null
+                ? '$_selectedQuickOption\n${_descriptionController.text}'
+                : _descriptionController.text,
+            addressText: 'موقعي الحالي',
+            initialPrice: 0,
+            images: imageUrls,
+          );
+
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+
+      if (job != null && mounted) {
+        // Navigate to searching screen
+        context.push(
+          '/searching-for-technician',
+          extra: {
+            'jobId': job.id,
+            'serviceName': widget.serviceName,
+            'lat': lat,
+            'lng': lng,
+          },
+        );
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('فشل في إنشاء الطلب، يرجى المحاولة مرة أخرى'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Request service error: $e');
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('خطأ: ${e.toString().replaceAll('Exception: ', '')}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final quickOptions = _getQuickOptions();
@@ -98,8 +238,6 @@ class _ServiceDetailsScreenState extends ConsumerState<ServiceDetailsScreen> {
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
-        elevation: 0,
         title: Text(
           widget.serviceName,
           style: const TextStyle(fontWeight: FontWeight.bold),
@@ -109,9 +247,6 @@ class _ServiceDetailsScreenState extends ConsumerState<ServiceDetailsScreen> {
           icon: const Icon(Icons.arrow_back),
           onPressed: () => context.pop(),
         ),
-        actions: [
-          IconButton(icon: const Icon(Icons.favorite_border), onPressed: () {}),
-        ],
       ),
       body: SingleChildScrollView(
         padding: EdgeInsets.all(16.w),
@@ -158,11 +293,9 @@ class _ServiceDetailsScreenState extends ConsumerState<ServiceDetailsScreen> {
                       final isSelected =
                           _selectedQuickOption == option['label'];
                       return InkWell(
-                        onTap: () {
-                          setState(() {
-                            _selectedQuickOption = option['label'];
-                          });
-                        },
+                        onTap: () => setState(
+                          () => _selectedQuickOption = option['label'],
+                        ),
                         child: Container(
                           decoration: BoxDecoration(
                             color: isSelected
@@ -269,7 +402,6 @@ class _ServiceDetailsScreenState extends ConsumerState<ServiceDetailsScreen> {
                     ),
                   ),
                   SizedBox(height: 12.h),
-                  SizedBox(height: 12.h),
                   SizedBox(
                     height: 100.h,
                     child: ListView.separated(
@@ -291,13 +423,10 @@ class _ServiceDetailsScreenState extends ConsumerState<ServiceDetailsScreen> {
 
             SizedBox(height: 16.h),
 
-            // Customer Location Confirmation Section
+            // Location Confirmation
             InkWell(
-              onTap: () {
-                setState(() {
-                  _locationConfirmed = !_locationConfirmed;
-                });
-              },
+              onTap: () =>
+                  setState(() => _locationConfirmed = !_locationConfirmed),
               child: Container(
                 padding: EdgeInsets.all(16.w),
                 decoration: BoxDecoration(
@@ -371,8 +500,7 @@ class _ServiceDetailsScreenState extends ConsumerState<ServiceDetailsScreen> {
                 ),
               ),
             ),
-
-            SizedBox(height: 80.h), // Bottom button padding
+            SizedBox(height: 80.h),
           ],
         ),
       ),
@@ -396,7 +524,7 @@ class _ServiceDetailsScreenState extends ConsumerState<ServiceDetailsScreen> {
                 borderRadius: BorderRadius.circular(30.r),
               ),
             ),
-            child: _isLoading 
+            child: _isLoading
                 ? SizedBox(
                     height: 20.h,
                     width: 20.w,
@@ -417,105 +545,6 @@ class _ServiceDetailsScreenState extends ConsumerState<ServiceDetailsScreen> {
         ),
       ),
     );
-  }
-
-  Future<void> _requestService() async {
-    // Validate location
-    if (!_locationConfirmed) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('يرجى تأكيد موقعك أولاً'),
-          backgroundColor: Colors.orange,
-        ),
-      );
-      return;
-    }
-
-    if (_isLoading) return; // Prevent double tap
-    
-    setState(() => _isLoading = true);
-
-    try {
-      double lat = 24.7136; // Default Riyadh
-      double lng = 46.6753;
-      
-      // Check if location services are available
-      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      
-      if (serviceEnabled) {
-        // Check location permission
-        LocationPermission permission = await Geolocator.checkPermission();
-        
-        if (permission == LocationPermission.denied) {
-          permission = await Geolocator.requestPermission();
-        }
-        
-        if (permission == LocationPermission.whileInUse || 
-            permission == LocationPermission.always) {
-          try {
-            // Get current location with timeout
-            final position = await Geolocator.getCurrentPosition(
-              desiredAccuracy: LocationAccuracy.high,
-            ).timeout(
-              const Duration(seconds: 10),
-              onTimeout: () => throw Exception('Location timeout'),
-            );
-            lat = position.latitude;
-            lng = position.longitude;
-          } catch (e) {
-            debugPrint('Location error: $e');
-            // Use default location if location fails
-          }
-        }
-      }
-
-      // Create the job
-      final job = await ref.read(jobControllerProvider.notifier).createJob(
-        serviceId: widget.serviceId,
-        lat: lat,
-        lng: lng,
-        description: _selectedQuickOption != null 
-            ? '$_selectedQuickOption\n${_descriptionController.text}'
-            : _descriptionController.text,
-        addressText: 'موقعي الحالي',
-        initialPrice: 0, // Price will be set by technician
-      );
-
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
-
-      if (job != null && mounted) {
-        // Navigate to searching screen
-        context.push(
-          '/searching-for-technician',
-          extra: {
-            'jobId': job.id,
-            'serviceName': widget.serviceName,
-            'lat': lat,
-            'lng': lng,
-          },
-        );
-      } else if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('فشل في إنشاء الطلب، يرجى المحاولة مرة أخرى'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } catch (e) {
-      debugPrint('Request service error: $e');
-      if (mounted) {
-        setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('خطأ: ${e.toString().replaceAll('Exception: ', '')}'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
   }
 
   Widget _buildImageItem(int index) {

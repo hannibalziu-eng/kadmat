@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
@@ -5,6 +6,23 @@ part 'location_service.g.dart';
 
 class LocationService {
   Future<Position> getCurrentLocation() async {
+    // Bypass for Web Testing to avoid permission hang
+    if (kIsWeb) {
+      return Position(
+        latitude: 24.7136,
+        longitude: 46.6753,
+        timestamp: DateTime.now(),
+        accuracy: 0,
+        altitude: 0,
+        heading: 0,
+        speed: 0,
+        speedAccuracy: 0,
+        altitudeAccuracy: 0,
+        headingAccuracy: 0,
+        isMocked: true,
+      );
+    }
+
     bool serviceEnabled;
     LocationPermission permission;
 
