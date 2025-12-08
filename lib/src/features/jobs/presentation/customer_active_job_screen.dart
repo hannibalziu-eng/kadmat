@@ -490,7 +490,7 @@ class _CustomerActiveJobScreenState
   Future<void> _acceptPrice() async {
     setState(() => _isLoading = true);
     try {
-      await ref.read(jobRepositoryProvider).confirmPrice(widget.jobId, true);
+      await ref.read(jobRepositoryProvider).confirmPrice(widget.jobId);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -537,7 +537,11 @@ class _CustomerActiveJobScreenState
     if (result == true) {
       setState(() => _isLoading = true);
       try {
-        await ref.read(jobRepositoryProvider).confirmPrice(widget.jobId, false);
+        // For price rejection, we cancel the current job or use a different endpoint
+        // Since confirmPrice no longer takes a boolean, rejecting means cancelling
+        await ref
+            .read(jobRepositoryProvider)
+            .cancelJob(widget.jobId, reason: 'رفض السعر');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(

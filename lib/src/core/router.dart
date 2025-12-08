@@ -21,6 +21,9 @@ import '../features/jobs/presentation/searching_for_technician_screen.dart';
 import '../features/jobs/presentation/customer_active_job_screen.dart';
 import '../features/jobs/presentation/rating_screen.dart';
 import '../features/technician/presentation/jobs/technician_job_detail_screen.dart';
+// New job flow screens
+import '../features/jobs/presentation/screens/customer_screens.dart';
+import '../features/jobs/presentation/screens/technician_screens.dart';
 import 'package:flutter/material.dart';
 
 part 'router.g.dart';
@@ -200,6 +203,89 @@ GoRouter goRouter(GoRouterRef ref) {
       GoRoute(
         path: '/customer-wallet',
         builder: (context, state) => const CustomerWalletScreen(),
+      ),
+
+      // ===== NEW JOB FLOW ROUTES =====
+
+      // Customer Job Flow Routes
+      GoRoute(
+        path: '/jobs/:jobId/customer/searching',
+        builder: (context, state) {
+          final jobId = state.pathParameters['jobId']!;
+          return CustomerSearchingScreen(jobId: jobId);
+        },
+      ),
+      GoRoute(
+        path: '/jobs/:jobId/customer/technician-found',
+        builder: (context, state) {
+          final jobId = state.pathParameters['jobId']!;
+          return CustomerTechnicianFoundScreen(jobId: jobId);
+        },
+      ),
+      GoRoute(
+        path: '/jobs/:jobId/customer/price-offer',
+        builder: (context, state) {
+          final jobId = state.pathParameters['jobId']!;
+          return CustomerPriceOfferScreen(jobId: jobId);
+        },
+      ),
+      GoRoute(
+        path: '/jobs/:jobId/customer/in-progress',
+        builder: (context, state) {
+          final jobId = state.pathParameters['jobId']!;
+          return CustomerInProgressScreen(jobId: jobId);
+        },
+      ),
+      GoRoute(
+        path: '/jobs/:jobId/customer/rate',
+        builder: (context, state) {
+          final jobId = state.pathParameters['jobId']!;
+          return CustomerRateScreen(jobId: jobId);
+        },
+      ),
+      GoRoute(
+        path: '/jobs/:jobId/customer/completed',
+        builder: (context, state) {
+          final jobId = state.pathParameters['jobId']!;
+          return CustomerCompletedScreen(jobId: jobId);
+        },
+      ),
+
+      // Technician Job Flow Routes
+      GoRoute(
+        path: '/jobs/:jobId/technician/accepted',
+        builder: (context, state) {
+          final jobId = state.pathParameters['jobId']!;
+          return TechnicianAcceptedScreen(jobId: jobId);
+        },
+      ),
+      GoRoute(
+        path: '/jobs/:jobId/technician/set-price',
+        builder: (context, state) {
+          final jobId = state.pathParameters['jobId']!;
+          return TechnicianSetPriceScreen(jobId: jobId);
+        },
+      ),
+      GoRoute(
+        path: '/jobs/:jobId/technician/waiting',
+        builder: (context, state) {
+          final jobId = state.pathParameters['jobId']!;
+          return TechnicianWaitingScreen(jobId: jobId);
+        },
+      ),
+      GoRoute(
+        path: '/jobs/:jobId/technician/in-progress',
+        builder: (context, state) {
+          final jobId = state.pathParameters['jobId']!;
+          return TechnicianInProgressScreen(jobId: jobId);
+        },
+      ),
+      GoRoute(
+        path: '/jobs/:jobId/technician/completed',
+        builder: (context, state) {
+          final jobId = state.pathParameters['jobId']!;
+          return TechnicianCompletedScreen(jobId: jobId);
+        },
       ),
     ],
   );

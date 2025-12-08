@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/api/endpoints.dart';
@@ -36,11 +36,10 @@ class JobRepository {
         ),
       );
 
-      // Manually add token
-      const storage = FlutterSecureStorage();
-      final token = await storage.read(key: 'auth_token');
-      if (token != null) {
-        dio.options.headers['Authorization'] = 'Bearer $token';
+      // Manually add token from Supabase Session
+      final session = Supabase.instance.client.auth.currentSession;
+      if (session != null) {
+        dio.options.headers['Authorization'] = 'Bearer ${session.accessToken}';
       }
 
       final response = await dio.post(
@@ -57,7 +56,7 @@ class JobRepository {
       );
 
       if (response.statusCode == 201 && response.data['success'] == true) {
-        return Job.fromJson(response.data['job']);
+        return Job.fromJson(response.data['data']);
       }
       return null;
     } catch (e) {
@@ -111,7 +110,44 @@ class JobRepository {
           throw Exception('فشل إنشاء الطلب (Offline Mode Failed): $dbError');
         }
       }
-      throw Exception('فشل إنشاء الطلب: ${e.response?.data['message'] ?? e.message}');
+      if (e is DioException) {
+        throw Exception(
+          'فشل إنشاء الطلب: ${e.response?.data['message'] ?? e.message}',
+        );
+      }
+      throw Exception('فشل إنشاء الطلب: $e');
+    }
+  }
+
+  /// Get a single job by ID with full details
+  Future<Job?> getJobById(String jobId) async {
+    try {
+      final response = await _client.get('/jobs/$jobId');
+
+      final body = response.data;
+      if (body == null || body['success'] != true || body['data'] == null) {
+        return null;
+      }
+      return Job.fromJson(body['data']);
+    } catch (e) {
+      if (e is DioException && e.response?.statusCode == 404) {
+        return null;
+      }
+      // Fallback to Supabase
+      try {
+        final data = await Supabase.instance.client
+            .from('jobs')
+            .select(
+              '*, customer:users!customer_id(*), technician:users!technician_id(*), service:services!service_id(*)',
+            )
+            .eq('id', jobId)
+            .maybeSingle();
+
+        if (data == null) return null;
+        return Job.fromJson(data);
+      } catch (_) {
+        return null;
+      }
     }
   }
 
@@ -121,16 +157,23 @@ class JobRepository {
     double radius = 5000,
   }) async {
     try {
-      final response = await _client.get(
+      // Use fresh Dio to avoid shared interceptor issues
+      final dio = Dio(BaseOptions(baseUrl: Endpoints.baseUrl));
+      final session = Supabase.instance.client.auth.currentSession;
+      if (session != null) {
+        dio.options.headers['Authorization'] = 'Bearer ${session.accessToken}';
+      }
+
+      final response = await dio.get(
         Endpoints.nearbyJobs,
         queryParameters: {'lat': lat, 'lng': lng, 'radius': radius},
       );
 
-      final List data = response.data['jobs'];
+      final List data = response.data['data'];
       return data.map((e) => Job.fromJson(e)).toList();
     } catch (e) {
       if (e is DioException && e.response?.statusCode == 429) {
-        // Fallback: Fetch pending jobs directly
+        // Fallback: Fetch pending jobs directly from Supabase
         try {
           final data = await Supabase.instance.client
               .from('jobs')
@@ -140,17 +183,14 @@ class JobRepository {
               .eq('status', 'pending')
               .isFilter('technician_id', null)
               .order('created_at', ascending: false);
-
-          // Simple client-side distance filter could be added here if needed,
-          // but for fallback, returning all pending jobs is "good enough" to unblock
           return (data as List).map((e) => Job.fromJson(e)).toList();
         } catch (_) {}
       }
 
       if (e is DioException) {
-        final message =
-            e.response?.data['message'] ?? 'فشل جلب الطلبات القريبة';
-        throw Exception(message);
+        throw Exception(
+          e.response?.data['message'] ?? 'فشل جلب الطلبات القريبة',
+        );
       }
       throw Exception('فشل جلب الطلبات القريبة: $e');
     }
@@ -158,12 +198,19 @@ class JobRepository {
 
   Future<List<Job>> getMyJobs() async {
     try {
-      final response = await _client.get(Endpoints.myJobs);
-      final List data = response.data['jobs'];
+      // Use fresh Dio to avoid shared interceptor issues
+      final dio = Dio(BaseOptions(baseUrl: Endpoints.baseUrl));
+      final session = Supabase.instance.client.auth.currentSession;
+      if (session != null) {
+        dio.options.headers['Authorization'] = 'Bearer ${session.accessToken}';
+      }
+
+      final response = await dio.get(Endpoints.myJobs);
+      final List data = response.data['data'];
       return data.map((e) => Job.fromJson(e)).toList();
     } catch (e) {
       if (e is DioException && e.response?.statusCode == 429) {
-        // Fallback: Fetch my jobs directly
+        // Fallback: Fetch my jobs directly from Supabase
         try {
           final userId = Supabase.instance.client.auth.currentUser?.id;
           if (userId != null) {
@@ -172,9 +219,7 @@ class JobRepository {
                 .select(
                   '*, customer:users!customer_id(*), technician:users!technician_id(*), service:services!service_id(*)',
                 )
-                .or(
-                  'customer_id.eq.$userId,technician_id.eq.$userId',
-                ) // Fetch jobs where I am customer OR technician
+                .or('customer_id.eq.$userId,technician_id.eq.$userId')
                 .order('created_at', ascending: false);
             return (data as List).map((e) => Job.fromJson(e)).toList();
           }
@@ -198,19 +243,37 @@ class JobRepository {
         ),
       );
 
-      // Manually add token
-      const storage = FlutterSecureStorage();
-      final token = await storage.read(key: 'auth_token');
-      if (token != null) {
-        dio.options.headers['Authorization'] = 'Bearer $token';
+      // Manually add token from Supabase Session
+      final session = Supabase.instance.client.auth.currentSession;
+      if (session != null) {
+        dio.options.headers['Authorization'] = 'Bearer ${session.accessToken}';
       }
 
       final response = await dio.post(Endpoints.acceptJob(jobId));
-      return Job.fromJson(response.data['job']);
+
+      final body = response.data;
+      if (body == null) {
+        throw Exception('استجابة غير متوقعة من الخادم');
+      }
+
+      if (body['success'] == true) {
+        return Job.fromJson(body['data']);
+      } else {
+        final error = body['error'];
+        final code = error?['code'] ?? 'UNKNOWN_ERROR';
+        final message = error?['message'] ?? 'فشل قبول الطلب';
+
+        if (code == 'JOB_ALREADY_ACCEPTED') {
+          throw Exception('عذراً، تم قبول الطلب من فني آخر');
+        }
+
+        throw Exception(message);
+      }
     } catch (e) {
       if (e is DioException && e.response?.statusCode == 409) {
         throw Exception('عذراً، تم قبول الطلب من فني آخر');
       }
+      if (e is Exception) rethrow; // Allow logic errors to propagate cleanly
       throw Exception('فشل قبول الطلب: $e');
     }
   }
@@ -221,35 +284,38 @@ class JobRepository {
         Endpoints.setPrice(jobId),
         data: {'price': price, 'notes': notes},
       );
-      return Job.fromJson(response.data['job']);
+      return Job.fromJson(response.data['data']);
     } catch (e) {
       throw Exception('فشل تحديد السعر');
     }
   }
 
-  Future<Job> confirmPrice(
-    String jobId,
-    bool accepted, {
-    double? counterOffer,
-  }) async {
+  Future<Job> confirmPrice(String jobId) async {
     try {
-      final response = await _client.post(
-        Endpoints.confirmPrice(jobId),
-        data: {
-          'accepted': accepted,
-          if (counterOffer != null) 'counter_offer': counterOffer,
-        },
-      );
-      return Job.fromJson(response.data['job']);
+      final response = await _client.post(Endpoints.confirmPrice(jobId));
+
+      final body = response.data;
+      if (body == null || body['success'] != true) {
+        throw Exception(body?['error']?['message'] ?? 'فشل تأكيد السعر');
+      }
+      return Job.fromJson(body['data']);
     } catch (e) {
+      if (e is Exception) rethrow;
       throw Exception('فشل تأكيد السعر');
     }
   }
 
-  Future<void> completeJob(String jobId) async {
+  Future<Job> completeJob(String jobId) async {
     try {
-      await _client.post(Endpoints.completeJob(jobId));
+      final response = await _client.post(Endpoints.completeJob(jobId));
+
+      final body = response.data;
+      if (body == null || body['success'] != true) {
+        throw Exception(body?['error']?['message'] ?? 'فشل إكمال الطلب');
+      }
+      return Job.fromJson(body['data']);
     } catch (e) {
+      if (e is Exception) rethrow;
       throw Exception('فشل إكمال الطلب');
     }
   }
@@ -260,8 +326,14 @@ class JobRepository {
         Endpoints.rateJob(jobId),
         data: {'rating': rating, 'review': review},
       );
-      return Job.fromJson(response.data['job']);
+
+      final body = response.data;
+      if (body == null || body['success'] != true) {
+        throw Exception(body?['error']?['message'] ?? 'فشل إرسال التقييم');
+      }
+      return Job.fromJson(body['data']);
     } catch (e) {
+      if (e is Exception) rethrow;
       throw Exception('فشل إرسال التقييم');
     }
   }
@@ -291,8 +363,19 @@ class JobRepository {
               '*, customer:users!customer_id(*), technician:users!technician_id(*), service:services!service_id(*)',
             )
             .eq('id', jobId)
-            .single();
+            .maybeSingle(); // 👈 uses maybeSingle as requested
+
+        if (data == null) {
+          return null;
+        }
+
         return Job.fromJson(data);
+      } on PostgrestException catch (e) {
+        if (e.code == 'PGRST116') {
+          return null; // Handle 0 rows logic
+        }
+        debugPrint('Error getting job: $e');
+        return null;
       } catch (dbError) {
         debugPrint('Error getting job: $dbError');
         return null;

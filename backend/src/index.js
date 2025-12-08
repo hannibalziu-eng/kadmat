@@ -40,8 +40,12 @@ app.use(express.json());
 // Rate Limiting (Basic protection against DDoS)
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, // Limit each IP to 100 requests per windowMs
-    message: 'Too many requests from this IP, please try again later.'
+    max: 500, // Increased limit for development
+    message: 'Too many requests from this IP, please try again later.',
+    skip: (req) => {
+        // Skip rate limiting for location updates which happen frequently
+        return req.path === '/api/technician/location' || req.path.includes('/location');
+    }
 });
 app.use(limiter);
 
@@ -86,10 +90,21 @@ app.use(errorHandler);
 // Start Server
 // =============================================
 
-app.listen(PORT, () => {
-    console.log(`
-  ################################################
-  🚀 Server listening on port: ${PORT}
-  ################################################
-  `);
-});
+import { startJobRetryScheduler } from './jobs/jobRetryScheduler.js';
+
+// Export app for testing
+export default app;
+
+// Only listen if run directly
+if (process.argv[1] === new URL(import.meta.url).pathname) {
+    app.listen(PORT, () => {
+        console.log(`
+      ################################################
+      🚀 Server listening on port: ${PORT}
+      ################################################
+      `);
+
+        // Start job retry scheduler
+        startJobRetryScheduler();
+    });
+}

@@ -83,16 +83,18 @@ class _SearchingForTechnicianScreenState
       final jobRepo = ref.read(jobRepositoryProvider);
       final job = await jobRepo.getJob(widget.jobId);
 
-      if (job != null) {
-        debugPrint(
-          '🔍 Polling Result: Status=${job.status}, TechID=${job.technicianId}, Navigating=$_navigating',
-        );
-      } else {
-        debugPrint('⚠️ Polling: Job returned null');
+      if (job == null) {
+        debugPrint('⚠️ Polling: Job not found (null). Stopping polling.');
+        // Job might be cancelled or deleted. Stop polling to avoid loops.
+        // In a real app, you might want to show a dialog or navigate back.
+        return;
       }
 
-      if (job != null &&
-          job.status == 'accepted' &&
+      debugPrint(
+        '🔍 Polling Result: Status=${job.status}, TechID=${job.technicianId}, Navigating=$_navigating',
+      );
+
+      if (job.status == 'accepted' &&
           job.technicianId != null &&
           !_navigating) {
         debugPrint('✅ Polling: Job accepted! TechID: ${job.technicianId}');

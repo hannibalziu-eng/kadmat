@@ -1,6 +1,6 @@
 import 'package:dio/dio.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'endpoints.dart';
 
 part 'api_client.g.dart';
@@ -29,12 +29,15 @@ Dio apiClient(ApiClientRef ref) {
           return handler.next(options);
         }
 
-        // Add Auth Token to Header
-        const storage = FlutterSecureStorage();
-        final token = await storage.read(key: 'auth_token');
-
-        if (token != null) {
+        // Add Auth Token from Supabase Session
+        // This is more reliable than manual storage as Supabase SDK manages persistence/refresh
+        final session = Supabase.instance.client.auth.currentSession;
+        if (session != null) {
+          final token = session.accessToken;
           options.headers['Authorization'] = 'Bearer $token';
+          print('✅ Token Added to Request: ${token.substring(0, 10)}...');
+        } else {
+          print('⚠️ No Supabase session found for request: ${options.path}');
         }
 
         return handler.next(options);
@@ -51,83 +54,45 @@ Dio apiClient(ApiClientRef ref) {
 
         // Handle 401 Unauthorized - Token Expired
         if (err.response?.statusCode == 401) {
-          print('🔄 401 Detected. Attempting refresh...');
-          const storage = FlutterSecureStorage();
-          final refreshToken = await storage.read(key: 'refresh_token');
+          print('🔄 401 Detected. Attempting Supabase SDK refresh...');
 
-          if (refreshToken != null) {
-            try {
-              // Create a new Dio instance to avoid interceptor loops
-              final refreshDio = Dio(
-                BaseOptions(
-                  baseUrl: Endpoints.baseUrl,
-                  headers: {'Content-Type': 'application/json'},
+          try {
+            // Attempt to refresh the session using Supabase SDK
+            // This checks for a locally stored refresh token and uses it
+            final response = await Supabase.instance.client.auth
+                .refreshSession();
+
+            if (response.session != null) {
+              print('✅ Supabase Session Refreshed!');
+
+              // Retry the request with the new token
+              final opts = err.requestOptions;
+              opts.headers['Authorization'] =
+                  'Bearer ${response.session!.accessToken}';
+
+              // Use a fresh Dio for retry to avoid interceptor issues
+              final retryDio = Dio(
+                BaseOptions(baseUrl: Endpoints.baseUrl, headers: opts.headers),
+              );
+
+              final retryResponse = await retryDio.request(
+                opts.path,
+                data: opts.data,
+                queryParameters: opts.queryParameters,
+                options: Options(
+                  method: opts.method,
+                  contentType: opts.contentType,
+                  responseType: opts.responseType,
                 ),
               );
 
-              final response = await refreshDio.post(
-                '/auth/refresh',
-                data: {'refresh_token': refreshToken},
-              );
-
-              if (response.statusCode == 200 &&
-                  response.data['success'] == true) {
-                print('✅ Token Refreshed!');
-                final newAccessToken = response.data['token'];
-                final newRefreshToken = response.data['refresh_token'];
-
-                await storage.write(key: 'auth_token', value: newAccessToken);
-                await storage.write(
-                  key: 'refresh_token',
-                  value: newRefreshToken,
-                );
-
-                // Retry the original request with new token
-                final opts = err.requestOptions;
-                opts.headers['Authorization'] = 'Bearer $newAccessToken';
-
-                // Use a fresh Dio to retry
-                final retryDio = Dio(
-                  BaseOptions(
-                    baseUrl: Endpoints.baseUrl,
-                    headers: opts.headers,
-                  ),
-                );
-
-                try {
-                  final retryResponse = await retryDio.request(
-                    opts.path,
-                    data: opts.data,
-                    queryParameters: opts.queryParameters,
-                    options: Options(
-                      method: opts.method,
-                      contentType: opts.contentType,
-                      responseType: opts.responseType,
-                    ),
-                  );
-                  return handler.resolve(retryResponse);
-                } catch (retryError) {
-                  print('❌ Retry request failed: $retryError');
-                  if (retryError is DioException) {
-                    return handler.next(retryError);
-                  }
-                  return handler.next(err);
-                }
-              } else {
-                print('❌ Token refresh response unsuccessful');
-                await storage.delete(key: 'auth_token');
-                await storage.delete(key: 'refresh_token');
-                return handler.next(err);
-              }
-            } catch (e) {
-              print('❌ Token refresh failed: $e');
-              await storage.delete(key: 'auth_token');
-              await storage.delete(key: 'refresh_token');
+              return handler.resolve(retryResponse);
+            } else {
+              print('❌ Supabase Refresh Failed: No session returned.');
               return handler.next(err);
             }
-          } else {
-            print('❌ No refresh token found.');
-            await storage.delete(key: 'auth_token');
+          } catch (e) {
+            print('❌ Supabase Refresh Exception: $e');
             return handler.next(err);
           }
         }

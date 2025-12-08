@@ -1,48 +1,44 @@
-import { supabase, supabaseAdmin } from '../config/supabase.js';
+import { supabaseAdmin } from '../config/supabase.js';
+import {
+    validateTransition,
+    JOB_STATES
+} from '../utils/jobStateMachine.js';
 
-/**
- * JobService
- * Handles all business logic for the Job lifecycle.
- * Inspired by Medusa's OrderService.
- */
 class JobService {
-
     /**
      * Create a new job (Service Request)
      */
-    async create(customerId, data) {
-        // 1. Validation (Business Logic)
-        if (!data.service_id) throw new Error('Service ID is required');
-        if (!data.lat || !data.lng) throw new Error('Location is required');
-
-        // 2. Prepare Data
-        const jobData = {
-            customer_id: customerId,
-            service_id: data.service_id,
-            lat: data.lat,
-            lng: data.lng,
-            location: `POINT(${data.lng} ${data.lat})`, // PostGIS
-            address_text: data.address_text,
-            description: data.description,
-            initial_price: data.initial_price,
-            status: 'pending',
-            payment_status: 'not_paid',
-            search_radius: 2000, // Start with 2km
-            metadata: data.metadata || {}
+    async create(userId, jobData) {
+        // 1. Prepare Data
+        const jobToInsert = {
+            customer_id: userId,
+            service_id: jobData.service_id,
+            lat: jobData.lat,
+            lng: jobData.lng,
+            location: `SRID=4326;POINT(${jobData.lng} ${jobData.lat})`, // PostGIS
+            address_text: jobData.address_text,
+            description: jobData.description,
+            initial_price: jobData.initial_price,
+            status: JOB_STATES.PENDING,
+            search_radius: 5000, // 5km initial radius
+            metadata: jobData.metadata || {}
         };
 
-        // 3. Insert into DB
+        // 2. Insert into DB
         const { data: job, error } = await supabaseAdmin
             .from('jobs')
-            .insert(jobData)
+            .insert(jobToInsert)
             .select()
             .single();
 
-        if (error) throw error;
+        if (error) {
+            console.error('Create Job DB Error:', error);
+            throw new Error('Failed to create job');
+        }
 
-        // 4. Insert Images (if any)
-        if (data.images && data.images.length > 0) {
-            const imageRecords = data.images.map(url => ({
+        // 3. Insert Images (if any)
+        if (jobData.images && jobData.images.length > 0) {
+            const imageRecords = jobData.images.map(url => ({
                 job_id: job.id,
                 image_url: url,
                 media_type: 'image'
@@ -54,7 +50,6 @@ class JobService {
 
             if (imagesError) {
                 console.error('Error inserting job images:', imagesError);
-                // Don't fail the job creation, just log error
             }
         }
 
@@ -62,211 +57,269 @@ class JobService {
     }
 
     /**
-     * Accept a job (Technician)
      * Transition: pending/searching -> accepted
      */
     async accept(jobId, technicianId) {
-        // 1. First check if the job is in an acceptable state
-        const { data: existingJob, error: checkError } = await supabaseAdmin
-            .from('jobs')
-            .select('id, status')
-            .eq('id', jobId)
-            .single();
+        console.log(`[accept] Technician ${technicianId} attempting to accept job ${jobId}`);
 
-        if (checkError || !existingJob) {
-            throw new Error('Job not found');
+        try {
+            // Step 1: Fetch current job state
+            const currentJob = await this._getJob(jobId);
+
+            // Step 2: Validate current status
+            validateTransition(currentJob.status, JOB_STATES.ACCEPTED);
+
+            // Step 3: Atomic update with condition
+            const { data: updatedJob, error: updateError } = await supabaseAdmin
+                .from('jobs')
+                .update({
+                    technician_id: technicianId,
+                    status: JOB_STATES.ACCEPTED,
+                    accepted_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', jobId)
+                .in('status', [JOB_STATES.PENDING, JOB_STATES.SEARCHING, JOB_STATES.NO_TECHNICIAN]) // Atomic guard
+                .select()
+                .single();
+
+            if (updateError) {
+                console.error(`[accept] Update error:`, updateError);
+                const err = new Error('Failed to accept job. It may have been accepted by another technician.');
+                err.code = 'ACCEPT_FAILED';
+                throw err;
+            }
+
+            if (!updatedJob) {
+                const err = new Error('Job was accepted by another technician');
+                err.code = 'JOB_ALREADY_ACCEPTED';
+                throw err;
+            }
+
+            console.log(`✅ [accept] Job ${jobId} successfully accepted by technician ${technicianId}`);
+            return updatedJob;
+
+        } catch (error) {
+            console.error(`❌ [accept] Error:`, error);
+            throw error;
         }
-
-        // Accept jobs that are 'pending' or 'searching'
-        if (!['pending', 'searching'].includes(existingJob.status)) {
-            throw new Error('Job is no longer available or already taken');
-        }
-
-        // 2. Atomic Update
-        const { data: job, error } = await supabaseAdmin
-            .from('jobs')
-            .update({
-                technician_id: technicianId,
-                status: 'accepted',
-                accepted_at: new Date().toISOString()
-            })
-            .eq('id', jobId)
-            .in('status', ['pending', 'searching']) // Accept both statuses
-            .select()
-            .single();
-
-        if (error || !job) {
-            throw new Error('Job is no longer available or already taken');
-        }
-
-        return job;
     }
 
     /**
-     * Set Price (Technician proposes price)
      * Transition: accepted -> price_pending
      */
     async setPrice(jobId, technicianId, price, notes) {
         if (price <= 0) throw new Error('Price must be positive');
 
-        const { data: job, error } = await supabase
+        const job = await this._getJob(jobId);
+
+        if (job.technician_id !== technicianId) {
+            throw new Error('Unauthorized');
+        }
+
+        validateTransition(job.status, JOB_STATES.PRICE_PENDING);
+
+        const { data: updatedJob, error } = await supabaseAdmin
             .from('jobs')
             .update({
                 technician_price: price,
-                price_notes: notes,
-                status: 'price_pending'
-            })
-            .eq('id', jobId)
-            .eq('technician_id', technicianId)
-            .eq('status', 'accepted')
-            .select()
-            .single();
-
-        if (error || !job) throw new Error('Job not found or invalid status');
-
-        return job;
-    }
-
-    /**
-     * Confirm Price (Customer)
-     * Transition: price_pending -> in_progress
-     */
-    async confirmPrice(jobId, customerId) {
-        const { data: job, error } = await supabase
-            .from('jobs')
-            .update({
-                status: 'in_progress',
-                price_confirmed_at: new Date().toISOString()
-            })
-            .eq('id', jobId)
-            .eq('customer_id', customerId)
-            .eq('status', 'price_pending')
-            .select()
-            .single();
-
-        if (error || !job) throw new Error('Job not found or invalid status');
-
-        return job;
-    }
-
-    /**
-     * Complete Job (Technician)
-     * Transition: in_progress -> completed
-     * Triggers: Payment Processing
-     */
-    async complete(jobId, technicianId) {
-        // 1. Verify Job
-        const { data: job, error: fetchError } = await supabase
-            .from('jobs')
-            .select('*')
-            .eq('id', jobId)
-            .eq('technician_id', technicianId)
-            .single();
-
-        if (fetchError || !job) throw new Error('Job not found');
-        if (job.status !== 'in_progress') throw new Error('Job is not in progress');
-
-        // 2. Process Payment (Atomic Transaction via RPC)
-        // This ensures money moves only if job completes
-        const amount = job.technician_price || job.initial_price;
-
-        const { data: paymentResult, error: rpcError } = await supabaseAdmin
-            .rpc('process_job_payment', {
-                p_job_id: jobId,
-                p_amount: amount
-            });
-
-        if (rpcError) throw rpcError;
-        if (!paymentResult.success) throw new Error(paymentResult.message);
-
-        // 3. Update Status
-        const { data: updatedJob, error: updateError } = await supabase
-            .from('jobs')
-            .update({
-                status: 'completed',
-                completed_at: new Date().toISOString()
+                status: JOB_STATES.PRICE_PENDING,
+                metadata: { ...job.metadata, price_notes: notes },
+                updated_at: new Date().toISOString()
             })
             .eq('id', jobId)
             .select()
             .single();
 
-        if (updateError) throw updateError;
+        if (error) throw new Error('Failed to set price');
+
+        // Send notification to customer
+        await supabaseAdmin.from('notifications').insert({
+            user_id: job.customer_id,
+            type: 'price_request',
+            title: 'عرض سعر جديد',
+            body: `الفني أرسل عرض سعر: ${price} ريال`,
+            data: { job_id: jobId, price },
+            is_read: false
+        });
 
         return updatedJob;
     }
 
     /**
-     * Cancel Job
+     * Transition: price_pending -> in_progress
+     */
+    async confirmPrice(jobId, customerId) {
+        const job = await this._getJob(jobId);
+
+        if (job.customer_id !== customerId) {
+            throw new Error('Unauthorized');
+        }
+
+        validateTransition(job.status, JOB_STATES.IN_PROGRESS);
+
+        const { data: updatedJob, error } = await supabaseAdmin
+            .from('jobs')
+            .update({
+                final_price: job.technician_price,
+                status: JOB_STATES.IN_PROGRESS,
+                price_confirmed_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+            })
+            .eq('id', jobId)
+            .select()
+            .single();
+
+        if (error) throw new Error('Failed to confirm price');
+
+        // Send notification to technician
+        await supabaseAdmin.from('notifications').insert({
+            user_id: job.technician_id,
+            type: 'price_confirmed',
+            title: 'تم قبول السعر',
+            body: 'العميل وافق على السعر. يمكنك البدء بالعمل الآن!',
+            data: { job_id: jobId },
+            is_read: false
+        });
+
+        return updatedJob;
+    }
+
+    /**
+     * Transition: in_progress -> completed
+     */
+    async complete(jobId, technicianId) {
+        const job = await this._getJob(jobId);
+
+        if (job.technician_id !== technicianId) {
+            throw new Error('Unauthorized');
+        }
+
+        validateTransition(job.status, JOB_STATES.COMPLETED);
+
+        const { data: updatedJob, error } = await supabaseAdmin
+            .from('jobs')
+            .update({
+                status: JOB_STATES.COMPLETED,
+                completed_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+            })
+            .eq('id', jobId)
+            .select()
+            .single();
+
+        if (error) throw new Error('Failed to complete job');
+
+        // Send notification to customer
+        await supabaseAdmin.from('notifications').insert({
+            user_id: job.customer_id,
+            type: 'job_completed',
+            title: 'تم إنهاء الخدمة',
+            body: 'الفني أنهى العمل. يرجى تقييم الخدمة.',
+            data: { job_id: jobId },
+            is_read: false
+        });
+
+        return updatedJob;
+    }
+
+    /**
+     * Transition: completed -> rated
+     */
+    async rate(jobId, customerId, rating, review) {
+        const job = await this._getJob(jobId);
+
+        if (job.customer_id !== customerId) {
+            throw new Error('Unauthorized');
+        }
+
+        validateTransition(job.status, JOB_STATES.RATED);
+
+        const { data: updatedJob, error } = await supabaseAdmin
+            .from('jobs')
+            .update({
+                status: JOB_STATES.RATED,
+                rated_at: new Date().toISOString(),
+                customer_rating: rating,
+                customer_review: review,
+                updated_at: new Date().toISOString()
+            })
+            .eq('id', jobId)
+            .select()
+            .single();
+
+        if (error) throw new Error('Failed to rate job');
+
+        // Update technician's average rating
+        if (job.technician_id) {
+            // Get all ratings for this technician
+            const { data: techJobs } = await supabaseAdmin
+                .from('jobs')
+                .select('customer_rating')
+                .eq('technician_id', job.technician_id)
+                .not('customer_rating', 'is', null);
+
+            if (techJobs && techJobs.length > 0) {
+                const totalRating = techJobs.reduce((sum, j) => sum + (j.customer_rating || 0), 0);
+                const avgRating = totalRating / techJobs.length;
+
+                await supabaseAdmin
+                    .from('users')
+                    .update({
+                        rating: Math.round(avgRating * 100) / 100,
+                        total_reviews: techJobs.length,
+                        updated_at: new Date().toISOString()
+                    })
+                    .eq('id', job.technician_id);
+            }
+        }
+
+        return updatedJob;
+    }
+
+    /**
      * Transition: * -> cancelled
      */
     async cancel(jobId, userId, reason) {
-        // 1. Get Job
-        const { data: job, error: fetchError } = await supabase
-            .from('jobs')
-            .select('*')
-            .eq('id', jobId)
-            .single();
+        const job = await this._getJob(jobId);
 
-        if (fetchError || !job) throw new Error('Job not found');
-
-        // 2. Permission Check
         if (job.customer_id !== userId && job.technician_id !== userId) {
             throw new Error('Unauthorized');
         }
 
-        if (job.status === 'completed') throw new Error('Cannot cancel completed job');
+        validateTransition(job.status, JOB_STATES.CANCELLED);
 
-        // 3. Update Status
-        const { data: updatedJob, error } = await supabase
+        const { data: updatedJob, error } = await supabaseAdmin
             .from('jobs')
             .update({
-                status: 'cancelled',
-                cancelled_by: userId,
-                cancel_reason: reason,
-                cancelled_at: new Date().toISOString()
+                status: JOB_STATES.CANCELLED,
+                cancelled_at: new Date().toISOString(),
+                metadata: { ...job.metadata, cancellation_reason: reason, cancelled_by: userId },
+                updated_at: new Date().toISOString()
             })
             .eq('id', jobId)
             .select()
             .single();
 
-        if (error) throw error;
-
+        if (error) throw new Error('Failed to cancel job');
         return updatedJob;
     }
 
-    /**
-     * Rate Job (Customer)
-     */
-    async rate(jobId, customerId, rating, review) {
-        if (rating < 1 || rating > 5) throw new Error('Rating must be between 1 and 5');
-
-        // 1. Verify Job
-        const { data: job, error: fetchError } = await supabase
+    // Helper: Get Job or Throw
+    async _getJob(jobId) {
+        const { data: job, error } = await supabaseAdmin
             .from('jobs')
             .select('*')
             .eq('id', jobId)
-            .eq('customer_id', customerId)
-            .eq('status', 'completed')
             .single();
 
-        if (fetchError || !job) throw new Error('Job not found or not completed');
-        if (job.customer_rating) throw new Error('Job already rated');
+        if (error || !job) {
+            const err = new Error('Job not found');
+            err.code = 'JOB_NOT_FOUND';
+            throw err;
+        }
 
-        // 2. Update Job
-        const { data: updatedJob, error: updateError } = await supabase
-            .from('jobs')
-            .update({
-                customer_rating: rating,
-                customer_review: review,
-                rated_at: new Date().toISOString()
-            })
-            .eq('id', jobId)
-            .select()
-            .single();
-
-        if (updateError) throw updateError;
-
-        return updatedJob;
+        return job;
     }
 }
 

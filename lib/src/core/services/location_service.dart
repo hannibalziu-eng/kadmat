@@ -76,7 +76,31 @@ LocationService locationService(LocationServiceRef ref) {
 }
 
 @riverpod
-Stream<Position> locationStream(LocationStreamRef ref) {
+Stream<Position> locationStream(LocationStreamRef ref) async* {
   final locationService = ref.watch(locationServiceProvider);
-  return locationService.getPositionStream();
+
+  if (kIsWeb) {
+    // Simulate location updates for Web Testing
+    // Yield a new location every 15 seconds
+    while (true) {
+      await Future.delayed(const Duration(seconds: 15));
+      yield Position(
+        latitude: 24.7136,
+        longitude: 46.6753,
+        timestamp: DateTime.now(),
+        accuracy: 0,
+        altitude: 0,
+        heading: 0,
+        speed: 0,
+        speedAccuracy: 0,
+        altitudeAccuracy: 0,
+        headingAccuracy: 0,
+        isMocked: true,
+      );
+    }
+  } else {
+    // For Mobile: Use real stream but throttle it logic if needed
+    // Geolocator has distanceFilter which is good, but for time interval:
+    yield* locationService.getPositionStream();
+  }
 }

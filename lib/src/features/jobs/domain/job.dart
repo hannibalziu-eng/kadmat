@@ -40,6 +40,12 @@ class Job with _$Job {
     @JsonKey(name: 'technician')
     Map<String, dynamic>? technician, // Nested technician object
     @JsonKey(name: 'job_images') List<JobImage>? images, // Nested images
+    // Computed fields from backend
+    Map<String, dynamic>? permissions, // canAccept, canSetPrice, etc.
+    Map<String, dynamic>? timeline, // createdAt, acceptedAt, etc.
+    @JsonKey(name: 'priceSummary')
+    Map<String, dynamic>?
+    priceSummary, // initialPrice, technicianProposedPrice, finalPrice, commission
   }) = _Job;
 
   factory Job.fromJson(Map<String, dynamic> json) => _$JobFromJson(json);

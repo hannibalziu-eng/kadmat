@@ -21,19 +21,12 @@ class AuthRepository {
   }
 
   Future<void> _checkAuthStatus() async {
-    final token = await _storage.read(key: 'auth_token');
+    final session = Supabase.instance.client.auth.currentSession;
     final userType = await _storage.read(key: 'user_type');
-    // Note: For a real app, we should fetch the profile from API using the token
-    // For now, we'll rely on what we have or fetch it if needed.
-    // Since we don't persist the full profile in secure storage (it's too big/complex),
-    // we might need to fetch it again or store basic info.
-    // For simplicity in this fix, we'll assume the user needs to login to get fresh data,
-    // or we could fetch it here. Let's fetch it if we have a token.
 
-    if (token != null) {
-      _currentUser = 'user';
+    if (session != null) {
+      _currentUser = session.user.email ?? 'user';
       _userType = userType;
-      // Ideally fetch profile here, but for now let's just set state
       _authStateController.add(_currentUser);
     } else {
       _authStateController.add(null);
@@ -57,33 +50,10 @@ class AuthRepository {
         data: {'email': email, 'password': password},
       );
 
-      final token = response.data['token'];
+      final refreshToken =
+          response.data['refresh_token']; // Extract refresh token
       final user = response.data['user'];
       final type = user['user_type'] ?? 'customer';
-
-      // Fetch extended profile including badges (if technician)
-      // This is a temporary direct Supabase call until the API returns full nested data
-      final userId = user['id'];
-      Map<String, dynamic> fullProfile = Map<String, dynamic>.from(user);
-
-      /*
-      try {
-        if (type == 'technician') {
-          // Fetch badges
-          final badgesData = await Supabase.instance.client
-              .from('technician_badges')
-              .select('badge_type, label, icon_name')
-              .eq('technician_id', userId);
-
-          if (badgesData.isNotEmpty) {
-            fullProfile['badges'] = badgesData;
-          }
-        }
-      } catch (e) {
-        print('Error fetching badges: $e');
-        // Continue without badges if fetch fails
-      }
-      */
 
       // Enforce User Type Check
       if (requiredUserType != null && type != requiredUserType) {
@@ -94,12 +64,19 @@ class AuthRepository {
         );
       }
 
-      await _storage.write(key: 'auth_token', value: token);
+      // Hydrate Supabase Session
+      // This is critical: it initializes the Supabase SDK with the session we just got from the backend.
+      // This ensures api_client.dart can access the token via Supabase.instance.client.auth.currentSession
+      if (refreshToken != null) {
+        await Supabase.instance.client.auth.setSession(refreshToken);
+      }
+
+      // We still store user_type for local checks, but auth_token is now managed by Supabase SDK
       await _storage.write(key: 'user_type', value: type);
 
       _currentUser = user['email'];
       _userType = type;
-      _userProfile = fullProfile; // Store the full user profile
+      _userProfile = Map<String, dynamic>.from(user);
       _authStateController.add(_currentUser);
     } catch (e) {
       if (e is DioException) {
@@ -158,7 +135,8 @@ class AuthRepository {
   }
 
   Future<void> signOut() async {
-    await _storage.delete(key: 'auth_token');
+    await Supabase.instance.client.auth.signOut();
+    // await _storage.delete(key: 'auth_token'); // No longer used
     await _storage.delete(key: 'user_type');
     _currentUser = null;
     _userType = null;

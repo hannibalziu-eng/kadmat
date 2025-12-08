@@ -4,6 +4,7 @@ import {
     getNearbyJobs,
     acceptJob,
     getMyJobs,
+    getJobById, // New import
     completeJob,
     setPrice,
     confirmPrice,
@@ -21,6 +22,7 @@ router.use(protect);
 router.post('/', createJob);
 router.get('/nearby', getNearbyJobs);
 router.get('/my-jobs', getMyJobs);
+router.get('/:id', getJobById); // New route
 
 // Job Flow
 router.post('/:id/accept', acceptJob);           // Technician accepts
