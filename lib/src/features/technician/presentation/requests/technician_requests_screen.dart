@@ -1,7 +1,9 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_scalify/flutter_scalify.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:go_router/go_router.dart';
 import '../../../jobs/presentation/job_controller.dart';
 import '../../../jobs/domain/job.dart';
 
@@ -70,7 +72,7 @@ class _TechnicianRequestsScreenState
     );
 
     return nearbyJobsAsync.when(
-      data: (jobs) {
+       (jobs) {
         if (jobs.isEmpty) {
           return Center(child: Text('لا توجد طلبات جديدة حالياً'));
         }
@@ -92,12 +94,18 @@ class _TechnicianRequestsScreenState
               statusColor: Colors.orange,
               showActions: true,
               onAccept: () async {
+                debugPrint('✅ Accepting job: ${job.id}');
                 await ref
                     .read(jobControllerProvider.notifier)
                     .acceptJob(job.id);
-                // Refresh lists
-                ref.invalidate(nearbyJobsProvider);
-                ref.invalidate(myJobsProvider);
+                // Refresh lists after accept
+                if (mounted) {
+                  debugPrint('🔄 Invalidating providers after accept');
+                  ref.invalidate(nearbyJobsProvider);
+                  ref.invalidate(myJobsProvider);
+                  // Also refresh current tab
+                  setState(() {});
+                }
               },
               onReject: () {
                 // Implement reject logic (maybe just hide locally or API call)
@@ -112,48 +120,94 @@ class _TechnicianRequestsScreenState
   }
 
   Widget _buildInProgressTab() {
+    // Continuously watch myJobs - rebuilds whenever status changes
     final myJobsAsync = ref.watch(myJobsProvider);
 
     return myJobsAsync.when(
-      data: (jobs) {
+       (jobs) {
+        debugPrint(
+          '📋 InProgress Tab: Total=${jobs.length}, Statuses=${jobs.map((j) => j.status).toList()}',
+        );
+
+        // Include accepted, price_pending, and in_progress
         final inProgressJobs = jobs
-            .where((j) => j.status == 'accepted' || j.status == 'in_progress')
+            .where((j) =>
+                j.status == 'accepted' ||
+                j.status == 'price_pending' ||
+                j.status == 'in_progress')
             .toList();
 
+        debugPrint('✅ Filtered jobs=${inProgressJobs.length}');
+
         if (inProgressJobs.isEmpty) {
-          return Center(child: Text('لا توجد طلبات قيد التنفيذ'));
+          return Center(
+            child: Padding(
+              padding: EdgeInsets.all(24.w),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.inbox, size: 80.s, color: Colors.grey),
+                  SizedBox(height: 16.h),
+                  const Text(
+                    'لا توجد طلبات قيد التنفيذ',
+                    style: TextStyle(color: Colors.grey, fontSize: 16),
+                  ),
+                ],
+              ),
+            ),
+          );
         }
 
-        return ListView.builder(
-          padding: EdgeInsets.all(16.w),
-          itemCount: inProgressJobs.length,
-          itemBuilder: (context, index) {
-            final job = inProgressJobs[index];
-            return _buildRequestCard(
-              job: job,
-              serviceName: job.service?['name'] ?? 'خدمة',
-              customerName: job.customer?['full_name'] ?? 'عميل',
-              location: job.addressText ?? 'موقع غير محدد',
-              time: job.createdAt.toString(),
-              icon: Icons.work_history,
-              iconColor: Colors.cyan,
-              iconBgColor: Colors.cyan.shade50,
-              statusText: 'قيد التنفيذ',
-              statusColor: Colors.blue,
-              showActions: false,
-              showCompleteButton: true,
-              onComplete: () async {
-                await ref
-                    .read(jobControllerProvider.notifier)
-                    .completeJob(job.id);
-                ref.invalidate(myJobsProvider);
-              },
-            ).animate().fadeIn().slideX();
+        return RefreshIndicator(
+          onRefresh: () async {
+            // Force refresh when user pulls down
+            ref.invalidate(myJobsProvider);
+            await ref.read(myJobsProvider.future);
           },
+          child: ListView.builder(
+            padding: EdgeInsets.all(16.w),
+            itemCount: inProgressJobs.length,
+            itemBuilder: (context, index) {
+              final job = inProgressJobs[index];
+              debugPrint('🎨 Building card: ${job.id}, status=${job.status}');
+
+              return _buildRequestCard(
+                job: job,
+                serviceName: job.service?['name'] ?? 'خدمة',
+                customerName: job.customer?['full_name'] ?? 'عميل',
+                location: job.addressText ?? 'موقع غير محدد',
+                time: job.createdAt.toString(),
+                icon: Icons.work_history,
+                iconColor: Colors.cyan,
+                iconBgColor: Colors.cyan.shade50,
+                statusText: _getStatusText(job.status),
+                statusColor: _getStatusColor(job.status),
+                showActions: false,
+                showSetPriceButton: job.status == 'accepted',
+                showWaitingPriceApproval:
+                    job.status == 'price_pending',
+                showCompleteButton: job.status == 'in_progress',
+                onSetPrice: () {
+                  debugPrint('💰 Navigate to set price: ${job.id}');
+                  context.go('/jobs/${job.id}/technician/set-price');
+                },
+                onComplete: () async {
+                  debugPrint('✔️ Completing job: ${job.id}');
+                  await ref
+                      .read(jobControllerProvider.notifier)
+                      .completeJob(job.id);
+                  ref.invalidate(myJobsProvider);
+                },
+              ).animate().fadeIn().slideX();
+            },
+          ),
         );
       },
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (err, stack) => Center(child: Text('خطأ: $err')),
+      error: (err, stack) {
+        debugPrint('❌ InProgress Error: $err, $stack');
+        return Center(child: Text('خطأ: $err'));
+      },
     );
   }
 
@@ -161,7 +215,7 @@ class _TechnicianRequestsScreenState
     final myJobsAsync = ref.watch(myJobsProvider);
 
     return myJobsAsync.when(
-      data: (jobs) {
+       (jobs) {
         final completedJobs = jobs
             .where((j) => j.status == 'completed')
             .toList();
@@ -198,6 +252,32 @@ class _TechnicianRequestsScreenState
     );
   }
 
+  String _getStatusText(String status) {
+    switch (status) {
+      case 'accepted':
+        return 'في انتظار تحديد السعر';
+      case 'price_pending':
+        return 'في انتظار موافقة العميل';
+      case 'in_progress':
+        return 'قيد التنفيذ';
+      default:
+        return 'قيد التنفيذ';
+    }
+  }
+
+  Color _getStatusColor(String status) {
+    switch (status) {
+      case 'accepted':
+        return Colors.orange;
+      case 'price_pending':
+        return Colors.amber;
+      case 'in_progress':
+        return Colors.blue;
+      default:
+        return Colors.blue;
+    }
+  }
+
   Widget _buildRequestCard({
     required Job job,
     required String serviceName,
@@ -211,11 +291,14 @@ class _TechnicianRequestsScreenState
     required Color statusColor,
     bool showActions = false,
     bool showCompleteButton = false,
+    bool showSetPriceButton = false,
+    bool showWaitingPriceApproval = false,
     bool showRating = false,
     double rating = 0.0,
     VoidCallback? onAccept,
     VoidCallback? onReject,
     VoidCallback? onComplete,
+    VoidCallback? onSetPrice,
   }) {
     return Container(
       padding: EdgeInsets.all(16.w),
@@ -307,8 +390,7 @@ class _TechnicianRequestsScreenState
             ],
           ),
           // Rating (for completed)
-          if (showRating) ...[
-            SizedBox(height: 12.h),
+          if (showRating) ...[SizedBox(height: 12.h),
             Row(
               children: [
                 ...List.generate(5, (index) {
@@ -362,6 +444,54 @@ class _TechnicianRequestsScreenState
                 ),
               ],
             ),
+          if (showSetPriceButton)
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: onSetPrice,
+                icon: const Icon(Icons.attach_money),
+                label: const Text('تحديد السعر الآن'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.deepOrange,
+                  foregroundColor: Colors.white,
+                  padding: EdgeInsets.symmetric(vertical: 12.h),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12.r),
+                  ),
+                ),
+              ),
+            ),
+          if (showWaitingPriceApproval)
+            Container(
+              width: double.infinity,
+              padding: EdgeInsets.symmetric(vertical: 12.h),
+              decoration: BoxDecoration(
+                color: Colors.amber.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12.r),
+                border: Border.all(color: Colors.amber, width: 1),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  SizedBox(
+                    width: 16.w,
+                    height: 16.h,
+                    child: const CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation(Colors.amber),
+                    ),
+                  ),
+                  SizedBox(width: 8.w),
+                  const Text(
+                    'في انتظار موافقة العميل على السعر',
+                    style: TextStyle(
+                      color: Colors.amber,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           if (showCompleteButton)
             SizedBox(
               width: double.infinity,
@@ -372,13 +502,17 @@ class _TechnicianRequestsScreenState
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Theme.of(context).primaryColor,
                   foregroundColor: Colors.white,
+                  padding: EdgeInsets.symmetric(vertical: 12.h),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12.r),
                   ),
                 ),
               ),
             ),
-          if (!showActions && !showCompleteButton)
+          if (!showActions &&
+              !showCompleteButton &&
+              !showSetPriceButton &&
+              !showWaitingPriceApproval)
             SizedBox(
               width: double.infinity,
               child: OutlinedButton(
