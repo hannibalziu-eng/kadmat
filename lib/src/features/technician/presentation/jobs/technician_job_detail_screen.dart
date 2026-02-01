@@ -4,9 +4,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_scalify/flutter_scalify.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../../../../core/app_theme.dart';
+import '../../../../core/widgets/kadmat_toast.dart';
+import '../../../../core/widgets/shimmer_skeletons.dart';
+import '../../../../core/exceptions/app_exceptions.dart';
 import '../../../jobs/data/job_repository.dart';
 import '../../../jobs/domain/job.dart';
+import '../../../jobs/presentation/job_controller.dart';
 
 class TechnicianJobDetailScreen extends ConsumerStatefulWidget {
   final String jobId;
@@ -25,11 +30,30 @@ class _TechnicianJobDetailScreenState
   bool _isLoading = false;
   StreamSubscription? _jobSubscription;
   Job? _job;
+  List<String> _prePhotos = [];
+  List<String> _postPhotos = [];
 
   @override
   void initState() {
     super.initState();
     _startListening();
+    _fetchPhotos();
+  }
+
+  Future<void> _fetchPhotos() async {
+    try {
+      final photos = await ref
+          .read(jobRepositoryProvider)
+          .getJobPhotos(widget.jobId);
+      if (mounted) {
+        setState(() {
+          _prePhotos = photos['pre'] ?? [];
+          _postPhotos = photos['post'] ?? [];
+        });
+      }
+    } catch (e) {
+      debugPrint('Error fetching job photos: $e');
+    }
   }
 
   void _startListening() {
@@ -55,7 +79,7 @@ class _TechnicianJobDetailScreenState
       return Scaffold(
         backgroundColor: AppTheme.backgroundDark,
         appBar: AppBar(title: const Text('تفاصيل الطلب')),
-        body: const Center(child: CircularProgressIndicator()),
+        body: const DetailSkeleton(),
       );
     }
 
@@ -106,13 +130,70 @@ class _TechnicianJobDetailScreenState
                     style: TextStyle(fontSize: 14.fz, color: Colors.white70),
                   ),
                   SizedBox(height: 8.h),
-                  ElevatedButton.icon(
-                    onPressed: _openMaps,
-                    icon: const Icon(Icons.map),
-                    label: const Text('افتح في الخريطة'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blue,
+                  // Mini Map Placeholder
+                  Container(
+                    height: 120.h,
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[200],
+                      borderRadius: BorderRadius.circular(12.r),
+                      image: const DecorationImage(
+                        image: AssetImage(
+                          'assets/images/map_placeholder.png',
+                        ), // Ensure this exists or use color
+                        fit: BoxFit.cover,
+                      ),
                     ),
+                    child: Center(
+                      child: Icon(
+                        Icons.map,
+                        size: 40.s,
+                        color: Theme.of(
+                          context,
+                        ).cardColor.withValues(alpha: 0.95),
+                      ),
+                    ),
+                  ),
+                  SizedBox(height: 12.h),
+                  // Open in Maps Button
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () async {
+                        final url =
+                            'https://www.google.com/maps/search/?api=1&query=${_job!.lat},${_job!.lng}';
+                        if (await canLaunchUrl(Uri.parse(url))) {
+                          await launchUrl(Uri.parse(url));
+                        }
+                      },
+                      icon: const Icon(Icons.map),
+                      label: const Text('فتح في خرائط Google'),
+                      style: OutlinedButton.styleFrom(
+                        padding: EdgeInsets.symmetric(vertical: 12.h),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12.r),
+                        ),
+                      ),
+                    ),
+                  ),
+                  SizedBox(height: 12.h),
+                  // Distance/Time
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.directions_car,
+                        size: 16.s,
+                        color: Colors.grey,
+                      ),
+                      SizedBox(width: 8.w),
+                      Text(
+                        'المسافة المقدرة: 5.2 كم (10 دقائق)', // Mocked for now, or calc
+                        style: TextStyle(
+                          fontSize: 14.fz,
+                          color: Colors.grey[700],
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -131,10 +212,10 @@ class _TechnicianJobDetailScreenState
               ),
             SizedBox(height: 12.h),
 
-            // Job Images
+            // Job Images (Customer Problem Photos)
             if (_job?.images != null && _job!.images!.isNotEmpty)
               _buildInfoCard(
-                title: 'صور المشكلة',
+                title: 'صور المشكلة (من العميل)',
                 icon: Icons.image,
                 child: SizedBox(
                   height: 120.h,
@@ -149,7 +230,7 @@ class _TechnicianJobDetailScreenState
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(12.r),
                           border: Border.all(
-                            color: Colors.white.withOpacity(0.1),
+                            color: Colors.white.withValues(alpha: 0.1),
                           ),
                           image: DecorationImage(
                             image: NetworkImage(image.imageUrl),
@@ -161,6 +242,43 @@ class _TechnicianJobDetailScreenState
                   ),
                 ),
               ),
+            // Initial Price
+            if (_job!.initialPrice != null)
+              _buildInfoCard(
+                title: 'السعر الابتدائي',
+                icon: Icons.monetization_on,
+                child: Text(
+                  '${_job!.initialPrice} ريال',
+                  style: TextStyle(
+                    fontSize: 18.fz,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            // Price Summary Card
+            _buildPriceSummaryCard(),
+            SizedBox(height: 24.h),
+
+            // Customer Photos Section Grid
+            if (_job?.images != null && _job!.images!.isNotEmpty)
+              _buildPhotoGrid(
+                'صور المشكلة (من العميل)',
+                _job!.images!.map((e) => e.imageUrl).toList(),
+              ),
+
+            // Technician Pre-Service Photos
+            if (_prePhotos.isNotEmpty) ...[
+              SizedBox(height: 24.h),
+              _buildPhotoGrid('صور قبل العمل', _prePhotos),
+            ],
+
+            SizedBox(height: 24.h),
+
+            // Technician Post-Service Photos
+            if (_postPhotos.isNotEmpty)
+              _buildPhotoGrid('صور بعد الإنجاز', _postPhotos),
+
             SizedBox(height: 24.h),
 
             // Action Buttons based on status
@@ -212,7 +330,7 @@ class _TechnicianJobDetailScreenState
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.2),
+        color: color.withValues(alpha: 0.2),
         borderRadius: BorderRadius.circular(12.r),
         border: Border.all(color: color),
       ),
@@ -267,6 +385,7 @@ class _TechnicianJobDetailScreenState
     final customerPhone = _job!.customer?['phone'] ?? '';
     final customerRating = _job!.customer?['rating']?.toString() ?? '5.0';
     final customerPhoto = _job!.customer?['avatar_url'];
+    final customerOrdersCount = _job!.customer?['orders_count'] ?? 0;
 
     return Container(
       padding: EdgeInsets.all(16.w),
@@ -293,7 +412,7 @@ class _TechnicianJobDetailScreenState
               // Photo
               CircleAvatar(
                 radius: 30.r,
-                backgroundColor: AppTheme.primaryColor.withOpacity(0.3),
+                backgroundColor: AppTheme.primaryColor.withValues(alpha: 0.3),
                 backgroundImage: customerPhoto != null
                     ? NetworkImage(customerPhoto)
                     : null,
@@ -303,7 +422,7 @@ class _TechnicianJobDetailScreenState
               ),
               SizedBox(width: 12.w),
 
-              // Name & Rating
+              // Name & Rating & Orders Count
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -328,27 +447,71 @@ class _TechnicianJobDetailScreenState
                             color: Colors.white70,
                           ),
                         ),
+                        SizedBox(width: 8.w),
+                        Text('•', style: TextStyle(color: Colors.white70)),
+                        SizedBox(width: 8.w),
+                        Text(
+                          '$customerOrdersCount طلبات',
+                          style: TextStyle(
+                            fontSize: 14.fz,
+                            color: Colors.white70,
+                          ),
+                        ),
                       ],
                     ),
                   ],
                 ),
               ),
-
-              // Call Button
-              if (customerPhone.isNotEmpty)
-                IconButton(
-                  onPressed: () => _callCustomer(customerPhone),
-                  icon: Container(
-                    padding: EdgeInsets.all(10.w),
-                    decoration: BoxDecoration(
-                      color: Colors.green,
-                      borderRadius: BorderRadius.circular(12.r),
-                    ),
-                    child: Icon(Icons.phone, color: Colors.white, size: 22.s),
-                  ),
-                ),
             ],
           ),
+
+          // Phone and Chat Buttons
+          if (customerPhone.isNotEmpty) ...[
+            SizedBox(height: 16.h),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () => _callCustomer(customerPhone),
+                    icon: const Icon(Icons.phone),
+                    label: const Text('اتصال'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green,
+                      foregroundColor: Colors.white,
+                      padding: EdgeInsets.symmetric(vertical: 12.h),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10.r),
+                      ),
+                    ),
+                  ),
+                ),
+                SizedBox(width: 8.w),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      context.push(
+                        '/jobs/${widget.jobId}/chat',
+                        extra: {
+                          'otherUserName': customerName,
+                          'otherUserImage': customerPhoto,
+                        },
+                      );
+                    },
+                    icon: const Icon(Icons.chat),
+                    label: const Text('مراسلة'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blue,
+                      foregroundColor: Colors.white,
+                      padding: EdgeInsets.symmetric(vertical: 12.h),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10.r),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
 
           // Phone number display
           if (customerPhone.isNotEmpty) ...[
@@ -356,7 +519,7 @@ class _TechnicianJobDetailScreenState
             Container(
               padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 8.h),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.1),
+                color: Colors.white.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8.r),
               ),
               child: Row(
@@ -383,14 +546,261 @@ class _TechnicianJobDetailScreenState
       await launchUrl(uri);
     } else {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('لا يمكن الاتصال بـ $phone'),
-            backgroundColor: Colors.red,
-          ),
+        KadmatToast.showError(
+          context,
+          title: 'خطأ',
+          message: 'لا يمكن الاتصال بـ $phone',
         );
       }
     }
+  }
+
+  Widget _buildPhotoGrid(String title, List<String> photos) {
+    if (photos.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      padding: EdgeInsets.all(16.w),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(12.r),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.photo_library,
+                color: AppTheme.primaryColor,
+                size: 20.w,
+              ),
+              SizedBox(width: 8.w),
+              Text(
+                title,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 16.fz,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 16.h),
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              crossAxisSpacing: 8.w,
+              mainAxisSpacing: 8.h,
+              childAspectRatio: 1.0,
+            ),
+            itemCount: photos.length,
+            itemBuilder: (context, index) {
+              final photoUrl = photos[index];
+              return GestureDetector(
+                onTap: () {
+                  showDialog(
+                    context: context,
+                    builder: (context) => Dialog(
+                      backgroundColor: Colors.transparent,
+                      insetPadding: EdgeInsets.zero,
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          GestureDetector(
+                            onTap: () => Navigator.pop(context),
+                            child: Container(color: Colors.black87),
+                          ),
+                          Center(
+                            child: InteractiveViewer(
+                              child: CachedNetworkImage(
+                                imageUrl: photoUrl,
+                                placeholder: (context, url) =>
+                                    const CircularProgressIndicator(),
+                                errorWidget: (context, url, error) =>
+                                    const Icon(Icons.error, color: Colors.red),
+                              ),
+                            ),
+                          ),
+                          PositionedDirectional(
+                            top: 40.h,
+                            start: 16.w,
+                            child: IconButton(
+                              icon: const Icon(
+                                Icons.close,
+                                color: Colors.white,
+                              ),
+                              onPressed: () => Navigator.pop(context),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12.r),
+                  child: CachedNetworkImage(
+                    imageUrl: photoUrl,
+                    fit: BoxFit.cover,
+                    placeholder: (context, url) => Container(
+                      color: Colors.white10,
+                      child: const Center(
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    ),
+                    errorWidget: (context, url, error) => Container(
+                      color: Colors.white10,
+                      child: const Center(
+                        child: Icon(Icons.broken_image, color: Colors.white38),
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Price Summary Card showing all price information
+  Widget _buildPriceSummaryCard() {
+    final initialPrice = _job!.initialPrice;
+    final technicianPrice = _job!.technicianPrice;
+    final status = _job!.status;
+
+    // Only show if there's any price info
+    if (initialPrice == null && technicianPrice == null) {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      padding: EdgeInsets.all(16.w),
+      decoration: AppTheme.glassDecoration(radius: 16.r),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          Row(
+            children: [
+              Icon(
+                Icons.monetization_on,
+                color: AppTheme.primaryColor,
+                size: 20.s,
+              ),
+              SizedBox(width: 8.w),
+              Text(
+                'ملخص الأسعار',
+                style: TextStyle(fontSize: 14.fz, color: Colors.white60),
+              ),
+            ],
+          ),
+          SizedBox(height: 16.h),
+
+          // Initial/Budget Price
+          if (initialPrice != null)
+            _buildPriceRow('السعر الابتدائي', initialPrice, Colors.grey),
+
+          // Technician's Proposed Price
+          if (technicianPrice != null) ...[
+            SizedBox(height: 12.h),
+            _buildPriceRow(
+              'السعر المقترح',
+              technicianPrice,
+              AppTheme.primaryColor,
+            ),
+          ],
+
+          // Final Price (if approved)
+          if (status == 'in_progress' ||
+              status == 'completed' ||
+              status == 'pending_confirmation') ...[
+            SizedBox(height: 12.h),
+            Container(
+              padding: EdgeInsets.all(12.w),
+              decoration: BoxDecoration(
+                color: Colors.green.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(12.r),
+                border: Border.all(color: Colors.green.withValues(alpha: 0.5)),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.check_circle, color: Colors.green, size: 20.s),
+                      SizedBox(width: 8.w),
+                      Text(
+                        'السعر النهائي (موافق عليه)',
+                        style: TextStyle(
+                          fontSize: 14.fz,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.green,
+                        ),
+                      ),
+                    ],
+                  ),
+                  Text(
+                    '${technicianPrice ?? initialPrice} ريال',
+                    style: TextStyle(
+                      fontSize: 18.fz,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.green,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+
+          // Commission Notice (for technician)
+          if (technicianPrice != null) ...[
+            SizedBox(height: 16.h),
+            Container(
+              padding: EdgeInsets.all(10.w),
+              decoration: BoxDecoration(
+                color: Colors.amber.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8.r),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline, size: 16.s, color: Colors.amber),
+                  SizedBox(width: 8.w),
+                  Text(
+                    'عمولة التطبيق: ${(technicianPrice * 0.15).toStringAsFixed(0)} ريال (15%)',
+                    style: TextStyle(fontSize: 12.fz, color: Colors.amber),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPriceRow(String label, double price, Color color) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: TextStyle(fontSize: 14.fz, color: Colors.white70),
+        ),
+        Text(
+          '$price ريال',
+          style: TextStyle(
+            fontSize: 16.fz,
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
+        ),
+      ],
+    );
   }
 
   Widget _buildActionButtons() {
@@ -414,17 +824,23 @@ class _TechnicianJobDetailScreenState
     return ElevatedButton(
       onPressed: _isLoading ? null : _acceptJob,
       style: ElevatedButton.styleFrom(
-        backgroundColor: AppTheme.primaryColor,
+        backgroundColor: Colors.green, // Explicit Green
+        foregroundColor: Colors.white,
         padding: EdgeInsets.symmetric(vertical: 16.h),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12.r),
         ),
+        elevation: 4,
       ),
       child: _isLoading
-          ? const CircularProgressIndicator(color: Colors.white)
+          ? const SizedBox(
+              height: 24,
+              width: 24,
+              child: CircularProgressIndicator(color: Colors.white),
+            )
           : Text(
-              'قبول الطلب',
-              style: TextStyle(fontSize: 18.fz, fontWeight: FontWeight.bold),
+              'قبول الطلب والانتقال لتحديد السعر',
+              style: TextStyle(fontSize: 16.fz, fontWeight: FontWeight.bold),
             ),
     );
   }
@@ -459,7 +875,7 @@ class _TechnicianJobDetailScreenState
                     color: AppTheme.primaryColor,
                   ),
                   filled: true,
-                  fillColor: Colors.white.withOpacity(0.1),
+                  fillColor: Colors.white.withValues(alpha: 0.1),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12.r),
                     borderSide: BorderSide.none,
@@ -475,7 +891,7 @@ class _TechnicianJobDetailScreenState
                   hintText: 'ملاحظات (اختياري)',
                   hintStyle: TextStyle(color: Colors.white38),
                   filled: true,
-                  fillColor: Colors.white.withOpacity(0.1),
+                  fillColor: Colors.white.withValues(alpha: 0.1),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12.r),
                     borderSide: BorderSide.none,
@@ -520,7 +936,7 @@ class _TechnicianJobDetailScreenState
     return Container(
       padding: EdgeInsets.all(20.w),
       decoration: BoxDecoration(
-        color: Colors.purple.withOpacity(0.2),
+        color: Colors.purple.withValues(alpha: 0.2),
         borderRadius: BorderRadius.circular(16.r),
         border: Border.all(color: Colors.purple),
       ),
@@ -553,16 +969,16 @@ class _TechnicianJobDetailScreenState
         Container(
           padding: EdgeInsets.all(16.w),
           decoration: BoxDecoration(
-            color: Colors.green.withOpacity(0.2),
+            color: Colors.green.withValues(alpha: 0.2),
             borderRadius: BorderRadius.circular(12.r),
           ),
           child: Row(
             children: [
-              Icon(Icons.check_circle, color: Colors.green, size: 32.s),
+              Icon(Icons.work, color: Colors.green, size: 32.s),
               SizedBox(width: 12.w),
               Expanded(
                 child: Text(
-                  'العميل وافق على السعر. قم بإنهاء الخدمة.',
+                  'الخدمة قيد التنفيذ',
                   style: TextStyle(fontSize: 14.fz, color: Colors.white),
                 ),
               ),
@@ -571,30 +987,26 @@ class _TechnicianJobDetailScreenState
         ),
         SizedBox(height: 16.h),
         ElevatedButton(
-          onPressed: _isLoading ? null : _completeJob,
+          onPressed: () =>
+              context.go('/jobs/${widget.jobId}/technician/in-progress'),
           style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.green,
+            backgroundColor: Colors.blue,
             padding: EdgeInsets.symmetric(vertical: 16.h),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12.r),
             ),
           ),
-          child: _isLoading
-              ? const CircularProgressIndicator(color: Colors.white)
-              : Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.done_all),
-                    SizedBox(width: 8.w),
-                    Text(
-                      'إتمام الخدمة',
-                      style: TextStyle(
-                        fontSize: 18.fz,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.play_arrow),
+              SizedBox(width: 8.w),
+              Text(
+                'متابعة التنفيذ',
+                style: TextStyle(fontSize: 18.fz, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
         ),
       ],
     );
@@ -603,19 +1015,63 @@ class _TechnicianJobDetailScreenState
   Future<void> _acceptJob() async {
     setState(() => _isLoading = true);
     try {
-      await ref.read(jobRepositoryProvider).acceptJob(widget.jobId);
+      await ref.read(jobControllerProvider.notifier).acceptJob(widget.jobId);
+
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('تم قبول الطلب! أدخل السعر الآن.'),
-            backgroundColor: Colors.green,
-          ),
+        KadmatToast.showSuccess(
+          context,
+          title: 'نجاح قبول الطلب',
+          message: '✅ تم قبول الطلب بنجاح – جاري فتح شاشة تحديد السعر…',
+        );
+        // Navigate directly to set price screen
+        context.go('/jobs/${widget.jobId}/technician/set-price');
+      }
+    } on JobAlreadyAcceptedException catch (e) {
+      if (mounted) {
+        KadmatToast.showError(
+          context,
+          title: 'تم قبول الطلب',
+          message: e.message,
+        );
+      }
+    } on TechnicianLockedException catch (e) {
+      if (mounted) {
+        KadmatToast.showWarning(
+          context,
+          title: 'طلب قيد التنفيذ',
+          message: e.message,
+        );
+      }
+    } on InvalidStatusException catch (e) {
+      if (mounted) {
+        KadmatToast.showError(
+          context,
+          title: 'حالة غير صحيحة',
+          message: e.message,
+        );
+      }
+    } on NetworkException catch (e) {
+      if (mounted) {
+        KadmatToast.showError(
+          context,
+          title: 'خطأ في الاتصال',
+          message: e.message,
+        );
+      }
+    } on JobNotFoundException catch (e) {
+      if (mounted) {
+        KadmatToast.showError(
+          context,
+          title: 'الطلب غير موجود',
+          message: e.message,
         );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$e'), backgroundColor: Colors.red),
+        KadmatToast.showError(
+          context,
+          title: 'خطأ',
+          message: 'فشل قبول الطلب. يرجى المحاولة مرة أخرى.',
         );
       }
     } finally {
@@ -626,11 +1082,10 @@ class _TechnicianJobDetailScreenState
   Future<void> _setPrice() async {
     final price = double.tryParse(_priceController.text);
     if (price == null || price <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('أدخل سعر صحيح'),
-          backgroundColor: Colors.orange,
-        ),
+      KadmatToast.showWarning(
+        context,
+        title: 'تنبيه',
+        message: 'أدخل سعر صحيح',
       );
       return;
     }
@@ -641,56 +1096,22 @@ class _TechnicianJobDetailScreenState
           .read(jobRepositoryProvider)
           .setPrice(widget.jobId, price, notes: _notesController.text);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('تم إرسال السعر للعميل'),
-            backgroundColor: Colors.green,
-          ),
+        KadmatToast.showSuccess(
+          context,
+          title: 'تم تحديد السعر',
+          message: '💰 تم تحديد السعر، بانتظار موافقة العميل…',
         );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$e'), backgroundColor: Colors.red),
+        KadmatToast.showError(
+          context,
+          title: 'فشل إرسال السعر',
+          message: e.toString(),
         );
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  Future<void> _completeJob() async {
-    setState(() => _isLoading = true);
-    try {
-      await ref.read(jobRepositoryProvider).completeJob(widget.jobId);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('🎉 تم إتمام الخدمة بنجاح!'),
-            backgroundColor: Colors.green,
-          ),
-        );
-        context.go('/technician/home');
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$e'), backgroundColor: Colors.red),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  void _openMaps() async {
-    if (_job?.lat != null && _job?.lng != null) {
-      final url = Uri.parse(
-        'https://www.google.com/maps/dir/?api=1&destination=${_job!.lat},${_job!.lng}',
-      );
-      if (await canLaunchUrl(url)) {
-        await launchUrl(url);
-      }
     }
   }
 }

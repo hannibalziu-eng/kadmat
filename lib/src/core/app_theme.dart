@@ -21,12 +21,15 @@ class AppTheme {
     double opacity = 0.7,
   }) {
     return BoxDecoration(
-      color: color.withOpacity(opacity),
+      color: color.withValues(alpha: opacity),
       borderRadius: BorderRadius.circular(radius ?? 16.r),
-      border: Border.all(color: Colors.white.withOpacity(0.1), width: 1.w),
+      border: Border.all(
+        color: Colors.white.withValues(alpha: 0.1),
+        width: 1.w,
+      ),
       boxShadow: [
         BoxShadow(
-          color: Colors.black.withOpacity(0.1),
+          color: Colors.black.withValues(alpha: 0.1),
           blurRadius: 10.r,
           spreadRadius: 0,
         ),
@@ -45,7 +48,6 @@ class AppTheme {
         primary: primaryColor,
         secondary: secondaryColor,
         surface: Colors.white,
-        background: const Color(0xFFF6F8F8),
       ),
       fontFamily: 'Cairo',
       textTheme: TextTheme(

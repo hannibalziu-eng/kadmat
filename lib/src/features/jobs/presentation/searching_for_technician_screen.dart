@@ -40,7 +40,9 @@ class _SearchingForTechnicianScreenState
   int _estimatedTime = 3; // minutes
   bool _technicianFound = false;
   Map<String, dynamic>? _technician;
+  bool _showingNoTechMessage = false; // Show "no tech yet" without blocking
   StreamSubscription? _jobSubscription;
+  late DateTime _searchStartTime; // Track when search started
 
   // Default location (Riyadh) - will be replaced by actual location
   late double _lat;
@@ -52,6 +54,7 @@ class _SearchingForTechnicianScreenState
 
     _lat = widget.lat ?? 24.7136;
     _lng = widget.lng ?? 46.6753;
+    _searchStartTime = DateTime.now(); // Record search start time
 
     // Pulse animation
     _pulseController = AnimationController(
@@ -154,10 +157,31 @@ class _SearchingForTechnicianScreenState
               );
               _handleFoundTechnician(job);
             } else if (job.status == 'no_technician_found' && !_navigating) {
-            } else if (job.status == 'no_technician_found' && !_navigating) {
-              debugPrint('❌ SearchingScreen: No technician found');
-              _navigating = true;
-              _showNoTechnicianDialog();
+              // Don't navigate away! Keep listening for late acceptance.
+              // Only show the message after 30 seconds to avoid showing it too quickly
+              final elapsedSeconds = DateTime.now()
+                  .difference(_searchStartTime)
+                  .inSeconds;
+              debugPrint(
+                '⚠️ SearchingScreen: No technician found yet (elapsed: ${elapsedSeconds}s), still listening...',
+              );
+
+              if (mounted && !_showingNoTechMessage) {
+                if (elapsedSeconds >= 30) {
+                  setState(() => _showingNoTechMessage = true);
+                } else {
+                  // Schedule it
+                  final remaining = 30 - elapsedSeconds;
+                  Timer(Duration(seconds: remaining), () {
+                    if (mounted &&
+                        !_showingNoTechMessage &&
+                        !_navigating &&
+                        !_technicianFound) {
+                      setState(() => _showingNoTechMessage = true);
+                    }
+                  });
+                }
+              }
             }
           },
           onError: (e) {
@@ -245,8 +269,10 @@ class _SearchingForTechnicianScreenState
                             point: LatLng(_lat, _lng),
                             radius: _searchRadius.toDouble(),
                             useRadiusInMeter: true,
-                            color: AppTheme.primaryColor.withOpacity(0.1),
-                            borderColor: AppTheme.primaryColor.withOpacity(0.5),
+                            color: AppTheme.primaryColor.withValues(alpha: 0.1),
+                            borderColor: AppTheme.primaryColor.withValues(
+                              alpha: 0.5,
+                            ),
                             borderStrokeWidth: 2,
                           ),
                           // Inner solid circle
@@ -254,7 +280,7 @@ class _SearchingForTechnicianScreenState
                             point: LatLng(_lat, _lng),
                             radius: 50,
                             useRadiusInMeter: true,
-                            color: AppTheme.primaryColor.withOpacity(0.3),
+                            color: AppTheme.primaryColor.withValues(alpha: 0.3),
                             borderColor: AppTheme.primaryColor,
                             borderStrokeWidth: 3,
                           ),
@@ -277,16 +303,16 @@ class _SearchingForTechnicianScreenState
               ),
 
               // Tier indicator
-              Positioned(
+              PositionedDirectional(
                 top: 16.h,
-                right: 32.w,
+                end: 32.w,
                 child: Container(
                   padding: EdgeInsets.symmetric(
                     horizontal: 12.w,
                     vertical: 8.h,
                   ),
                   decoration: BoxDecoration(
-                    color: AppTheme.surfaceDark.withOpacity(0.9),
+                    color: AppTheme.surfaceDark.withValues(alpha: 0.9),
                     borderRadius: BorderRadius.circular(20.r),
                     border: Border.all(color: AppTheme.primaryColor),
                   ),
@@ -324,17 +350,22 @@ class _SearchingForTechnicianScreenState
             children: [
               // Status text with shimmer
               Text(
-                    'جاري البحث عن فني قريب...',
+                    _showingNoTechMessage
+                        ? 'لم يتم العثور على فني بعد...\nما زلنا نبحث!'
+                        : 'جاري البحث عن فني قريب...',
+                    textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 20.fz,
                       fontWeight: FontWeight.bold,
-                      color: Colors.white,
+                      color: _showingNoTechMessage
+                          ? Colors.orange
+                          : Colors.white,
                     ),
                   )
                   .animate(onPlay: (c) => c.repeat(reverse: true))
                   .shimmer(
                     duration: 2.seconds,
-                    color: AppTheme.primaryColor.withOpacity(0.3),
+                    color: AppTheme.primaryColor.withValues(alpha: 0.3),
                   ),
 
               SizedBox(height: 16.h),
@@ -376,7 +407,9 @@ class _SearchingForTechnicianScreenState
                         boxShadow: isCurrent
                             ? [
                                 BoxShadow(
-                                  color: AppTheme.primaryColor.withOpacity(0.5),
+                                  color: AppTheme.primaryColor.withValues(
+                                    alpha: 0.5,
+                                  ),
                                   blurRadius: 8,
                                   spreadRadius: 1,
                                 ),
@@ -419,12 +452,12 @@ class _SearchingForTechnicianScreenState
               gradient: RadialGradient(
                 colors: [
                   AppTheme.primaryColor,
-                  AppTheme.primaryColor.withOpacity(0.7),
+                  AppTheme.primaryColor.withValues(alpha: 0.7),
                 ],
               ),
               boxShadow: [
                 BoxShadow(
-                  color: AppTheme.primaryColor.withOpacity(0.5),
+                  color: AppTheme.primaryColor.withValues(alpha: 0.5),
                   blurRadius: 20.r,
                   spreadRadius: 5.r,
                 ),
@@ -490,7 +523,7 @@ class _SearchingForTechnicianScreenState
               color: Colors.green,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.green.withOpacity(0.4),
+                  color: Colors.green.withValues(alpha: 0.4),
                   blurRadius: 20.r,
                   spreadRadius: 5.r,
                 ),
@@ -519,7 +552,9 @@ class _SearchingForTechnicianScreenState
             decoration: BoxDecoration(
               color: AppTheme.surfaceDark,
               borderRadius: BorderRadius.circular(20.r),
-              border: Border.all(color: AppTheme.primaryColor.withOpacity(0.3)),
+              border: Border.all(
+                color: AppTheme.primaryColor.withValues(alpha: 0.3),
+              ),
             ),
             child: Column(
               children: [
@@ -576,7 +611,7 @@ class _SearchingForTechnicianScreenState
                                   vertical: 2.h,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: Colors.green.withOpacity(0.2),
+                                  color: Colors.green.withValues(alpha: 0.2),
                                   borderRadius: BorderRadius.circular(8.r),
                                 ),
                                 child: Text(
@@ -742,57 +777,6 @@ class _SearchingForTechnicianScreenState
                   },
                   style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
                   child: const Text('نعم، إلغاء'),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showNoTechnicianDialog() {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppTheme.surfaceDark,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20.r),
-        ),
-        title: Text(
-          '😔 للأسف',
-          style: TextStyle(
-            fontSize: 20.fz,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
-          textAlign: TextAlign.center,
-        ),
-        content: Text(
-          'لم نتمكن من العثور على فني متاح حالياً.\nهل تود إعادة المحاولة؟',
-          style: TextStyle(fontSize: 14.fz, color: Colors.white70),
-          textAlign: TextAlign.center,
-        ),
-        actions: [
-          Row(
-            children: [
-              Expanded(
-                child: TextButton(
-                  onPressed: () {
-                    Navigator.pop(context);
-                    context.go('/');
-                  },
-                  child: const Text('لا، إلغاء'),
-                ),
-              ),
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: () {
-                    Navigator.pop(context);
-                    // Retry logic here
-                  },
-                  child: const Text('إعادة المحاولة'),
                 ),
               ),
             ],

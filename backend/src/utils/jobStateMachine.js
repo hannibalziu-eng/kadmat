@@ -1,14 +1,10 @@
-/**
- * Job State Machine
- * Defines valid state transitions and rules
- */
-
 export const JOB_STATES = {
     PENDING: 'pending',
     SEARCHING: 'searching',
     ACCEPTED: 'accepted',
     PRICE_PENDING: 'price_pending',
     IN_PROGRESS: 'in_progress',
+    PENDING_CONFIRM: 'pending_confirm', // New state
     COMPLETED: 'completed',
     RATED: 'rated',
     CANCELLED: 'cancelled',
@@ -40,8 +36,11 @@ export const VALID_TRANSITIONS = {
         JOB_STATES.CANCELLED
     ],
     [JOB_STATES.IN_PROGRESS]: [
-        JOB_STATES.COMPLETED,
+        JOB_STATES.PENDING_CONFIRM, // Must go to confirmation first
         JOB_STATES.CANCELLED
+    ],
+    [JOB_STATES.PENDING_CONFIRM]: [
+        JOB_STATES.COMPLETED
     ],
     [JOB_STATES.COMPLETED]: [
         JOB_STATES.RATED
@@ -107,6 +106,7 @@ export const STATE_DESCRIPTIONS = {
     [JOB_STATES.ACCEPTED]: 'تم قبول الطلب',
     [JOB_STATES.PRICE_PENDING]: 'في انتظار موافقتك على السعر',
     [JOB_STATES.IN_PROGRESS]: 'جاري تنفيذ الخدمة',
+    [JOB_STATES.PENDING_CONFIRM]: 'في انتظار تأكيد العميل للإكمال',
     [JOB_STATES.COMPLETED]: 'اكتملت الخدمة',
     [JOB_STATES.RATED]: 'تم تقييم الخدمة',
     [JOB_STATES.CANCELLED]: 'تم إلغاء الطلب',

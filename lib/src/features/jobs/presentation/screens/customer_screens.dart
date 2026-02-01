@@ -4,6 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_scalify/flutter_scalify.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/app_theme.dart';
+import '../../../../core/navigation/app_routes.dart';
+import '../../../../core/widgets/kadmat_toast.dart';
+import '../../../../core/utils/error_handler.dart';
 import '../../data/job_repository.dart';
 import '../../domain/job.dart';
 import '../widgets/job_widgets.dart';
@@ -61,10 +64,11 @@ class _CustomerSearchingScreenState
         _isLoading = false;
       });
 
-      // Auto-navigate when technician accepts
-      if (job != null && job.status == 'accepted') {
+      // Auto-navigate when technician accepts or sets price
+      if (job != null &&
+          (job.status == 'accepted' || job.status == 'price_pending')) {
         _pollTimer?.cancel();
-        context.go('/jobs/${widget.jobId}/customer/technician-found');
+        context.go(AppRoutes.buildCustomerTechnicianFoundPath(widget.jobId));
       }
     } catch (e) {
       if (mounted) {
@@ -114,8 +118,8 @@ class _CustomerSearchingScreenState
                           shape: BoxShape.circle,
                           gradient: RadialGradient(
                             colors: [
-                              AppTheme.primaryColor.withOpacity(0.3),
-                              AppTheme.primaryColor.withOpacity(0.1),
+                              AppTheme.primaryColor.withValues(alpha: 0.3),
+                              AppTheme.primaryColor.withValues(alpha: 0.1),
                               Colors.transparent,
                             ],
                           ),
@@ -244,12 +248,10 @@ class _CustomerSearchingScreenState
     if (confirm == true) {
       try {
         await ref.read(jobRepositoryProvider).cancelJob(widget.jobId);
-        if (mounted) context.go('/');
+        if (mounted) context.go(AppRoutes.home);
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('$e'), backgroundColor: Colors.red),
-          );
+          ErrorHandler.handle(context, e);
         }
       }
     }
@@ -295,7 +297,7 @@ class _CustomerTechnicianFoundScreenState
       // Auto-navigate when price is set
       if (job != null && job.status == 'price_pending') {
         _pollTimer?.cancel();
-        context.go('/jobs/${widget.jobId}/customer/price-offer');
+        context.go(AppRoutes.buildCustomerPriceOfferPath(widget.jobId));
       }
     } catch (e) {
       // Ignore errors
@@ -327,7 +329,7 @@ class _CustomerTechnicianFoundScreenState
                   Container(
                     padding: EdgeInsets.all(24.w),
                     decoration: BoxDecoration(
-                      color: Colors.green.withOpacity(0.2),
+                      color: Colors.green.withValues(alpha: 0.2),
                       shape: BoxShape.circle,
                     ),
                     child: Icon(Icons.check, color: Colors.green, size: 60.s),
@@ -417,19 +419,16 @@ class _CustomerPriceOfferScreenState
     try {
       await ref.read(jobRepositoryProvider).confirmPrice(widget.jobId);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('تم قبول السعر! الفني في الطريق.'),
-            backgroundColor: Colors.green,
-          ),
+        KadmatToast.showSuccess(
+          context,
+          title: 'تم قبول السعر',
+          message: '✅ الفني في الطريق إليك!',
         );
-        context.go('/jobs/${widget.jobId}/customer/in-progress');
+        context.go(AppRoutes.buildCustomerInProgressPath(widget.jobId));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$e'), backgroundColor: Colors.red),
-        );
+        ErrorHandler.handle(context, e);
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -464,7 +463,7 @@ class _CustomerPriceOfferScreenState
       await ref
           .read(jobRepositoryProvider)
           .cancelJob(widget.jobId, reason: 'رفض السعر');
-      if (mounted) context.go('/');
+      if (mounted) context.go(AppRoutes.home);
     }
   }
 
@@ -518,8 +517,8 @@ class _CustomerPriceOfferScreenState
                       padding: EdgeInsets.all(12.w),
                       decoration: BoxDecoration(
                         color: _job!.technicianPrice! <= _job!.initialPrice!
-                            ? Colors.green.withOpacity(0.2)
-                            : Colors.orange.withOpacity(0.2),
+                            ? Colors.green.withValues(alpha: 0.2)
+                            : Colors.orange.withValues(alpha: 0.2),
                         borderRadius: BorderRadius.circular(12.r),
                       ),
                       child: Row(
@@ -645,9 +644,16 @@ class _CustomerInProgressScreenState
       setState(() => _job = job);
 
       // Auto-navigate when completed
-      if (job != null && job.status == 'completed') {
-        _pollTimer?.cancel();
-        context.go('/jobs/${widget.jobId}/customer/rate');
+      if (job != null) {
+        if (job.status == 'completed') {
+          _pollTimer?.cancel();
+          context.go(AppRoutes.buildCustomerRatePath(widget.jobId));
+        } else if (job.status == 'pending_confirmation') {
+          _pollTimer?.cancel();
+          context.go(
+            AppRoutes.buildCustomerConfirmCompletionPath(widget.jobId),
+          );
+        }
       }
     } catch (e) {
       // Ignore
@@ -678,7 +684,7 @@ class _CustomerInProgressScreenState
                   Container(
                     padding: EdgeInsets.all(32.w),
                     decoration: BoxDecoration(
-                      color: Colors.blue.withOpacity(0.2),
+                      color: Colors.blue.withValues(alpha: 0.2),
                       shape: BoxShape.circle,
                     ),
                     child: Icon(
@@ -705,7 +711,7 @@ class _CustomerInProgressScreenState
                   Container(
                     padding: EdgeInsets.all(16.w),
                     decoration: BoxDecoration(
-                      color: Colors.green.withOpacity(0.2),
+                      color: Colors.green.withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(12.r),
                     ),
                     child: Row(
@@ -754,7 +760,29 @@ class _CustomerRateScreenState extends ConsumerState<CustomerRateScreen> {
   Job? _job;
   int _rating = 0;
   final _reviewController = TextEditingController();
+  final List<String> _availableTags = [
+    'محترف',
+    'سريع',
+    'نطيف',
+    'تعامل راقي',
+    'سعر ممتاز',
+    'دقيق في المواعيد',
+  ];
+  final Set<String> _selectedTags = {};
   bool _isLoading = false;
+
+  String? _buildReviewText() {
+    String review = _reviewController.text;
+    if (_selectedTags.isNotEmpty) {
+      final tagsString = _selectedTags.map((t) => '#$t').join(' ');
+      if (review.isNotEmpty) {
+        review += '\n\n$tagsString';
+      } else {
+        review = tagsString;
+      }
+    }
+    return review.isNotEmpty ? review : null;
+  }
 
   @override
   void initState() {
@@ -775,11 +803,10 @@ class _CustomerRateScreenState extends ConsumerState<CustomerRateScreen> {
 
   Future<void> _submitRating() async {
     if (_rating == 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('يرجى اختيار تقييم'),
-          backgroundColor: Colors.orange,
-        ),
+      KadmatToast.showWarning(
+        context,
+        title: 'تنبيه',
+        message: 'يرجى اختيار تقييم',
       );
       return;
     }
@@ -788,27 +815,18 @@ class _CustomerRateScreenState extends ConsumerState<CustomerRateScreen> {
     try {
       await ref
           .read(jobRepositoryProvider)
-          .rateJob(
-            widget.jobId,
-            _rating,
-            review: _reviewController.text.isNotEmpty
-                ? _reviewController.text
-                : null,
-          );
+          .rateJob(widget.jobId, _rating, review: _buildReviewText());
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('شكراً على تقييمك! ⭐'),
-            backgroundColor: Colors.green,
-          ),
+        KadmatToast.showSuccess(
+          context,
+          title: 'شكراً على تقييمك!',
+          message: '⭐ تم إرسال التقييم بنجاح',
         );
         context.go('/jobs/${widget.jobId}/customer/completed');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$e'), backgroundColor: Colors.red),
-        );
+        ErrorHandler.handle(context, e);
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -837,7 +855,7 @@ class _CustomerRateScreenState extends ConsumerState<CustomerRateScreen> {
             Container(
               padding: EdgeInsets.all(24.w),
               decoration: BoxDecoration(
-                color: Colors.teal.withOpacity(0.2),
+                color: Colors.teal.withValues(alpha: 0.2),
                 shape: BoxShape.circle,
               ),
               child: Icon(Icons.done_all, color: Colors.teal, size: 60.s),
@@ -872,6 +890,43 @@ class _CustomerRateScreenState extends ConsumerState<CustomerRateScreen> {
                   ),
                 );
               }),
+            ),
+            SizedBox(height: 24.h),
+            Wrap(
+              spacing: 8.w,
+              runSpacing: 8.h,
+              alignment: WrapAlignment.center,
+              children: _availableTags.map((tag) {
+                final isSelected = _selectedTags.contains(tag);
+                return FilterChip(
+                  label: Text(tag),
+                  selected: isSelected,
+                  onSelected: (selected) {
+                    setState(() {
+                      if (selected) {
+                        _selectedTags.add(tag);
+                      } else {
+                        _selectedTags.remove(tag);
+                      }
+                    });
+                  },
+                  backgroundColor: Colors.white10,
+                  selectedColor: AppTheme.primaryColor.withValues(alpha: 0.2),
+                  checkmarkColor: AppTheme.primaryColor,
+                  labelStyle: TextStyle(
+                    color: isSelected ? AppTheme.primaryColor : Colors.white70,
+                    fontSize: 12.fz,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20.r),
+                    side: BorderSide(
+                      color: isSelected
+                          ? AppTheme.primaryColor
+                          : Colors.white10,
+                    ),
+                  ),
+                );
+              }).toList(),
             ),
             SizedBox(height: 32.h),
             Container(
@@ -987,8 +1042,8 @@ class _CustomerCompletedScreenState
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         colors: [
-                          AppTheme.primaryColor.withOpacity(0.3),
-                          Colors.teal.withOpacity(0.3),
+                          AppTheme.primaryColor.withValues(alpha: 0.3),
+                          Colors.teal.withValues(alpha: 0.3),
                         ],
                       ),
                       shape: BoxShape.circle,

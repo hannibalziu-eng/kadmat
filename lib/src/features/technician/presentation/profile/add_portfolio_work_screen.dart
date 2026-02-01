@@ -1,19 +1,31 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_scalify/flutter_scalify.dart';
 import 'package:go_router/go_router.dart';
 
-class AddPortfolioWorkScreen extends StatefulWidget {
+import 'dart:io';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
+import '../../data/technician_repository.dart';
+import '../../../../core/providers/photo_upload_provider.dart';
+
+class AddPortfolioWorkScreen extends ConsumerStatefulWidget {
   const AddPortfolioWorkScreen({super.key});
 
   @override
-  State<AddPortfolioWorkScreen> createState() => _AddPortfolioWorkScreenState();
+  ConsumerState<AddPortfolioWorkScreen> createState() =>
+      _AddPortfolioWorkScreenState();
 }
 
-class _AddPortfolioWorkScreenState extends State<AddPortfolioWorkScreen> {
+class _AddPortfolioWorkScreenState
+    extends ConsumerState<AddPortfolioWorkScreen> {
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _dateController = TextEditingController();
+  XFile? _selectedImage;
+  Uint8List? _imageBytes; // Cached bytes for web preview
+  bool _isLoading = false;
 
   @override
   void dispose() {
@@ -21,6 +33,77 @@ class _AddPortfolioWorkScreenState extends State<AddPortfolioWorkScreen> {
     _descriptionController.dispose();
     _dateController.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickImage() async {
+    final photoService = ref.read(photoUploadServiceProvider);
+    try {
+      final photos = await photoService.pickPhotos(
+        source: ImageSource.gallery,
+        maxPhotos: 1,
+      );
+      if (photos.isNotEmpty) {
+        final xfile = photos.first;
+        // Cache bytes for web preview
+        final bytes = await xfile.readAsBytes();
+        setState(() {
+          _selectedImage = xfile;
+          _imageBytes = bytes;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('فشل اختيار الصورة: $e')));
+      }
+    }
+  }
+
+  Future<void> _submit() async {
+    if (!_formKey.currentState!.validate()) return;
+    if (_selectedImage == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('يرجى إضافة صورة للعمل')));
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      final photoService = ref.read(photoUploadServiceProvider);
+      final techRepo = ref.read(technicianRepositoryProvider);
+
+      // 1. Upload Photo
+      final imageUrl = await photoService.uploadPhoto(
+        _selectedImage!,
+        'portfolio',
+      );
+
+      // 2. Save Portfolio Item
+      await techRepo.addPortfolioWork({
+        'title': _titleController.text,
+        'description': _descriptionController.text,
+        'completion_date': _dateController.text,
+        'image_url': imageUrl,
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('تم إضافة العمل بنجاح')));
+        context.pop();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('خطأ: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   @override
@@ -40,22 +123,43 @@ class _AddPortfolioWorkScreenState extends State<AddPortfolioWorkScreen> {
           key: _formKey,
           child: Column(
             children: [
-              // Image Upload Placeholder
-              Container(
-                height: 200.h,
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: Colors.grey[200],
-                  borderRadius: BorderRadius.circular(16.r),
-                  border: Border.all(color: Colors.grey[400]!),
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.add_photo_alternate_outlined, size: 48.s, color: Colors.grey),
-                    SizedBox(height: 8.h),
-                    Text('إضافة صورة للعمل', style: TextStyle(color: Colors.grey[600])),
-                  ],
+              // Image Upload
+              GestureDetector(
+                onTap: _pickImage,
+                child: Container(
+                  height: 200.h,
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[200],
+                    borderRadius: BorderRadius.circular(16.r),
+                    border: Border.all(color: Colors.grey[400]!),
+                    image: _selectedImage != null && _imageBytes != null
+                        ? DecorationImage(
+                            image: kIsWeb
+                                ? MemoryImage(_imageBytes!)
+                                : FileImage(File(_selectedImage!.path))
+                                      as ImageProvider,
+                            fit: BoxFit.cover,
+                          )
+                        : null,
+                  ),
+                  child: _selectedImage == null
+                      ? Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.add_photo_alternate_outlined,
+                              size: 48.s,
+                              color: Colors.grey,
+                            ),
+                            SizedBox(height: 8.h),
+                            Text(
+                              'إضافة صورة للعمل',
+                              style: TextStyle(color: Colors.grey[600]),
+                            ),
+                          ],
+                        )
+                      : null,
                 ),
               ),
               SizedBox(height: 24.h),
@@ -79,9 +183,22 @@ class _AddPortfolioWorkScreenState extends State<AddPortfolioWorkScreen> {
                   border: OutlineInputBorder(),
                 ),
                 onTap: () async {
-                  // Show date picker
                   FocusScope.of(context).requestFocus(FocusNode());
+                  // Show date picker (Simple mock for now)
+                  // In real app use showDatePicker
+                  // For now let user type or just pick current date
+                  final date = await showDatePicker(
+                    context: context,
+                    initialDate: DateTime.now(),
+                    firstDate: DateTime(2000),
+                    lastDate: DateTime.now(),
+                  );
+                  if (date != null) {
+                    _dateController.text =
+                        "${date.year}-${date.month}-${date.day}";
+                  }
                 },
+                validator: (value) => value!.isEmpty ? 'مطلوب' : null,
               ),
               SizedBox(height: 16.h),
 
@@ -100,16 +217,10 @@ class _AddPortfolioWorkScreenState extends State<AddPortfolioWorkScreen> {
                 width: double.infinity,
                 height: 50.h,
                 child: ElevatedButton(
-                  onPressed: () {
-                    if (_formKey.currentState!.validate()) {
-                      // TODO: Implement save logic
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('تم إضافة العمل بنجاح')),
-                      );
-                      context.pop();
-                    }
-                  },
-                  child: const Text('نشر العمل'),
+                  onPressed: _isLoading ? null : _submit,
+                  child: _isLoading
+                      ? const CircularProgressIndicator(color: Colors.white)
+                      : const Text('نشر العمل'),
                 ),
               ),
             ],

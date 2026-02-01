@@ -4,7 +4,8 @@ import {
     getUnreadCount,
     markAsRead,
     markAllAsRead,
-    deleteNotification
+    deleteNotification,
+    updateFCMToken
 } from '../controllers/notificationController.js';
 import { protect } from '../middleware/authMiddleware.js';
 
@@ -27,5 +28,8 @@ router.post('/:id/read', markAsRead);
 
 // Delete notification
 router.delete('/:id', deleteNotification);
+
+// Update FCM Token
+router.post('/fcm-token', updateFCMToken);
 
 export default router;

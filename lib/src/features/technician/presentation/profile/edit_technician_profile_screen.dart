@@ -2,19 +2,53 @@ import 'package:flutter/material.dart';
 import 'package:flutter_scalify/flutter_scalify.dart';
 import 'package:go_router/go_router.dart';
 
-class EditTechnicianProfileScreen extends StatefulWidget {
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../data/technician_repository.dart';
+import '../../../auth/data/auth_repository.dart';
+
+class EditTechnicianProfileScreen extends ConsumerStatefulWidget {
   const EditTechnicianProfileScreen({super.key});
 
   @override
-  State<EditTechnicianProfileScreen> createState() => _EditTechnicianProfileScreenState();
+  ConsumerState<EditTechnicianProfileScreen> createState() =>
+      _EditTechnicianProfileScreenState();
 }
 
-class _EditTechnicianProfileScreenState extends State<EditTechnicianProfileScreen> {
+class _EditTechnicianProfileScreenState
+    extends ConsumerState<EditTechnicianProfileScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _nameController = TextEditingController(text: 'عبدالله المنصور');
-  final _titleController = TextEditingController(text: 'سباك محترف');
-  final _bioController = TextEditingController(text: 'سباك محترف بخبرة تمتد لأكثر من 8 سنوات...');
-  final _locationController = TextEditingController(text: 'الرياض، المملكة العربية السعودية');
+  late TextEditingController _nameController;
+  late TextEditingController _titleController;
+  late TextEditingController _bioController;
+  late TextEditingController _locationController;
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // The original code had some comments about fetching user, which are now addressed by the new _loadProfile implementation.
+    // Keeping the initialization of controllers here as per the instruction.
+    _nameController = TextEditingController(text: '');
+    _titleController = TextEditingController(text: '');
+    _bioController = TextEditingController(text: '');
+    _locationController = TextEditingController(text: '');
+
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadProfile());
+  }
+
+  Future<void> _loadProfile() async {
+    final userProfile = ref.read(authRepositoryProvider).userProfile;
+    if (userProfile != null) {
+      if (mounted) {
+        setState(() {
+          _nameController.text = userProfile['full_name'] ?? '';
+          _titleController.text = userProfile['title'] ?? '';
+          _bioController.text = userProfile['bio'] ?? '';
+          _locationController.text = userProfile['location'] ?? '';
+        });
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -42,7 +76,7 @@ class _EditTechnicianProfileScreenState extends State<EditTechnicianProfileScree
           key: _formKey,
           child: Column(
             children: [
-              // Avatar Edit
+              // Avatar Edit (Simplified for now)
               Stack(
                 children: [
                   CircleAvatar(
@@ -78,6 +112,7 @@ class _EditTechnicianProfileScreenState extends State<EditTechnicianProfileScree
                   prefixIcon: Icon(Icons.person_outline),
                   border: OutlineInputBorder(),
                 ),
+                validator: (value) => value!.isEmpty ? 'مطلوب' : null,
               ),
               SizedBox(height: 16.h),
 
@@ -116,16 +151,43 @@ class _EditTechnicianProfileScreenState extends State<EditTechnicianProfileScree
                 width: double.infinity,
                 height: 50.h,
                 child: ElevatedButton(
-                  onPressed: () {
-                    if (_formKey.currentState!.validate()) {
-                      // TODO: Implement save logic
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('تم حفظ التغييرات بنجاح')),
-                      );
-                      context.pop();
-                    }
-                  },
-                  child: const Text('حفظ التغييرات'),
+                  onPressed: _isLoading
+                      ? null
+                      : () async {
+                          if (_formKey.currentState!.validate()) {
+                            setState(() => _isLoading = true);
+                            try {
+                              await ref
+                                  .read(technicianRepositoryProvider)
+                                  .updateProfile({
+                                    'full_name': _nameController.text,
+                                    'title': _titleController.text,
+                                    'location': _locationController.text,
+                                    'bio': _bioController.text,
+                                  });
+
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('تم حفظ التغييرات بنجاح'),
+                                  ),
+                                );
+                                context.pop();
+                              }
+                            } catch (e) {
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text('خطأ: $e')),
+                                );
+                              }
+                            } finally {
+                              if (mounted) setState(() => _isLoading = false);
+                            }
+                          }
+                        },
+                  child: _isLoading
+                      ? const CircularProgressIndicator(color: Colors.white)
+                      : const Text('حفظ التغييرات'),
                 ),
               ),
             ],

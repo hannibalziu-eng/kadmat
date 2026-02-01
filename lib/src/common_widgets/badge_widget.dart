@@ -24,22 +24,22 @@ class BadgeWidget extends StatelessWidget {
 
     switch (badgeType) {
       case 'verified_pro':
-        backgroundColor = Colors.blue.withOpacity(0.15);
+        backgroundColor = Colors.blue.withValues(alpha: 0.15);
         contentColor = Colors.blue;
         iconData = Icons.verified;
         break;
       case 'top_rated':
-        backgroundColor = Colors.amber.withOpacity(0.15);
+        backgroundColor = Colors.amber.withValues(alpha: 0.15);
         contentColor = Colors.amber;
         iconData = Icons.star;
         break;
       case 'quick_responder':
-        backgroundColor = Colors.green.withOpacity(0.15);
+        backgroundColor = Colors.green.withValues(alpha: 0.15);
         contentColor = Colors.green;
         iconData = Icons.flash_on;
         break;
       default:
-        backgroundColor = Colors.grey.withOpacity(0.15);
+        backgroundColor = Colors.grey.withValues(alpha: 0.15);
         contentColor = Colors.grey;
         iconData = Icons.stars;
     }
@@ -52,7 +52,10 @@ class BadgeWidget extends StatelessWidget {
           decoration: BoxDecoration(
             color: backgroundColor,
             shape: BoxShape.circle,
-            border: Border.all(color: contentColor.withOpacity(0.5), width: 1),
+            border: Border.all(
+              color: contentColor.withValues(alpha: 0.5),
+              width: 1,
+            ),
           ),
           child: Icon(iconData, size: 14.s, color: contentColor),
         ),
@@ -64,7 +67,7 @@ class BadgeWidget extends StatelessWidget {
       decoration: BoxDecoration(
         color: backgroundColor,
         borderRadius: BorderRadius.circular(20.r),
-        border: Border.all(color: contentColor.withOpacity(0.3)),
+        border: Border.all(color: contentColor.withValues(alpha: 0.3)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

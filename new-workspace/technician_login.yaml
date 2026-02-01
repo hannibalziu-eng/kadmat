@@ -1,0 +1,11 @@
+url: http://localhost:8081/#/
+---
+- launchApp
+- assertVisible: "تسجيل الدخول"
+- tapOn: "البريد الإلكتروني"
+- inputText: "hani@gmail.com"
+- tapOn: "كلمة المرور"
+- inputText: "123456789"
+- tapOn: "دخول"
+- assertVisible: "الرئيسية"
+- assertVisible: "الطلبات" # حسب نص التبويب عندك

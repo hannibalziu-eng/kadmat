@@ -186,7 +186,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
         borderRadius: BorderRadius.circular(16.r),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10.r,
             offset: const Offset(0, 2),
           ),
@@ -230,7 +230,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                         vertical: 6,
                       ),
                       decoration: BoxDecoration(
-                        color: statusBgColor.withOpacity(0.1),
+                        color: statusBgColor.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(20.r),
                       ),
                       child: Text(

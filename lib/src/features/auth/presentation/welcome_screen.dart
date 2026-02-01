@@ -50,9 +50,9 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                               begin: Alignment.topCenter,
                               end: Alignment.bottomCenter,
                               colors: [
-                                Colors.black.withOpacity(0.1),
-                                Colors.black.withOpacity(0.6),
-                                Colors.black.withOpacity(0.8),
+                                Colors.black.withValues(alpha: 0.1),
+                                Colors.black.withValues(alpha: 0.6),
+                                Colors.black.withValues(alpha: 0.8),
                               ],
                             ),
                           ),
@@ -94,7 +94,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                       children: [
                         _buildFeatureCard(
                           title: 'ابحث عن خبراء',
-                          subtitle: 'اعثر على المحترفين المناسبين لمشروعك بسهولة',
+                          subtitle:
+                              'اعثر على المحترفين المناسبين لمشروعك بسهولة',
                           imageUrl:
                               'https://images.unsplash.com/photo-1521737711867-e3b97375f902?w=800',
                         ),
@@ -229,7 +230,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
         borderRadius: BorderRadius.circular(16.r),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10.r,
             offset: Offset(0, 4.h),
           ),

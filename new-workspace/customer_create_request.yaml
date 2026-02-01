@@ -1,0 +1,22 @@
+url: http://localhost:8080/#/
+
+---
+
+- launchApp
+
+# يفترض أنك لوجين بالفعل أو تضيف هنا login steps أو تستخدم flow آخر قبل هذا
+
+- tapOn: "طلب خدمة جديدة"
+- tapOn: "نوع الخدمة"
+- tapOn: "إصلاح كهرباء"       # electrical_repair بالعربي
+- tapOn: "موقعي الحالي"        # زر اختيار الموقع
+- tapOn: "تأكيد الموقع"        # في شاشة الخريطة
+- tapOn: "وصف المشكلة"
+- inputText: "انقطاع كهرباء في الصالون"
+# لو فيه رفع صور، غالباً على الويب يكون inputFile، Maestro يدعم:
+# - tapOn: "إضافة صورة"
+# - inputText: "/absolute/path/to/test_image.jpg"
+
+- tapOn: "إرسال الطلب"
+- assertVisible: "تم إنشاء الطلب"
+- assertVisible: "في انتظار قبول الفني"

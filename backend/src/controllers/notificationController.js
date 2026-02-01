@@ -135,3 +135,30 @@ export const deleteNotification = async (req, res) => {
         res.status(500).json({ success: false, message: 'Server error', error: error.message });
     }
 };
+
+/**
+ * Update user's FCM token
+ */
+export const updateFCMToken = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const { fcmToken } = req.body;
+
+        if (!fcmToken) {
+            return res.status(400).json({ success: false, message: 'FCM Token is required' });
+        }
+
+        const { error } = await supabase
+            .from('users')
+            .update({ fcm_token: fcmToken })
+            .eq('id', userId);
+
+        if (error) throw error;
+
+        res.json({ success: true, message: 'Token updated successfully' });
+
+    } catch (error) {
+        console.error('Update FCM Token Error:', error);
+        res.status(500).json({ success: false, message: 'Server error', error: error.message });
+    }
+};

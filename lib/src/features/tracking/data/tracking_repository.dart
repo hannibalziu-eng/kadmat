@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -39,10 +40,9 @@ class TrackingRepository {
               // PostGIS point: POINT(lng lat)
               // We might need to parse it if it comes as string, or if we used a separate lat/lng column
               // The schema says: `location GEOGRAPHY(POINT)`
-              // Supabase Dart might return this as GeoJSON or WKT.
-              // For MVP, if we haven't implemented location updates writing,
-              // let's look for 'current_lat' and 'current_lng' if they exist,
-              // OR just use the simulated one if the backend isn't writing location yet.
+              // Supabase Dart SDK supports casting to geography.
+              // Ideally we use a stored procedure, but for now let's try
+              // updating the raw column if the SDK supports it, or use a function.
               // Checking schema... `location` column exists.
               // Let's assume we maintain `lat` and `lng` columns for simplicity in Flutter?
               // The schema showed `lat` and `lng` in JOBS, but `users` has `location`.
@@ -58,12 +58,12 @@ class TrackingRepository {
 }
 
 @riverpod
-TrackingRepository trackingRepository(TrackingRepositoryRef ref) {
+TrackingRepository trackingRepository(Ref ref) {
   return TrackingRepository();
 }
 
 @riverpod
-Stream<LatLng> providerLocation(ProviderLocationRef ref, String bookingId) {
+Stream<LatLng> providerLocation(Ref ref, String bookingId) {
   final repository = ref.watch(trackingRepositoryProvider);
   return repository.trackProvider(bookingId);
 }

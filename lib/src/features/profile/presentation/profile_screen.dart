@@ -123,90 +123,103 @@ class ProfileScreen extends ConsumerWidget {
             Padding(
               padding: EdgeInsets.symmetric(horizontal: 16.w),
               child: Column(
-                children: [
-                  if (isGuest) ...[
-                    _buildProfileOption(
-                      context,
-                      title: 'تسجيل الدخول / إنشاء حساب',
-                      subtitle: 'الوصول الكامل لجميع الخدمات',
-                      icon: Icons.login,
-                      iconColor: const Color(0xFF13b6ec),
-                      iconBgColor: const Color(0xFF13b6ec).withOpacity(0.1),
-                      onTap: () {
-                        ref.read(authRepositoryProvider).signOut();
-                        context.go('/login');
-                      },
-                    ),
-                    SizedBox(height: 16.h),
-                    _buildProfileOption(
-                      context,
-                      title: 'العودة للشاشة الرئيسية',
-                      subtitle: 'الرجوع لشاشة الترحيب',
-                      icon: Icons.home_outlined,
-                      iconColor: Colors.orange,
-                      iconBgColor: Colors.orange.withOpacity(0.1),
-                      onTap: () {
-                         ref.read(authRepositoryProvider).signOut();
-                         context.go('/'); // Assuming '/' is welcome or splash
-                      },
-                    ),
-                  ] else ...[
-                    _buildProfileOption(
-                      context,
-                      title: 'ملفي الشخصي',
-                      subtitle: 'تعديل معلوماتك الشخصية',
-                      icon: Icons.person_outline,
-                      iconColor: const Color(0xFF13b6ec),
-                      iconBgColor: const Color(0xFF13b6ec).withOpacity(0.1),
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (context) => const EditProfileScreen()),
-                      ),
-                    ),
-                    SizedBox(height: 16.h),
-                    _buildProfileOption(
-                      context,
-                      title: 'أمان الحساب',
-                      subtitle: 'تغيير كلمة المرور وتفعيل 2FA',
-                      icon: Icons.security,
-                      iconColor: Colors.green,
-                      iconBgColor: Colors.green.withOpacity(0.1),
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (context) => const AccountSecurityScreen()),
-                      ),
-                    ),
-                    SizedBox(height: 16.h),
-                    _buildProfileOption(
-                      context,
-                      title: 'المحفظة',
-                      subtitle: 'رصيدك الحالي: 350.00 ر.س',
-                      icon: Icons.account_balance_wallet_outlined,
-                      iconColor: Colors.blue,
-                      iconBgColor: Colors.blue.withOpacity(0.1),
-                      onTap: () => context.push('/customer-wallet'),
-                    ),
-                    SizedBox(height: 16.h),
-                    _buildProfileOption(
-                      context,
-                      title: 'الخدمات المفضلة',
-                      subtitle: 'عرض الخدمات المحفوظة لديك',
-                      icon: Icons.favorite_border,
-                      iconColor: Colors.red,
-                      iconBgColor: Colors.red.withOpacity(0.1),
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (context) => const FavoriteServicesScreen()),
-                      ),
-                    ),
-                  ],
-                ]
-                    .animate(interval: 100.ms)
-                    .fadeIn(duration: 400.ms)
-                    .slideX(begin: 0.2, end: 0),
+                children:
+                    [
+                          if (isGuest) ...[
+                            _buildProfileOption(
+                              context,
+                              title: 'تسجيل الدخول / إنشاء حساب',
+                              subtitle: 'الوصول الكامل لجميع الخدمات',
+                              icon: Icons.login,
+                              iconColor: const Color(0xFF13b6ec),
+                              iconBgColor: const Color(
+                                0xFF13b6ec,
+                              ).withOpacity(0.1),
+                              onTap: () {
+                                ref.read(authRepositoryProvider).signOut();
+                                context.go('/login');
+                              },
+                            ),
+                            SizedBox(height: 16.h),
+                            _buildProfileOption(
+                              context,
+                              title: 'العودة للشاشة الرئيسية',
+                              subtitle: 'الرجوع لشاشة الترحيب',
+                              icon: Icons.home_outlined,
+                              iconColor: Colors.orange,
+                              iconBgColor: Colors.orange.withOpacity(0.1),
+                              onTap: () {
+                                ref.read(authRepositoryProvider).signOut();
+                                context.go(
+                                  '/',
+                                ); // Assuming '/' is welcome or splash
+                              },
+                            ),
+                          ] else ...[
+                            _buildProfileOption(
+                              context,
+                              title: 'ملفي الشخصي',
+                              subtitle: 'تعديل معلوماتك الشخصية',
+                              icon: Icons.person_outline,
+                              iconColor: const Color(0xFF13b6ec),
+                              iconBgColor: const Color(
+                                0xFF13b6ec,
+                              ).withOpacity(0.1),
+                              onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) =>
+                                      const EditProfileScreen(),
+                                ),
+                              ),
+                            ),
+                            SizedBox(height: 16.h),
+                            _buildProfileOption(
+                              context,
+                              title: 'أمان الحساب',
+                              subtitle: 'تغيير كلمة المرور وتفعيل 2FA',
+                              icon: Icons.security,
+                              iconColor: Colors.green,
+                              iconBgColor: Colors.green.withOpacity(0.1),
+                              onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) =>
+                                      const AccountSecurityScreen(),
+                                ),
+                              ),
+                            ),
+                            SizedBox(height: 16.h),
+                            _buildProfileOption(
+                              context,
+                              title: 'المحفظة',
+                              subtitle: 'رصيدك الحالي: 350.00 ر.س',
+                              icon: Icons.account_balance_wallet_outlined,
+                              iconColor: Colors.blue,
+                              iconBgColor: Colors.blue.withOpacity(0.1),
+                              onTap: () => context.push('/customer-wallet'),
+                            ),
+                            SizedBox(height: 16.h),
+                            _buildProfileOption(
+                              context,
+                              title: 'الخدمات المفضلة',
+                              subtitle: 'عرض الخدمات المحفوظة لديك',
+                              icon: Icons.favorite_border,
+                              iconColor: Colors.red,
+                              iconBgColor: Colors.red.withOpacity(0.1),
+                              onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) =>
+                                      const FavoriteServicesScreen(),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ]
+                        .animate(interval: 100.ms)
+                        .fadeIn(duration: 400.ms)
+                        .slideX(begin: 0.2, end: 0),
               ),
             ),
             SizedBox(height: 80.h), // Bottom nav padding
@@ -234,7 +247,7 @@ class ProfileScreen extends ConsumerWidget {
           borderRadius: BorderRadius.circular(16.r),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.05),
+              color: Colors.black.withValues(alpha: 0.05),
               blurRadius: 10.r,
               offset: Offset(0, 2.h),
             ),

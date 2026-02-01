@@ -8,38 +8,54 @@ import '../features/auth/presentation/technician_landing_screen.dart';
 import '../features/auth/presentation/technician_login_screen.dart';
 import '../features/auth/presentation/technician_register_screen.dart';
 import '../features/auth/presentation/welcome_screen.dart';
+import '../features/auth/presentation/onboarding_screen.dart';
 import '../features/booking/presentation/booking_screen.dart';
 import '../features/booking/presentation/service_details_screen.dart';
 import '../features/main/main_screen.dart';
 import '../features/messages/presentation/messages_screen.dart';
+import '../features/messages/presentation/chat_screen.dart';
 import '../features/tracking/presentation/tracking_screen.dart';
 import '../features/orders/presentation/technician_price_input_screen.dart';
 import '../features/orders/presentation/customer_price_confirmation_dialog.dart';
 import '../features/technician/presentation/technician_main_screen.dart';
 import '../features/profile/presentation/customer_wallet_screen.dart';
 import '../features/jobs/presentation/searching_for_technician_screen.dart';
-import '../features/jobs/presentation/customer_active_job_screen.dart';
-import '../features/jobs/presentation/rating_screen.dart';
 import '../features/technician/presentation/jobs/technician_job_detail_screen.dart';
+import '../features/jobs/presentation/customer_active_job_screen.dart';
+
+import '../features/technician/presentation/technician_profile_screen.dart';
 // New job flow screens
 import '../features/jobs/presentation/screens/customer_screens.dart';
 import '../features/jobs/presentation/screens/technician_screens.dart';
+import '../features/jobs/presentation/screens/technician_complete_work_screen.dart';
+import '../features/jobs/presentation/screens/customer_payment_processing_screen.dart';
+import '../features/jobs/presentation/photos/pre_service_photo_screen.dart';
+import '../features/jobs/presentation/photos/post_service_photo_screen.dart';
+import '../features/jobs/presentation/payment/price_confirmation_screen.dart';
+import '../features/jobs/presentation/payment/customer_payment_approval_screen.dart';
+import '../features/jobs/presentation/screens/customer_service_completion_confirmation_screen.dart';
+import '../features/notifications/presentation/screens/notifications_screen.dart';
+import '../features/jobs/presentation/screens/customer_service_request_screen.dart';
+import '../features/jobs/presentation/screens/customer_job_tracking_screen.dart';
+import '../features/wallet/presentation/wallet_screen.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'navigation/app_routes.dart';
 
 part 'router.g.dart';
 
 @riverpod
-GoRouter goRouter(GoRouterRef ref) {
+GoRouter goRouter(Ref ref) {
   final authState = ref.watch(authStateChangesProvider);
 
   return GoRouter(
-    initialLocation: '/',
+    initialLocation: AppRoutes.home,
     redirect: (context, state) {
       final isLoggedIn = authState.valueOrNull != null;
-      final isLoggingIn = state.uri.path == '/login';
-      final isWelcome = state.uri.path == '/welcome';
-      final isRegistering = state.uri.path == '/register';
-      final isRecoveringPassword = state.uri.path == '/forgot-password';
+      final isLoggingIn = state.uri.path == AppRoutes.login;
+      final isWelcome = state.uri.path == AppRoutes.welcome;
+      final isRegistering = state.uri.path == AppRoutes.register;
+      final isRecoveringPassword = state.uri.path == AppRoutes.forgotPassword;
       final isTechnicianAuth = state.uri.path.startsWith('/technician');
 
       if (!isLoggedIn &&
@@ -48,13 +64,13 @@ GoRouter goRouter(GoRouterRef ref) {
           !isRegistering &&
           !isRecoveringPassword &&
           !isTechnicianAuth) {
-        return '/welcome';
+        return AppRoutes.welcome;
       }
       // Redirect technicians to their home if they try to access customer home
-      if (isLoggedIn && state.uri.path == '/') {
+      if (isLoggedIn && state.uri.path == AppRoutes.home) {
         final userType = ref.read(authRepositoryProvider).userType;
         if (userType == 'technician') {
-          return '/technician/home';
+          return AppRoutes.technicianHome;
         }
       }
 
@@ -66,62 +82,69 @@ GoRouter goRouter(GoRouterRef ref) {
               isTechnicianAuth)) {
         final userType = ref.read(authRepositoryProvider).userType;
         if (userType == 'technician') {
-          return '/technician/home';
+          return AppRoutes.technicianHome;
         }
-        return '/';
+        return AppRoutes.home;
       }
       return null;
     },
     routes: [
       GoRoute(
-        path: '/welcome',
+        path: AppRoutes.onboarding,
+        builder: (context, state) => const OnboardingScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.welcome,
         builder: (context, state) => const WelcomeScreen(),
       ),
       GoRoute(
-        path: '/register',
+        path: AppRoutes.register,
         builder: (context, state) => const RegisterScreen(),
       ),
       GoRoute(
-        path: '/forgot-password',
+        path: AppRoutes.forgotPassword,
         builder: (context, state) => const ForgotPasswordScreen(),
       ),
       GoRoute(
-        path: '/technician/landing',
+        path: AppRoutes.technicianLanding,
         builder: (context, state) => const TechnicianLandingScreen(),
       ),
       GoRoute(
-        path: '/technician/login',
+        path: AppRoutes.technicianLogin,
         builder: (context, state) => const TechnicianLoginScreen(),
       ),
       GoRoute(
-        path: '/technician/register',
+        path: AppRoutes.technicianRegister,
         builder: (context, state) => const TechnicianRegisterScreen(),
       ),
       GoRoute(
-        path: '/technician/home',
+        path: AppRoutes.technicianHome,
         builder: (context, state) => const TechnicianMainScreen(),
       ),
       GoRoute(
-        path: '/technician/job/:jobId',
+        path: AppRoutes.technicianJobDetail,
         builder: (context, state) {
           final jobId = state.pathParameters['jobId']!;
           return TechnicianJobDetailScreen(jobId: jobId);
         },
       ),
-      GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
       GoRoute(
-        path: '/',
+        path: AppRoutes.login,
+        builder: (context, state) => const LoginScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.home,
         builder: (context, state) => const MainScreen(),
         routes: [
           GoRoute(
-            path: 'booking/:serviceId',
+            path: AppRoutes.booking,
             builder: (context, state) {
               final serviceId = state.pathParameters['serviceId']!;
               return BookingScreen(serviceId: serviceId);
             },
           ),
           GoRoute(
-            path: 'service-details',
+            path: AppRoutes.serviceDetails,
             builder: (context, state) {
               final extra = state.extra as Map<String, dynamic>;
               return ServiceDetailsScreen(
@@ -131,11 +154,11 @@ GoRouter goRouter(GoRouterRef ref) {
             },
           ),
           GoRoute(
-            path: 'messages',
+            path: AppRoutes.messages,
             builder: (context, state) => const MessagesScreen(),
           ),
           GoRoute(
-            path: 'tracking/:bookingId',
+            path: AppRoutes.tracking,
             builder: (context, state) {
               final bookingId = state.pathParameters['bookingId']!;
               return TrackingScreen(bookingId: bookingId);
@@ -144,7 +167,7 @@ GoRouter goRouter(GoRouterRef ref) {
         ],
       ),
       GoRoute(
-        path: '/technician-price-input',
+        path: AppRoutes.technicianPriceInput,
         builder: (context, state) {
           final extra = state.extra as Map<String, dynamic>;
           return TechnicianPriceInputScreen(
@@ -154,7 +177,7 @@ GoRouter goRouter(GoRouterRef ref) {
         },
       ),
       GoRoute(
-        path: '/customer-confirmation',
+        path: AppRoutes.customerConfirmation,
         pageBuilder: (context, state) {
           final extra = state.extra as Map<String, dynamic>;
           return CustomTransitionPage(
@@ -175,7 +198,7 @@ GoRouter goRouter(GoRouterRef ref) {
         },
       ),
       GoRoute(
-        path: '/searching-for-technician',
+        path: AppRoutes.searchingForTechnician,
         builder: (context, state) {
           final extra = state.extra as Map<String, dynamic>?;
           return SearchingForTechnicianScreen(
@@ -187,104 +210,198 @@ GoRouter goRouter(GoRouterRef ref) {
         },
       ),
       GoRoute(
-        path: '/active-job/:jobId',
+        path: AppRoutes.activeJob,
         builder: (context, state) {
           final jobId = state.pathParameters['jobId']!;
           return CustomerActiveJobScreen(jobId: jobId);
         },
       ),
       GoRoute(
-        path: '/rate-job/:jobId',
-        builder: (context, state) {
+        path: AppRoutes.rateJob,
+        redirect: (context, state) {
           final jobId = state.pathParameters['jobId']!;
-          return RatingScreen(jobId: jobId);
+          return AppRoutes.buildCustomerRatePath(jobId);
         },
       ),
       GoRoute(
-        path: '/customer-wallet',
+        path: AppRoutes.customerWallet,
         builder: (context, state) => const CustomerWalletScreen(),
+      ),
+
+      GoRoute(
+        path: AppRoutes.customerCreateRequest,
+        builder: (context, state) => const CustomerServiceRequestScreen(),
       ),
 
       // ===== NEW JOB FLOW ROUTES =====
 
       // Customer Job Flow Routes
       GoRoute(
-        path: '/jobs/:jobId/customer/searching',
+        path: AppRoutes.customerJobSearching,
         builder: (context, state) {
           final jobId = state.pathParameters['jobId']!;
           return CustomerSearchingScreen(jobId: jobId);
         },
       ),
       GoRoute(
-        path: '/jobs/:jobId/customer/technician-found',
+        path: AppRoutes.customerTechnicianFound,
         builder: (context, state) {
           final jobId = state.pathParameters['jobId']!;
           return CustomerTechnicianFoundScreen(jobId: jobId);
         },
       ),
       GoRoute(
-        path: '/jobs/:jobId/customer/price-offer',
+        path: AppRoutes.customerPriceOffer,
         builder: (context, state) {
           final jobId = state.pathParameters['jobId']!;
           return CustomerPriceOfferScreen(jobId: jobId);
         },
       ),
       GoRoute(
-        path: '/jobs/:jobId/customer/in-progress',
+        path: AppRoutes.customerInProgress,
         builder: (context, state) {
           final jobId = state.pathParameters['jobId']!;
-          return CustomerInProgressScreen(jobId: jobId);
+          return CustomerJobTrackingScreen(jobId: jobId); // Use Tracking Screen
         },
       ),
       GoRoute(
-        path: '/jobs/:jobId/customer/rate',
+        path: AppRoutes.customerPaymentProcessing,
+        builder: (context, state) {
+          final jobId = state.pathParameters['jobId']!;
+          return CustomerPaymentProcessingScreen(jobId: jobId);
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.customerRate,
         builder: (context, state) {
           final jobId = state.pathParameters['jobId']!;
           return CustomerRateScreen(jobId: jobId);
         },
       ),
       GoRoute(
-        path: '/jobs/:jobId/customer/completed',
+        path: AppRoutes.customerCompleted,
         builder: (context, state) {
           final jobId = state.pathParameters['jobId']!;
           return CustomerCompletedScreen(jobId: jobId);
         },
       ),
+      GoRoute(
+        path: AppRoutes.customerConfirmCompletion,
+        builder: (context, state) {
+          final jobId = state.pathParameters['jobId']!;
+          return CustomerServiceCompletionConfirmationScreen(jobId: jobId);
+        },
+      ),
 
       // Technician Job Flow Routes
       GoRoute(
-        path: '/jobs/:jobId/technician/accepted',
+        path: AppRoutes.technicianAccepted,
         builder: (context, state) {
           final jobId = state.pathParameters['jobId']!;
           return TechnicianAcceptedScreen(jobId: jobId);
         },
       ),
       GoRoute(
-        path: '/jobs/:jobId/technician/set-price',
+        path: AppRoutes.technicianJobDetailV2,
         builder: (context, state) {
           final jobId = state.pathParameters['jobId']!;
-          return TechnicianSetPriceScreen(jobId: jobId);
+          return TechnicianJobDetailScreen(jobId: jobId);
         },
       ),
       GoRoute(
-        path: '/jobs/:jobId/technician/waiting',
+        path: AppRoutes.technicianSetPrice,
+        builder: (context, state) {
+          final jobId = state.pathParameters['jobId']!;
+          return TechnicianPriceInputScreen(orderId: jobId);
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.technicianWaiting,
         builder: (context, state) {
           final jobId = state.pathParameters['jobId']!;
           return TechnicianWaitingScreen(jobId: jobId);
         },
       ),
       GoRoute(
-        path: '/jobs/:jobId/technician/in-progress',
+        path: AppRoutes.technicianInProgress,
         builder: (context, state) {
           final jobId = state.pathParameters['jobId']!;
           return TechnicianInProgressScreen(jobId: jobId);
         },
       ),
       GoRoute(
-        path: '/jobs/:jobId/technician/completed',
+        path: AppRoutes.technicianCompleted,
         builder: (context, state) {
           final jobId = state.pathParameters['jobId']!;
           return TechnicianCompletedScreen(jobId: jobId);
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.technicianCompleteWorkInput,
+        builder: (context, state) {
+          final jobId = state.pathParameters['jobId']!;
+          return TechnicianCompleteWorkScreen(jobId: jobId);
+        },
+      ),
+
+      // Photo Capture Routes
+      GoRoute(
+        path: AppRoutes.technicianPrePhotos,
+        builder: (context, state) {
+          final jobId = state.pathParameters['jobId']!;
+          return PreServicePhotoScreen(jobId: jobId);
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.technicianPostPhotos,
+        builder: (context, state) {
+          final jobId = state.pathParameters['jobId']!;
+          return PostServicePhotoScreen(jobId: jobId);
+        },
+      ),
+
+      // Payment Confirmation Routes
+      GoRoute(
+        path: AppRoutes.technicianPriceConfirmation,
+        builder: (context, state) {
+          final jobId = state.pathParameters['jobId']!;
+          return PriceConfirmationScreen(jobId: jobId);
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.customerPaymentApproval,
+        builder: (context, state) {
+          final jobId = state.pathParameters['jobId']!;
+          return CustomerPaymentApprovalScreen(jobId: jobId);
+        },
+      ),
+
+      // Technician Profile Route
+      GoRoute(
+        path: AppRoutes.technicianProfile,
+        builder: (context, state) {
+          final technicianId = state.pathParameters['technicianId']!;
+          return TechnicianProfileScreen(technicianId: technicianId);
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.notifications,
+        builder: (context, state) => const NotificationsScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.wallet,
+        builder: (context, state) => const WalletScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.chat,
+        builder: (context, state) {
+          final jobId = state.pathParameters['jobId']!;
+          final extra = state.extra as Map<String, dynamic>;
+          return ChatScreen(
+            jobId: jobId,
+            otherUserName: extra['otherUserName'],
+            otherUserImage: extra['otherUserImage'],
+          );
         },
       ),
     ],

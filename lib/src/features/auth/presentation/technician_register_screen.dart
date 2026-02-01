@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'dart:io';
+import 'package:image_picker/image_picker.dart';
+import '../../../core/providers/photo_upload_provider.dart';
 import 'widgets/social_auth_button.dart';
 import 'auth_controller.dart';
 
@@ -22,6 +25,11 @@ class _TechnicianRegisterScreenState
   final _confirmPasswordController = TextEditingController();
   String? _selectedService;
   bool _isSocialLogin = false;
+
+  // Document Upload State
+  final List<XFile> _selectedDocuments = [];
+  bool _isUploading = false;
+  String _uploadStatus = '';
 
   void _simulateSocialLogin() {
     setState(() {
@@ -48,8 +56,72 @@ class _TechnicianRegisterScreenState
     super.dispose();
   }
 
+  Future<void> _pickDocuments() async {
+    try {
+      final uploadService = ref.read(photoUploadServiceProvider);
+      final photos = await uploadService.pickPhotos(
+        source: ImageSource.gallery,
+        maxPhotos: 5 - _selectedDocuments.length,
+      );
+
+      if (photos.isNotEmpty) {
+        setState(() {
+          _selectedDocuments.addAll(photos);
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('فشل اختيار المستندات: $e')));
+      }
+    }
+  }
+
+  void _removeDocument(int index) {
+    setState(() {
+      _selectedDocuments.removeAt(index);
+    });
+  }
+
   Future<void> _submit() async {
-    if (_formKey.currentState!.validate()) {
+    if (!_formKey.currentState!.validate()) return;
+
+    if (_selectedDocuments.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('الرجاء رفع صورة الهوية أو شهادات الخبرة'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _isUploading = true;
+      _uploadStatus = 'جاري رفع المستندات...';
+    });
+
+    try {
+      // 1. Upload Documents
+      final uploadService = ref.read(photoUploadServiceProvider);
+      List<String> documentUrls = [];
+
+      if (_selectedDocuments.isNotEmpty) {
+        documentUrls = await uploadService.uploadMultiplePhotos(
+          _selectedDocuments,
+          'technician_documents',
+          onProgress: (current, total) {
+            setState(() {
+              _uploadStatus = 'جاري رفع المستندات ($current / $total)...';
+            });
+          },
+        );
+      }
+
+      // 2. Register
+      setState(() => _uploadStatus = 'جاري إنشاء الحساب...');
+
       final success = await ref
           .read(authControllerProvider.notifier)
           .register(
@@ -59,10 +131,24 @@ class _TechnicianRegisterScreenState
             fullName: _nameController.text,
             userType: 'technician',
             serviceId: _selectedService,
+            documentUrls: documentUrls,
           );
 
       if (success && mounted) {
-        context.go('/');
+        context.go('/technician/home');
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('حدث خطأ: ${e.toString()}')));
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isUploading = false;
+          _uploadStatus = '';
+        });
       }
     }
   }
@@ -127,14 +213,18 @@ class _TechnicianRegisterScreenState
                 Row(
                   children: [
                     Expanded(
-                      child: Divider(color: subtitleColor.withOpacity(0.3)),
+                      child: Divider(
+                        color: subtitleColor.withValues(alpha: 0.3),
+                      ),
                     ),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       child: Text('أو', style: TextStyle(color: subtitleColor)),
                     ),
                     Expanded(
-                      child: Divider(color: subtitleColor.withOpacity(0.3)),
+                      child: Divider(
+                        color: subtitleColor.withValues(alpha: 0.3),
+                      ),
                     ),
                   ],
                 ),
@@ -218,7 +308,7 @@ class _TechnicianRegisterScreenState
                     return servicesAsync.when(
                       data: (services) {
                         return DropdownButtonFormField<String>(
-                          value: _selectedService,
+                          initialValue: _selectedService,
                           decoration: const InputDecoration(
                             hintText: 'اختر تخصصك',
                           ),
@@ -250,7 +340,59 @@ class _TechnicianRegisterScreenState
                 const SizedBox(height: 16),
 
                 // Documents Upload Area
-                _buildLabel('المستندات المطلوبة'),
+                _buildLabel('المستندات المطلوبة (الهوية، الشهادات)'),
+
+                // File List
+                if (_selectedDocuments.isNotEmpty)
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    height: 100,
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: _selectedDocuments.length,
+                      separatorBuilder: (context, index) =>
+                          const SizedBox(width: 8),
+                      itemBuilder: (context, index) {
+                        final file = _selectedDocuments[index];
+                        return Stack(
+                          children: [
+                            Container(
+                              width: 100,
+                              height: 100,
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(8),
+                                image: DecorationImage(
+                                  image: FileImage(File(file.path)),
+                                  fit: BoxFit.cover,
+                                ),
+                              ),
+                            ),
+                            Positioned(
+                              top: 4,
+                              right: 4,
+                              child: GestureDetector(
+                                onTap: () => _removeDocument(index),
+                                child: Container(
+                                  padding: const EdgeInsets.all(4),
+                                  decoration: const BoxDecoration(
+                                    color: Colors.red,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.close,
+                                    size: 16,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                  ),
+
+                // Upload Button
                 Container(
                   height: 140,
                   width: double.infinity,
@@ -263,14 +405,11 @@ class _TechnicianRegisterScreenState
                             context,
                           ).inputDecorationTheme.border?.borderSide.color ??
                           Colors.grey,
-                      style: BorderStyle
-                          .solid, // Flutter doesn't support dashed natively easily without CustomPainter, using solid for now to match theme
+                      style: BorderStyle.solid,
                     ),
                   ),
                   child: InkWell(
-                    onTap: () {
-                      // Handle file upload
-                    },
+                    onTap: _pickDocuments,
                     borderRadius: BorderRadius.circular(8),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -285,25 +424,35 @@ class _TechnicianRegisterScreenState
                             ),
                             children: const [
                               TextSpan(
-                                text: 'انقر للتحميل',
+                                text: 'انقر لرفع المستندات',
                                 style: TextStyle(fontWeight: FontWeight.bold),
                               ),
-                              TextSpan(text: ' أو اسحب وأفلت'),
                             ],
                           ),
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          'ملفات الهوية والخبرة',
+                          '${_selectedDocuments.length} ملفات تم اختيارها',
                           style: TextStyle(
                             fontSize: 12,
-                            color: subtitleColor.withOpacity(0.7),
+                            color: subtitleColor.withValues(alpha: 0.7),
                           ),
                         ),
                       ],
                     ),
                   ),
                 ),
+
+                if (_isUploading) ...[
+                  const SizedBox(height: 16),
+                  LinearProgressIndicator(),
+                  const SizedBox(height: 8),
+                  Text(
+                    _uploadStatus,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
+                ],
                 const SizedBox(height: 32),
 
                 if (state.hasError)
@@ -320,8 +469,8 @@ class _TechnicianRegisterScreenState
                 SizedBox(
                   height: 50,
                   child: ElevatedButton(
-                    onPressed: state.isLoading ? null : _submit,
-                    child: state.isLoading
+                    onPressed: state.isLoading || _isUploading ? null : _submit,
+                    child: state.isLoading || _isUploading
                         ? const CircularProgressIndicator(
                             color: Color(0xFF101d22),
                           )

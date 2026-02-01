@@ -123,7 +123,7 @@ class TechnicianProfileScreen extends ConsumerWidget {
                 borderRadius: BorderRadius.circular(16.r),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
+                    color: Colors.black.withValues(alpha: 0.05),
                     blurRadius: 8.r,
                     offset: const Offset(0, 2),
                   ),
@@ -206,7 +206,7 @@ class TechnicianProfileScreen extends ConsumerWidget {
                 borderRadius: BorderRadius.circular(16.r),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
+                    color: Colors.black.withValues(alpha: 0.05),
                     blurRadius: 8.r,
                     offset: const Offset(0, 2),
                   ),
@@ -311,12 +311,12 @@ class TechnicianProfileScreen extends ConsumerWidget {
           color: Theme.of(context).cardColor,
           borderRadius: BorderRadius.circular(16.r),
           border: Border.all(
-            color: Theme.of(context).primaryColor.withOpacity(0.3),
+            color: Theme.of(context).primaryColor.withValues(alpha: 0.3),
             width: 2.w,
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.05),
+              color: Colors.black.withValues(alpha: 0.05),
               blurRadius: 8.r,
               offset: const Offset(0, 2),
             ),
@@ -329,7 +329,7 @@ class TechnicianProfileScreen extends ConsumerWidget {
               width: 60.w,
               height: 60.h,
               decoration: BoxDecoration(
-                color: Theme.of(context).primaryColor.withOpacity(0.1),
+                color: Theme.of(context).primaryColor.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
               child: Icon(
@@ -367,7 +367,7 @@ class TechnicianProfileScreen extends ConsumerWidget {
         borderRadius: BorderRadius.circular(16.r),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 8.r,
             offset: const Offset(0, 2),
           ),
@@ -379,7 +379,7 @@ class TechnicianProfileScreen extends ConsumerWidget {
             width: 48.w,
             height: 48.h,
             decoration: BoxDecoration(
-              color: Theme.of(context).primaryColor.withOpacity(0.1),
+              color: Theme.of(context).primaryColor.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12.r),
             ),
             child: Icon(
@@ -425,7 +425,7 @@ class TechnicianProfileScreen extends ConsumerWidget {
         borderRadius: BorderRadius.circular(16.r),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 8.r,
             offset: const Offset(0, 2),
           ),
@@ -450,7 +450,8 @@ class TechnicianProfileScreen extends ConsumerWidget {
                   title,
                   style: TextStyle(
                     fontSize: 13.fz,
-                    fontWeight: FontWeight.w600,
+                    color: Colors.white.withValues(alpha: 0.9),
+                    height: 1.5,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,

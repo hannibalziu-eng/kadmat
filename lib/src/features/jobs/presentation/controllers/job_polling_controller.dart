@@ -101,7 +101,7 @@ class JobPoller extends _$JobPoller {
   /// Force refresh the job
   Future<void> refresh() async {
     state = const AsyncLoading();
-    state = AsyncData(await _fetchJob(arg));
+    state = AsyncData(await _fetchJob(jobId));
   }
 
   /// Stop polling (call when navigating away)

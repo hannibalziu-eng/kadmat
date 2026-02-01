@@ -1,0 +1,184 @@
+import 'dart:convert';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:kadmat/src/core/api/api_client.dart';
+import 'package:kadmat/src/core/router.dart';
+import 'package:flutter/foundation.dart';
+
+/// Provider for PushNotificationService
+final pushNotificationServiceProvider = Provider<PushNotificationService>((
+  ref,
+) {
+  return PushNotificationService(ref);
+});
+
+class PushNotificationService {
+  final Ref _ref;
+  final FirebaseMessaging _fcm = FirebaseMessaging.instance;
+  final FlutterLocalNotificationsPlugin _localNotifications =
+      FlutterLocalNotificationsPlugin();
+
+  PushNotificationService(this._ref);
+
+  /// Initialize Firebase Messaging & Local Notifications
+  Future<void> initialize() async {
+    // 1. Request Permission
+    final settings = await _fcm.requestPermission(
+      alert: true,
+      badge: true,
+      sound: true,
+      provisional: false,
+    );
+
+    if (settings.authorizationStatus == AuthorizationStatus.authorized) {
+      debugPrint('✅ User granted permission');
+    } else if (settings.authorizationStatus ==
+        AuthorizationStatus.provisional) {
+      debugPrint('⚠️ User granted provisional permission');
+    } else {
+      debugPrint('❌ User declined or has not accepted permission');
+      return;
+    }
+
+    // 2. Setup Local Notifications (for foreground)
+    const AndroidInitializationSettings initializationSettingsAndroid =
+        AndroidInitializationSettings('@mipmap/ic_launcher');
+
+    // Note: Requesting permission on iOS is redundant here as requestPermission does it,
+    // but needed for older versions or explicit local notification setup.
+    const DarwinInitializationSettings initializationSettingsIOS =
+        DarwinInitializationSettings();
+
+    const InitializationSettings initializationSettings =
+        InitializationSettings(
+          android: initializationSettingsAndroid,
+          iOS: initializationSettingsIOS,
+        );
+
+    await _localNotifications.initialize(
+      initializationSettings,
+      onDidReceiveNotificationResponse: _onSelectNotification,
+    );
+
+    // 3. Setup FCM Listeners
+
+    // On Message (Foreground)
+    FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
+
+    // On Message Opened App (Background -> Foreground)
+    FirebaseMessaging.onMessageOpenedApp.listen(_handleMessageOpenedApp);
+
+    // Get Initial Message (Terminated -> Foreground)
+    final initialMessage = await _fcm.getInitialMessage();
+    if (initialMessage != null) {
+      _handleMessageOpenedApp(initialMessage);
+    }
+
+    // 4. Update Token
+    final token = await _fcm.getToken();
+    if (token != null) {
+      debugPrint('📲 FCM Token: $token');
+      // We don't register here immediately.
+      // We register after login in LoginController or HomeScreen.
+    }
+
+    // Listen for regular token refresh
+    _fcm.onTokenRefresh.listen(registerToken);
+  }
+
+  /// Send token to Backend
+  Future<void> registerToken(String token) async {
+    try {
+      final apiClient = _ref.read(apiClientProvider);
+      await apiClient.post(
+        '/notifications/fcm-token',
+        data: {'fcmToken': token},
+      );
+      debugPrint('✅ FCM Token registered with backend');
+    } catch (e) {
+      debugPrint('❌ Failed to register FCM token: $e');
+    }
+  }
+
+  /// Get current token and register it
+  Future<void> registerCurrentToken() async {
+    final token = await _fcm.getToken();
+    if (token != null) {
+      await registerToken(token);
+    }
+  }
+
+  /// Handle Foreground Message
+  void _handleForegroundMessage(RemoteMessage message) {
+    debugPrint('📩 Foreground Message: ${message.notification?.title}');
+
+    if (message.notification != null) {
+      _showLocalNotification(message);
+    }
+  }
+
+  /// Show Local Notification
+  Future<void> _showLocalNotification(RemoteMessage message) async {
+    const AndroidNotificationDetails androidPlatformChannelSpecifics =
+        AndroidNotificationDetails(
+          'kadmat_notifications', // channelId
+          'Kadmat Notifications', // channelName
+          channelDescription: 'Important notifications from Kadmat',
+          importance: Importance.max,
+          priority: Priority.high,
+          showWhen: true,
+        );
+
+    const NotificationDetails platformChannelSpecifics = NotificationDetails(
+      android: androidPlatformChannelSpecifics,
+    );
+
+    await _localNotifications.show(
+      message.hashCode,
+      message.notification?.title,
+      message.notification?.body,
+      platformChannelSpecifics,
+      payload: jsonEncode(message.data),
+    );
+  }
+
+  /// Handle Notification Tap (Foreground banner or Background)
+  void _onSelectNotification(NotificationResponse response) {
+    if (response.payload != null) {
+      final data = jsonDecode(response.payload!);
+      _navigateBasedOnPayload(data);
+    }
+  }
+
+  /// Handle Notification Tap (From Background/Terminated)
+  void _handleMessageOpenedApp(RemoteMessage message) {
+    debugPrint('🔄 Notification caused app to open: ${message.data}');
+    _navigateBasedOnPayload(message.data);
+  }
+
+  /// Deep Linking Logic
+  void _navigateBasedOnPayload(Map<String, dynamic> data) {
+    final type = data['type'];
+    final router = _ref.read(goRouterProvider);
+
+    if (type == 'chat_message') {
+      final jobId = data['job_id'];
+      if (jobId != null) {
+        router.push('/jobs/$jobId/chat');
+      }
+    } else if (type == 'new_job_offer' ||
+        type == 'job_accepted' ||
+        type == 'price_request' ||
+        type == 'completion_request') {
+      final jobId = data['job_id'];
+      if (jobId != null) {
+        // Determine role and go to correct tracking/details page
+        // For simplicity, we can go to job details.
+        // Better logic might be needed depending on User Role, but job details handles both usually via conditional rendering or redirects.
+        // Assuming /jobs/:id works for details
+        router.push('/jobs/$jobId');
+      }
+    }
+  }
+}

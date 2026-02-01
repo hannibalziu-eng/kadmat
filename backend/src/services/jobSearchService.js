@@ -2,8 +2,8 @@
  * Job Search Service
  * Handles smart matching of jobs to nearby technicians
  */
-
 import { supabaseAdmin } from '../config/supabase.js';
+import { notifyTechniciansWithPush } from './fcmService.js';
 
 // Search tiers: [radius in meters, timeout in seconds]
 const SEARCH_TIERS = [
@@ -43,17 +43,24 @@ async function executeSearchTier(state) {
         }
 
         const tier = SEARCH_TIERS[state.tierIndex];
+        const searchStartTime = Date.now();
         console.log(`📡 [Job ${state.jobId}] Tier ${state.tierIndex + 1}: Searching ${tier.radius}m`);
 
-        // Find technicians in this tier
+        // Find technicians in this tier (now with serviceId filtering)
         const technicians = await findTechnicians(
             state.lat,
             state.lng,
-            tier.radius
+            tier.radius,
+            state.serviceId  // Pass service for specialty filtering
         );
 
+        const searchDuration = Date.now() - searchStartTime;
+
+        // Log search for analytics (non-blocking)
+        logSearch(state.jobId, state.tierIndex, tier.radius, technicians.length, searchDuration);
+
         if (technicians.length > 0) {
-            console.log(`✅ [Job ${state.jobId}] Found ${technicians.length} technicians in Tier ${state.tierIndex + 1}`);
+            console.log(`✅ [Job ${state.jobId}] Found ${technicians.length} technicians in Tier ${state.tierIndex + 1} (${searchDuration}ms)`);
 
             // Send notifications to technicians
             await notifyTechnicians(state.jobId, technicians);
@@ -76,64 +83,116 @@ async function executeSearchTier(state) {
 }
 
 /**
- * Find technicians within radius
+ * Log search to analytics table (non-blocking)
  */
-async function findTechnicians(lat, lng, radius) {
+async function logSearch(jobId, tierIndex, radiusMeters, techniciansFound, durationMs) {
     try {
-        // Get all online technicians
+        await supabaseAdmin
+            .from('search_logs')
+            .insert({
+                job_id: jobId,
+                tier_index: tierIndex,
+                radius_meters: radiusMeters,
+                technicians_found: techniciansFound,
+                search_duration_ms: durationMs
+            });
+    } catch (error) {
+        // Don't fail search if logging fails
+        console.warn('Failed to log search:', error.message);
+    }
+}
+
+/**
+ * Find technicians within radius using PostGIS RPC
+ * Much faster than fetching all and filtering in JS
+ */
+async function findTechnicians(lat, lng, radius, serviceId = null) {
+    try {
+        const startTime = Date.now();
+
+        // Use PostGIS-powered RPC for efficient spatial query
         const { data: technicians, error } = await supabaseAdmin
-            .from('users')
-            .select('id, full_name, phone, profile_image_url, rating, location')
-            .eq('user_type', 'technician')
-            .eq('is_online', true);
+            .rpc('get_nearby_technicians', {
+                lat: lat,
+                long: lng,
+                radius_meters: radius,
+                service_type: serviceId
+            });
+
+        const duration = Date.now() - startTime;
 
         if (error) {
-            console.error('Error fetching technicians:', error);
-            return [];
+            console.error('Error in get_nearby_technicians RPC:', error);
+            // Fallback to manual filtering if RPC fails
+            return await findTechniciansFallback(lat, lng, radius);
         }
 
         if (!technicians || technicians.length === 0) {
-            console.log('No online technicians available');
+            console.log(`📍 [Search] No technicians within ${radius}m (${duration}ms)`);
             return [];
         }
 
-        // Filter by distance
-        const nearbyTechnicians = technicians.filter(tech => {
-            if (!tech.location) return false;
-
-            try {
-                // tech.location is Geography(POINT) in format: { coordinates: [lng, lat] } or String 'POINT(lng lat)'
-                let techLng, techLat;
-
-                if (typeof tech.location === 'string') {
-                    // Handle WKT format 'POINT(lng lat)'
-                    const matches = tech.location.match(/POINT\(([-\d.]+) ([-\d.]+)\)/);
-                    if (matches) {
-                        techLng = parseFloat(matches[1]);
-                        techLat = parseFloat(matches[2]);
-                    }
-                } else if (tech.location.coordinates) {
-                    // Handle GeoJSON format
-                    [techLng, techLat] = tech.location.coordinates;
-                }
-
-                if (techLng === undefined || techLat === undefined) return false;
-
-                const distance = calculateDistance(lat, lng, techLat, techLng);
-                return distance <= radius;
-            } catch (e) {
-                console.warn('Error calculating distance:', e);
-                return false;
+        // RPC already returns sorted by distance, but let's add rating consideration
+        // Sort by: nearest first, then highest rating for same distance tier
+        const sortedTechnicians = technicians.sort((a, b) => {
+            // If distance difference is < 500m, prioritize rating
+            const distDiff = (a.dist_meters || 0) - (b.dist_meters || 0);
+            if (Math.abs(distDiff) < 500) {
+                return (b.rating || 0) - (a.rating || 0);
             }
+            return distDiff;
         });
 
-        console.log(`📍 [Search] Found ${nearbyTechnicians.length} technicians within ${radius}m`);
-        return nearbyTechnicians;
+        console.log(`📍 [Search] Found ${sortedTechnicians.length} technicians within ${radius}m (${duration}ms)`);
+        return sortedTechnicians.slice(0, 10); // Limit to top 10
 
     } catch (error) {
         console.error('Error in findTechnicians:', error);
         return [];
     }
+}
+
+/**
+ * Fallback: Manual distance calculation if RPC unavailable
+ */
+async function findTechniciansFallback(lat, lng, radius) {
+    console.log('⚠️ Using fallback technician search (RPC unavailable)');
+
+    const { data: technicians, error } = await supabaseAdmin
+        .from('users')
+        .select('id, full_name, phone, profile_image_url, rating, location')
+        .eq('user_type', 'technician')
+        .eq('is_online', true);
+
+    if (error || !technicians) return [];
+
+    const nearbyTechnicians = technicians
+        .map(tech => {
+            if (!tech.location) return null;
+
+            let techLng, techLat;
+            if (typeof tech.location === 'string') {
+                const matches = tech.location.match(/POINT\(([-\d.]+) ([-\d.]+)\)/);
+                if (matches) {
+                    techLng = parseFloat(matches[1]);
+                    techLat = parseFloat(matches[2]);
+                }
+            } else if (tech.location.coordinates) {
+                [techLng, techLat] = tech.location.coordinates;
+            }
+
+            if (!techLng || !techLat) return null;
+
+            const dist_meters = calculateDistance(lat, lng, techLat, techLng);
+            if (dist_meters > radius) return null;
+
+            return { ...tech, dist_meters };
+        })
+        .filter(Boolean)
+        .sort((a, b) => a.dist_meters - b.dist_meters)
+        .slice(0, 10);
+
+    return nearbyTechnicians;
 }
 
 /**
@@ -172,7 +231,11 @@ async function notifyTechnicians(jobId, technicians) {
         await supabaseAdmin
             .from('notifications')
             .insert(notifications);
-        console.log(`✅ [Job ${jobId}] Notifications sent`);
+        console.log(`✅ [Job ${jobId}] In-app notifications sent`);
+
+        // Send FCM Push notifications
+        await notifyTechniciansWithPush(jobId, technicians);
+        console.log(`✅ [Job ${jobId}] FCM push notifications sent`);
     } catch (error) {
         console.error(`❌ [Job ${jobId}] Error sending notifications:`, error);
     }

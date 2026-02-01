@@ -37,7 +37,7 @@ class CustomerWalletScreen extends ConsumerWidget {
                   borderRadius: BorderRadius.circular(16.r),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
+                      color: Colors.black.withValues(alpha: 0.05),
                       blurRadius: 12.r,
                       offset: const Offset(0, 4),
                     ),
@@ -73,7 +73,7 @@ class CustomerWalletScreen extends ConsumerWidget {
                           elevation: 4,
                           shadowColor: Theme.of(
                             context,
-                          ).primaryColor.withOpacity(0.3),
+                          ).primaryColor.withValues(alpha: 0.3),
                         ),
                         child: Text(
                           'إضافة رصيد',
@@ -122,7 +122,7 @@ class CustomerWalletScreen extends ConsumerWidget {
 
             // Transactions List
             ref
-                .watch(myTransactionsProvider)
+                .watch(myTransactionsProvider())
                 .when(
                   data: (transactions) {
                     if (transactions.isEmpty) {
@@ -220,7 +220,7 @@ class CustomerWalletScreen extends ConsumerWidget {
             width: 40.w,
             height: 40.h,
             decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
+              color: color.withValues(alpha: 0.1),
               shape: BoxShape.circle,
             ),
             child: Icon(icon, color: color, size: 20.s),

@@ -1,10 +1,11 @@
--- Enable Realtime for the jobs table
--- This allows the technician app to receive live updates when a new job is created
-begin;
-  -- Check if publication exists, if not create it (standard supabase setup usually has it)
-  -- But we just want to add the table to it.
-  
-  -- The publication 'supabase_realtime' is default in Supabase.
-  alter publication supabase_realtime add table public.jobs;
+-- ⚡️ تفعيل Realtime لجدول jobs
+-- شغل هذا الكود في SQL Editor مرة واحدة فقط
 
-commit;
+BEGIN;
+  -- إضافة جدول jobs إلى قائمة النشر (Realtime)
+  ALTER PUBLICATION supabase_realtime ADD TABLE jobs;
+COMMIT;
+
+-- ملاحظة: إذا ظهر لك خطأ يقول:
+-- relation "jobs" is already member of publication "supabase_realtime"
+-- فهذا يعني أن التفعيل تم بالفعل، ولا داعي للقلق! ✅

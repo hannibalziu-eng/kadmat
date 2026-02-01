@@ -1,5 +1,12 @@
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+
 class AppConstants {
-  static const String supabaseUrl = 'https://wwukyrixgkgagofyrlsq.supabase.co';
-  static const String supabaseAnonKey =
-      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind3dWt5cml4Z2tnYWdvZnlybHNxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ2NzgyMTcsImV4cCI6MjA4MDI1NDIxN30.gELKeHox3dnDMWgaDk9c_KVrvFd-FTtKNuegpogFcwo';
+  static String get supabaseUrl => dotenv.env['SUPABASE_URL'] ?? '';
+  static String get supabaseAnonKey => dotenv.env['SUPABASE_ANON_KEY'] ?? '';
+
+  /// Flag to switch payment gateway mode. true for real gateway, false for mock.
+  static bool get useRealPayments {
+    final v = (dotenv.env['USE_REAL_PAYMENTS'] ?? 'false').toLowerCase();
+    return v == 'true' || v == '1';
+  }
 }

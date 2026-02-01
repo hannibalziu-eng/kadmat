@@ -5,7 +5,8 @@ import {
     acceptJob,
     getMyJobs,
     getJobById, // New import
-    completeJob,
+    completeJob, // Maps to POST /:id/complete (Request Completion)
+    confirmJobCompletion, // New export
     setPrice,
     confirmPrice,
     rateJob,
@@ -28,7 +29,9 @@ router.get('/:id', getJobById); // New route
 router.post('/:id/accept', acceptJob);           // Technician accepts
 router.post('/:id/set-price', setPrice);         // Technician sets price
 router.post('/:id/confirm-price', confirmPrice); // Customer confirms price
-router.post('/:id/complete', completeJob);       // Technician completes
+router.post('/:id/complete', completeJob);       // Technician requests completion (was completes)
+router.post('/:id/request-completion', completeJob); // Alias for clarity
+router.post('/:id/confirm-completion', confirmJobCompletion); // Customer confirms completion
 router.post('/:id/rate', rateJob);               // Customer rates
 router.post('/:id/cancel', cancelJob);           // Either cancels
 
