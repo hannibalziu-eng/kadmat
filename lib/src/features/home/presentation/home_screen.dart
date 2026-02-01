@@ -102,7 +102,9 @@ class _HomeScreenContentState extends ConsumerState<HomeScreenContent> {
                     decoration: BoxDecoration(
                       color: Theme.of(context).cardColor,
                       borderRadius: BorderRadius.circular(12.r),
-                      border: Border.all(color: Colors.grey.withOpacity(0.2)),
+                      border: Border.all(
+                        color: Colors.grey.withValues(alpha: 0.2),
+                      ),
                     ),
                     child: IconButton(
                       icon: const Icon(Icons.notifications_outlined),
@@ -150,9 +152,16 @@ class _HomeScreenContentState extends ConsumerState<HomeScreenContent> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.error_outline, size: 48.s, color: Colors.grey),
+                        Icon(
+                          Icons.error_outline,
+                          size: 48.s,
+                          color: Colors.grey,
+                        ),
                         SizedBox(height: 16.h),
-                        Text('فشل تحميل الخدمات', style: TextStyle(fontSize: 16.fz)),
+                        Text(
+                          'فشل تحميل الخدمات',
+                          style: TextStyle(fontSize: 16.fz),
+                        ),
                         SizedBox(height: 8.h),
                         ElevatedButton(
                           onPressed: () => ref.invalidate(allServicesProvider),
@@ -178,11 +187,13 @@ class _HomeScreenContentState extends ConsumerState<HomeScreenContent> {
         padding: EdgeInsets.symmetric(horizontal: 16.w),
         children: [
           _buildCategoryChip('الكل', 'all', Icons.explore),
-          ...services.map((s) => _buildCategoryChip(
-            s.nameAr ?? s.name,
-            s.id,
-            _getIconForService(s.name),
-          )),
+          ...services.map(
+            (s) => _buildCategoryChip(
+              s.nameAr ?? s.name,
+              s.id,
+              _getIconForService(s.name),
+            ),
+          ),
         ],
       ),
     );
@@ -226,8 +237,11 @@ class _HomeScreenContentState extends ConsumerState<HomeScreenContent> {
             context,
             service: service,
             title: service.nameAr ?? service.name,
-            subtitle: 'السعر يبدأ من ${service.basePrice.toStringAsFixed(0)} ر.س',
-            imageUrl: service.iconUrl ?? 'https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=800',
+            subtitle:
+                'السعر يبدأ من ${service.basePrice.toStringAsFixed(0)} ر.س',
+            imageUrl:
+                service.iconUrl ??
+                'https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=800',
             tag: index == 0 ? 'خدمة مميزة' : null,
             tagColor: const Color(0xFF13b6ec),
           ),
@@ -257,11 +271,21 @@ class _HomeScreenContentState extends ConsumerState<HomeScreenContent> {
 
   IconData _getIconForService(String name) {
     final nameLower = name.toLowerCase();
-    if (nameLower.contains('كهرب') || nameLower.contains('electric')) return Icons.electrical_services;
-    if (nameLower.contains('سباك') || nameLower.contains('plumb')) return Icons.plumbing;
-    if (nameLower.contains('نجار') || nameLower.contains('carpent')) return Icons.carpenter;
-    if (nameLower.contains('دهان') || nameLower.contains('paint')) return Icons.format_paint;
-    if (nameLower.contains('تكييف') || nameLower.contains('ac')) return Icons.ac_unit;
+    if (nameLower.contains('كهرب') || nameLower.contains('electric')) {
+      return Icons.electrical_services;
+    }
+    if (nameLower.contains('سباك') || nameLower.contains('plumb')) {
+      return Icons.plumbing;
+    }
+    if (nameLower.contains('نجار') || nameLower.contains('carpent')) {
+      return Icons.carpenter;
+    }
+    if (nameLower.contains('دهان') || nameLower.contains('paint')) {
+      return Icons.format_paint;
+    }
+    if (nameLower.contains('تكييف') || nameLower.contains('ac')) {
+      return Icons.ac_unit;
+    }
     return Icons.build;
   }
 
@@ -332,7 +356,7 @@ class _HomeScreenContentState extends ConsumerState<HomeScreenContent> {
             image: NetworkImage(imageUrl),
             fit: BoxFit.cover,
             colorFilter: ColorFilter.mode(
-              Colors.black.withOpacity(0.3),
+              Colors.black.withValues(alpha: 0.3),
               BlendMode.darken,
             ),
           ),
@@ -343,7 +367,7 @@ class _HomeScreenContentState extends ConsumerState<HomeScreenContent> {
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              colors: [Colors.transparent, Colors.black.withOpacity(0.7)],
+              colors: [Colors.transparent, Colors.black.withValues(alpha: 0.7)],
             ),
           ),
           padding: EdgeInsets.all(16.w),

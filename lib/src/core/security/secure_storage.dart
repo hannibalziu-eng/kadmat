@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
@@ -11,7 +13,7 @@ class SecureStorage {
       await _storage.write(key: 'auth_token', value: token);
     } catch (e) {
       // Handle error appropriately (e.g., log it)
-      print('Error saving token: $e');
+      debugPrint('Error saving token: $e');
     }
   }
 
@@ -19,7 +21,7 @@ class SecureStorage {
     try {
       return await _storage.read(key: 'auth_token');
     } catch (e) {
-      print('Error reading token: $e');
+      debugPrint('Error reading token: $e');
       return null;
     }
   }
@@ -28,12 +30,12 @@ class SecureStorage {
     try {
       await _storage.delete(key: 'auth_token');
     } catch (e) {
-      print('Error deleting token: $e');
+      debugPrint('Error deleting token: $e');
     }
   }
 }
 
 @riverpod
-SecureStorage secureStorage(SecureStorageRef ref) {
+SecureStorage secureStorage(Ref ref) {
   return SecureStorage();
 }

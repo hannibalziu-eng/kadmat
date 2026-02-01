@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
@@ -8,6 +9,9 @@ part 'local_notifications.g.dart';
 class LocalNotificationsService {
   final FlutterLocalNotificationsPlugin _notifications =
       FlutterLocalNotificationsPlugin();
+
+  final _onNotificationTap = StreamController<String?>.broadcast();
+  Stream<String?> get onNotificationTap => _onNotificationTap.stream;
 
   Future<void> initialize() async {
     tz.initializeTimeZones();
@@ -22,7 +26,12 @@ class LocalNotificationsService {
       iOS: iosSettings,
     );
 
-    await _notifications.initialize(initSettings);
+    await _notifications.initialize(
+      initSettings,
+      onDidReceiveNotificationResponse: (details) {
+        _onNotificationTap.add(details.payload);
+      },
+    );
   }
 
   Future<void> showNotification({
@@ -84,7 +93,7 @@ class LocalNotificationsService {
   }
 }
 
-@riverpod
+@Riverpod(keepAlive: true)
 LocalNotificationsService localNotifications(LocalNotificationsRef ref) {
   return LocalNotificationsService();
 }

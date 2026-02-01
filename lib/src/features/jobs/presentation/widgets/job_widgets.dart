@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_scalify/flutter_scalify.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/app_theme.dart';
+import '../../domain/job_status.dart';
 
 /// Job Status Badge - Shows status with icon and Arabic label
 class JobStatusBadge extends StatelessWidget {
@@ -16,9 +17,9 @@ class JobStatusBadge extends StatelessWidget {
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 6.h),
       decoration: BoxDecoration(
-        color: config.color.withOpacity(0.2),
+        color: config.color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(20.r),
-        border: Border.all(color: config.color.withOpacity(0.5)),
+        border: Border.all(color: config.color.withValues(alpha: 0.5)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -40,26 +41,36 @@ class JobStatusBadge extends StatelessWidget {
 
   _StatusConfig _getStatusConfig(String status) {
     switch (status) {
-      case 'pending':
+      case JobStatus.pending:
+      case JobStatus.searching:
         return _StatusConfig(
           Icons.hourglass_empty,
           Colors.orange,
           'قيد الانتظار',
         );
-      case 'searching':
-        return _StatusConfig(Icons.search, Colors.blue, 'جاري البحث');
-      case 'accepted':
-        return _StatusConfig(Icons.check_circle, Colors.green, 'تم القبول');
-      case 'price_pending':
-        return _StatusConfig(Icons.attach_money, Colors.amber, 'بانتظار السعر');
-      case 'in_progress':
+      case JobStatus.acceptedByTech:
+      case JobStatus.accepted:
+        return _StatusConfig(Icons.check_circle, Colors.blue, 'تم قبول الطلب');
+      case JobStatus.priceSent:
+      case JobStatus.pricePending:
+        return _StatusConfig(Icons.attach_money, Colors.purple, 'عرض السعر');
+      case JobStatus.customerAgreed:
+        return _StatusConfig(Icons.handshake, Colors.indigo, 'تمت الموافقة');
+      case JobStatus.inProgress:
         return _StatusConfig(Icons.engineering, Colors.blue, 'جاري التنفيذ');
-      case 'completed':
-        return _StatusConfig(Icons.done_all, Colors.teal, 'مكتمل');
-      case 'rated':
+      case JobStatus.completed:
+        return _StatusConfig(Icons.check_circle_outline, Colors.teal, 'منجز');
+      case JobStatus.paymentPending:
+        return _StatusConfig(Icons.payment, Colors.orange, 'بانتظار الدفع');
+      case JobStatus.paid:
+        return _StatusConfig(Icons.verified, Colors.green, 'مدفوع');
+      case JobStatus.reviewed:
+      case JobStatus.rated:
         return _StatusConfig(Icons.star, Colors.amber, 'تم التقييم');
-      case 'cancelled':
+      case JobStatus.cancelled:
         return _StatusConfig(Icons.cancel, Colors.red, 'ملغي');
+      case 'rejected':
+        return _StatusConfig(Icons.block, Colors.red, 'مرفوض');
       default:
         return _StatusConfig(Icons.help, Colors.grey, status);
     }
@@ -103,7 +114,7 @@ class ProfileCard extends StatelessWidget {
           // Avatar
           CircleAvatar(
             radius: 32.r,
-            backgroundColor: AppTheme.primaryColor.withOpacity(0.2),
+            backgroundColor: AppTheme.primaryColor.withValues(alpha: 0.2),
             backgroundImage: imageUrl != null ? NetworkImage(imageUrl!) : null,
             child: imageUrl == null
                 ? Icon(Icons.person, color: AppTheme.primaryColor, size: 32.s)
@@ -231,7 +242,7 @@ class PriceCard extends StatelessWidget {
         children: [
           // Main Price
           Text(
-            '${displayPrice.toStringAsFixed(0)}',
+            displayPrice.toStringAsFixed(0),
             style: TextStyle(
               fontSize: 48.fz,
               fontWeight: FontWeight.bold,
@@ -309,11 +320,14 @@ class JobTimeline extends StatelessWidget {
   const JobTimeline({super.key, required this.currentStatus});
 
   static const _steps = [
-    ('pending', 'تم الإنشاء', Icons.add_circle),
-    ('accepted', 'تم القبول', Icons.check_circle),
-    ('price_pending', 'السعر', Icons.attach_money),
-    ('in_progress', 'جاري التنفيذ', Icons.engineering),
-    ('completed', 'مكتمل', Icons.done_all),
+    (JobStatus.pending, 'الطلب', Icons.add_circle),
+    (JobStatus.acceptedByTech, 'القبول', Icons.person_add),
+    (JobStatus.priceSent, 'السعر', Icons.attach_money),
+    (JobStatus.customerAgreed, 'الموافقة', Icons.handshake),
+    (JobStatus.inProgress, 'التنفيذ', Icons.engineering),
+    (JobStatus.completed, 'الإنجاز', Icons.check_circle_outline),
+    (JobStatus.paymentPending, 'الدفع', Icons.payment),
+    (JobStatus.reviewed, 'التقييم', Icons.star),
   ];
 
   @override
@@ -336,7 +350,7 @@ class JobTimeline extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: isCompleted
                       ? AppTheme.primaryColor
-                      : Colors.white.withOpacity(0.1),
+                      : Colors.white.withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                   border: isCurrent
                       ? Border.all(color: AppTheme.primaryColor, width: 2)

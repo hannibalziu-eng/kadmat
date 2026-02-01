@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/api/endpoints.dart';
+import '../domain/technician_profile.dart';
 
 part 'technician_repository.g.dart';
 
@@ -13,6 +14,19 @@ class TechnicianRepository {
 
   Future<void> updateLocation(double latitude, double longitude) async {
     try {
+      // Prevent spamming 401s if not logged in
+      var session = Supabase.instance.client.auth.currentSession;
+      if (session == null) return;
+
+      // Refresh if needed
+      final expiresAt = session.expiresAt;
+      final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+      if (expiresAt != null && expiresAt <= now + 60) {
+        try {
+          await Supabase.instance.client.auth.refreshSession();
+        } catch (_) {}
+      }
+
       await _client.post(
         Endpoints.technicianLocation,
         data: {'latitude': latitude, 'longitude': longitude},
@@ -54,6 +68,33 @@ class TechnicianRepository {
       Endpoints.technicianStatus,
       data: {'isOnline': isOnline},
     );
+  }
+
+  Future<void> updateProfile(Map<String, dynamic> data) async {
+    try {
+      await _client.put(Endpoints.updateProfile, data: data);
+    } catch (e) {
+      throw Exception('فشل تحديث الملف الشخصي');
+    }
+  }
+
+  Future<void> addPortfolioWork(Map<String, dynamic> data) async {
+    try {
+      await _client.post(Endpoints.addPortfolioWork, data: data);
+    } catch (e) {
+      throw Exception('فشل إضافة العمل');
+    }
+  }
+
+  Future<TechnicianProfile> getTechnicianProfile(String result) async {
+    try {
+      // Correct endpoint usage
+      final response = await _client.get('/technician/$result');
+      // Backend returns { message: "...", data: { ... } }
+      return TechnicianProfile.fromJson(response.data['data']);
+    } catch (e) {
+      throw Exception('فشل تحميل الملف الشخصي للفني');
+    }
   }
 }
 

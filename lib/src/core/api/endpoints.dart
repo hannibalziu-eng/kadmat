@@ -21,10 +21,13 @@ class Endpoints {
   // Wallet
   static const String wallet = '/wallet';
   static const String walletTransactions = '/wallet/transactions';
+  static const String walletWithdraw = '/wallet/withdraw';
 
   // Technician
   static const String technicianLocation = '/technician/location';
   static const String technicianStatus = '/technician/status';
+  static const String updateProfile = '/technician/profile';
+  static const String addPortfolioWork = '/technician/portfolio';
 
   // Services
   static const String services = '/services';

@@ -114,12 +114,16 @@ export const acceptJob = async (req, res) => {
             const { response, statusCode } = responseFormatter.error(ERROR_CODES.JOB_NOT_FOUND, error.message, HTTP_STATUS.NOT_FOUND);
             return res.status(statusCode).json(response);
         }
-        if (error.code === 'INVALID_STATUS_TRANSITION' || error.message.includes('taken')) {
+        if (error.code === 'JOB_ALREADY_ACCEPTED' || error.code === 'ACCEPT_FAILED') {
+            const { response, statusCode } = responseFormatter.error(ERROR_CODES.JOB_ALREADY_ACCEPTED, error.message, HTTP_STATUS.CONFLICT);
+            return res.status(statusCode).json(response);
+        }
+        if (error.code === 'INVALID_STATUS_TRANSITION') {
             const { response, statusCode } = responseFormatter.error(ERROR_CODES.JOB_ALREADY_ACCEPTED, error.message, HTTP_STATUS.CONFLICT);
             return res.status(statusCode).json(response);
         }
 
-        const { response, statusCode } = responseFormatter.error(ERROR_CODES.ACCEPT_FAILED, error.message);
+        const { response, statusCode } = responseFormatter.error(ERROR_CODES.ACCEPT_FAILED, error.message || 'فشل قبول الطلب');
         return res.status(statusCode).json(response);
     }
 };
@@ -176,11 +180,31 @@ export const getMyJobs = async (req, res) => {
     }
 };
 
-// 5. Complete Job
+// 5. Complete Job (Request Completion)
 export const completeJob = async (req, res) => {
     try {
-        const job = await jobService.complete(req.params.id, req.user.id);
-        return res.json(responseFormatter.success(job, 'Job completed'));
+        // Now calls requestCompletion logic
+        const { final_price, notes, after_photos } = req.body;
+        const job = await jobService.requestCompletion(req.params.id, req.user.id, {
+            finalPrice: final_price,
+            notes,
+            afterPhotos: after_photos
+        });
+        return res.json(responseFormatter.success(job, 'Job completion requested'));
+    } catch (error) {
+        const { response, statusCode } = responseFormatter.error(
+            ERROR_CODES.INVALID_STATUS_TRANSITION,
+            error.message
+        );
+        return res.status(statusCode).json(response);
+    }
+};
+
+// 5.5 Confirm Completion
+export const confirmJobCompletion = async (req, res) => {
+    try {
+        const job = await jobService.confirmJobCompletion(req.params.id, req.user.id);
+        return res.json(responseFormatter.success(job, 'Job completion confirmed'));
     } catch (error) {
         const { response, statusCode } = responseFormatter.error(
             ERROR_CODES.INVALID_STATUS_TRANSITION,
@@ -193,8 +217,8 @@ export const completeJob = async (req, res) => {
 // 6. Set Price
 export const setPrice = async (req, res) => {
     try {
-        const { price, notes } = req.body;
-        const job = await jobService.setPrice(req.params.id, req.user.id, price, notes);
+        const { price, notes, paymentMethod } = req.body;
+        const job = await jobService.setPrice(req.params.id, req.user.id, price, notes, paymentMethod);
         return res.json(responseFormatter.success(job, 'Price submitted'));
     } catch (error) {
         const { response, statusCode } = responseFormatter.error(
@@ -311,8 +335,9 @@ export const getJobById = async (req, res) => {
                 canSetPrice: job.status === 'accepted' && job.technician_id === req.user.id,
                 canConfirmPrice: job.status === 'price_pending' && job.customer_id === req.user.id,
                 canComplete: job.status === 'in_progress' && job.technician_id === req.user.id,
+                canConfirmCompletion: job.status === 'pending_confirm' && job.customer_id === req.user.id, // New permission
                 canRate: job.status === 'completed' && job.customer_id === req.user.id && !job.customer_rating,
-                canCancel: !['completed', 'rated', 'cancelled'].includes(job.status) &&
+                canCancel: !['completed', 'rated', 'cancelled', 'pending_confirm'].includes(job.status) &&
                     (job.customer_id === req.user.id || job.technician_id === req.user.id)
             },
             // Metadata

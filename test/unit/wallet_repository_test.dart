@@ -31,14 +31,14 @@ void main() {
 
       when(mockDio.get(any)).thenAnswer(
         (_) async => Response(
-          data: {'wallet': mockResponse},
+          data: {'data': mockResponse},
           statusCode: 200,
           requestOptions: RequestOptions(path: '/wallet'),
         ),
       );
 
       // Act
-      final result = await repository.getMyWallet();
+      final result = await repository.getWallet();
 
       // Assert
       expect(result, isA<Wallet>());
@@ -67,9 +67,11 @@ void main() {
         },
       ];
 
-      when(mockDio.get(any)).thenAnswer(
+      when(
+        mockDio.get(any, queryParameters: anyNamed('queryParameters')),
+      ).thenAnswer(
         (_) async => Response(
-          data: {'transactions': mockResponse},
+          data: {'data': mockResponse},
           statusCode: 200,
           requestOptions: RequestOptions(path: '/wallet/transactions'),
         ),
@@ -82,7 +84,9 @@ void main() {
       expect(result, isA<List<WalletTransaction>>());
       expect(result.length, 2);
       expect(result[0].amount, 100.0);
-      verify(mockDio.get(any)).called(1);
+      verify(
+        mockDio.get(any, queryParameters: anyNamed('queryParameters')),
+      ).called(1);
     });
   });
 }

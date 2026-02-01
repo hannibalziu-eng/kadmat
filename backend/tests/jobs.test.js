@@ -34,6 +34,7 @@ jest.unstable_mockModule('../src/config/supabase.js', () => ({
         }))
     },
     supabaseAdmin: {
+        rpc: jest.fn(() => Promise.resolve({ data: [], error: null })),
         from: jest.fn(() => ({
             select: jest.fn().mockReturnThis(),
             insert: jest.fn().mockReturnThis(),

@@ -5,12 +5,23 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 part 'offline_service.g.dart';
 
 class OfflineService {
+  OfflineService() {
+    _connectivity.onConnectivityChanged.listen((results) {
+      final isConnected = results.any(
+        (element) => element != ConnectivityResult.none,
+      );
+      if (isConnected) {
+        syncPendingActions();
+      }
+    });
+  }
+
   final Connectivity _connectivity = Connectivity();
   final List<Future<void> Function()> _pendingActions = [];
 
   Stream<bool> get isOnline =>
-      _connectivity.onConnectivityChanged.map((result) {
-        return result.first != ConnectivityResult.none;
+      _connectivity.onConnectivityChanged.map((results) {
+        return results.any((element) => element != ConnectivityResult.none);
       });
 
   Future<bool> checkConnectivity() async {

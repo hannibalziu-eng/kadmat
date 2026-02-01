@@ -9,8 +9,8 @@ class LocationService {
     // Bypass for Web Testing to avoid permission hang
     if (kIsWeb) {
       return Position(
-        latitude: 24.7136,
-        longitude: 46.6753,
+        latitude: 32.081688, // Benghazi (Matching Test Job)
+        longitude: 20.054815, // Benghazi
         timestamp: DateTime.now(),
         accuracy: 0,
         altitude: 0,
@@ -85,8 +85,8 @@ Stream<Position> locationStream(LocationStreamRef ref) async* {
     while (true) {
       await Future.delayed(const Duration(seconds: 15));
       yield Position(
-        latitude: 24.7136,
-        longitude: 46.6753,
+        latitude: 32.081688, // Benghazi (Matching Test Job)
+        longitude: 20.054815, // Benghazi
         timestamp: DateTime.now(),
         accuracy: 0,
         altitude: 0,

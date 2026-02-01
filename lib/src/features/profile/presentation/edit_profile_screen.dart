@@ -1,19 +1,33 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_scalify/flutter_scalify.dart';
 import 'package:go_router/go_router.dart';
+import '../../auth/data/auth_repository.dart';
 
-class EditProfileScreen extends StatefulWidget {
+class EditProfileScreen extends ConsumerStatefulWidget {
   const EditProfileScreen({super.key});
 
   @override
-  State<EditProfileScreen> createState() => _EditProfileScreenState();
+  ConsumerState<EditProfileScreen> createState() => _EditProfileScreenState();
 }
 
-class _EditProfileScreenState extends State<EditProfileScreen> {
+class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _nameController = TextEditingController(text: 'عبدالله المنصور');
-  final _phoneController = TextEditingController(text: '0501234567');
-  final _emailController = TextEditingController(text: 'abdullah@example.com');
+  late TextEditingController _nameController;
+  late TextEditingController _phoneController;
+  final _emailController =
+      TextEditingController(); // Email usually not editable directly
+
+  @override
+  void initState() {
+    super.initState();
+    final userProfile = ref.read(authRepositoryProvider).userProfile;
+    _nameController = TextEditingController(
+      text: userProfile?['full_name'] ?? '',
+    );
+    _phoneController = TextEditingController(text: userProfile?['phone'] ?? '');
+    _emailController.text = userProfile?['email'] ?? '';
+  }
 
   @override
   void dispose() {
@@ -21,6 +35,41 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _phoneController.dispose();
     _emailController.dispose();
     super.dispose();
+  }
+
+  Future<void> _saveProfile() async {
+    if (_formKey.currentState!.validate()) {
+      try {
+        // Show loading
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (c) => const Center(child: CircularProgressIndicator()),
+        );
+
+        await ref
+            .read(authRepositoryProvider)
+            .updateProfile(
+              fullName: _nameController.text,
+              phone: _phoneController.text,
+            );
+
+        if (mounted) {
+          Navigator.pop(context); // Hide loading
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('تم حفظ التغييرات بنجاح')),
+          );
+          context.pop();
+        }
+      } catch (e) {
+        if (mounted) {
+          Navigator.pop(context); // Hide loading
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('خطأ: ${e.toString()}')));
+        }
+      }
+    }
   }
 
   @override
@@ -78,6 +127,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               // Name Field
               TextFormField(
                 controller: _nameController,
+                validator: (val) =>
+                    val == null || val.isEmpty ? 'الاسم مطلوب' : null,
                 decoration: InputDecoration(
                   labelText: 'الاسم الكامل',
                   prefixIcon: const Icon(Icons.person_outline),
@@ -92,6 +143,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               TextFormField(
                 controller: _phoneController,
                 keyboardType: TextInputType.phone,
+                validator: (val) =>
+                    val == null || val.isEmpty ? 'رقم الجوال مطلوب' : null,
                 decoration: InputDecoration(
                   labelText: 'رقم الجوال',
                   prefixIcon: const Icon(Icons.phone_outlined),
@@ -102,9 +155,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               ),
               SizedBox(height: 16.h),
 
-              // Email Field
+              // Email Field (Read Only)
               TextFormField(
                 controller: _emailController,
+                readOnly: true,
+                enabled: false,
                 keyboardType: TextInputType.emailAddress,
                 decoration: InputDecoration(
                   labelText: 'البريد الإلكتروني',
@@ -121,15 +176,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 width: double.infinity,
                 height: 50.h,
                 child: ElevatedButton(
-                  onPressed: () {
-                    if (_formKey.currentState!.validate()) {
-                      // TODO: Implement update logic
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('تم حفظ التغييرات بنجاح')),
-                      );
-                      context.pop();
-                    }
-                  },
+                  onPressed: _saveProfile,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF13b6ec),
                     shape: RoundedRectangleBorder(

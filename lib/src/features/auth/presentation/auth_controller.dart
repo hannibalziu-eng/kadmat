@@ -1,6 +1,7 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../data/auth_repository.dart';
+import '../../notifications/data/push_notification_service.dart';
 
 part 'auth_controller.g.dart';
 
@@ -27,13 +28,15 @@ class AuthController extends _$AuthController {
     String email,
     String password,
     String? requiredUserType,
-  ) {
+  ) async {
     final authRepository = ref.read(authRepositoryProvider);
-    return authRepository.signInWithEmailAndPassword(
+    await authRepository.signInWithEmailAndPassword(
       email,
       password,
       requiredUserType: requiredUserType,
     );
+    // Register FCM Token
+    await ref.read(pushNotificationServiceProvider).registerCurrentToken();
   }
 
   Future<bool> register({
@@ -43,6 +46,7 @@ class AuthController extends _$AuthController {
     required String fullName,
     String userType = 'customer',
     String? serviceId,
+    List<String>? documentUrls,
   }) async {
     state = const AsyncValue.loading();
     state = await AsyncValue.guard(
@@ -53,6 +57,7 @@ class AuthController extends _$AuthController {
         fullName: fullName,
         userType: userType,
         serviceId: serviceId,
+        documentUrls: documentUrls,
       ),
     );
     return state.hasError == false;
@@ -65,16 +70,20 @@ class AuthController extends _$AuthController {
     required String fullName,
     required String userType,
     String? serviceId,
-  }) {
+    List<String>? documentUrls,
+  }) async {
     final authRepository = ref.read(authRepositoryProvider);
-    return authRepository.register(
+    await authRepository.register(
       email: email,
       password: password,
       phone: phone,
       fullName: fullName,
       userType: userType,
       serviceId: serviceId,
+      documentUrls: documentUrls,
     );
+    // Register FCM Token
+    await ref.read(pushNotificationServiceProvider).registerCurrentToken();
   }
 
   Future<bool> signInAsGuest() async {

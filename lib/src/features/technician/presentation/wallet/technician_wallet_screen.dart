@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_scalify/flutter_scalify.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import '../../../../core/widgets/empty_state_widget.dart';
+import '../../../../core/widgets/shimmer_skeletons.dart';
 import '../../../wallet/presentation/wallet_controller.dart';
 
 class TechnicianWalletScreen extends ConsumerWidget {
@@ -29,7 +31,7 @@ class TechnicianWalletScreen extends ConsumerWidget {
                   borderRadius: BorderRadius.circular(16.r),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
+                      color: Colors.black.withValues(alpha: 0.05),
                       blurRadius: 12.r,
                       offset: const Offset(0, 4),
                     ),
@@ -58,7 +60,7 @@ class TechnicianWalletScreen extends ConsumerWidget {
                     ),
                     SizedBox(height: 4.h),
                     Text(
-                      '${wallet.balance.toStringAsFixed(2)} ${wallet.currency}', // TODO: Add total earnings field to Wallet model
+                      '${wallet.totalEarnings.toStringAsFixed(2)} ${wallet.currency}',
                       style: TextStyle(
                         fontSize: 16.fz,
                         fontWeight: FontWeight.w600,
@@ -68,7 +70,7 @@ class TechnicianWalletScreen extends ConsumerWidget {
                   ],
                 ),
               ).animate().fadeIn().slideY(begin: 0.2),
-              loading: () => const Center(child: CircularProgressIndicator()),
+              loading: () => const CardSkeleton(height: 180),
               error: (err, stack) => Center(child: Text('خطأ: $err')),
             ),
             SizedBox(height: 24.h),
@@ -78,7 +80,11 @@ class TechnicianWalletScreen extends ConsumerWidget {
               width: double.infinity,
               height: 50.h,
               child: ElevatedButton.icon(
-                onPressed: () {},
+                onPressed: () => _showWithdrawDialog(
+                  context,
+                  ref,
+                  walletAsync.value?.balance ?? 0,
+                ),
                 icon: const Icon(Icons.account_balance_wallet),
                 label: const Text('سحب الأرباح'),
                 style: ElevatedButton.styleFrom(
@@ -88,7 +94,9 @@ class TechnicianWalletScreen extends ConsumerWidget {
                     borderRadius: BorderRadius.circular(12.r),
                   ),
                   elevation: 4,
-                  shadowColor: Theme.of(context).primaryColor.withOpacity(0.3),
+                  shadowColor: Theme.of(
+                    context,
+                  ).primaryColor.withValues(alpha: 0.3),
                 ),
               ),
             ).animate().fadeIn().slideY(begin: 0.2, delay: 100.ms),
@@ -131,11 +139,15 @@ class TechnicianWalletScreen extends ConsumerWidget {
 
             // Transaction List
             ref
-                .watch(myTransactionsProvider)
+                .watch(myTransactionsProvider())
                 .when(
                   data: (transactions) {
                     if (transactions.isEmpty) {
-                      return const Center(child: Text('لا توجد معاملات'));
+                      return const EmptyStateWidget(
+                        title: 'لا توجد معاملات بعد',
+                        subtitle: 'ستظهر هنا سجلات عملياتك المالية',
+                        icon: Icons.receipt_long_rounded,
+                      );
                     }
                     return Column(
                       children: transactions
@@ -158,8 +170,10 @@ class TechnicianWalletScreen extends ConsumerWidget {
                           .toList(),
                     );
                   },
-                  loading: () =>
-                      const Center(child: CircularProgressIndicator()),
+                  loading: () => const ListSkeleton(
+                    shrinkWrap: true,
+                    physics: NeverScrollableScrollPhysics(),
+                  ),
                   error: (err, stack) => Center(child: Text('خطأ: $err')),
                 ),
             SizedBox(height: 80.h), // Bottom nav padding
@@ -184,7 +198,7 @@ class TechnicianWalletScreen extends ConsumerWidget {
           borderRadius: BorderRadius.circular(12.r),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.04),
+              color: Colors.black.withValues(alpha: 0.04),
               blurRadius: 8.r,
               offset: const Offset(0, 2),
             ),
@@ -231,7 +245,7 @@ class TechnicianWalletScreen extends ConsumerWidget {
         borderRadius: BorderRadius.circular(12.r),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 8.r,
             offset: const Offset(0, 2),
           ),
@@ -243,7 +257,7 @@ class TechnicianWalletScreen extends ConsumerWidget {
             width: 40.w,
             height: 40.h,
             decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
+              color: color.withValues(alpha: 0.1),
               shape: BoxShape.circle,
             ),
             child: Icon(
@@ -279,6 +293,57 @@ class TechnicianWalletScreen extends ConsumerWidget {
               fontWeight: FontWeight.bold,
               color: color,
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showWithdrawDialog(
+    BuildContext context,
+    WidgetRef ref,
+    double balance,
+  ) {
+    final controller = TextEditingController(text: balance.toString());
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('سحب الأرباح'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('أدخل المبلغ الذي تود سحبه:'),
+            SizedBox(height: 16.h),
+            TextField(
+              controller: controller,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                suffixText: 'د.ل',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('إلغاء'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final amount = double.tryParse(controller.text);
+              if (amount == null || amount <= 0 || amount > balance) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('الرجاء إدخال مبلغ صالح')),
+                );
+                return;
+              }
+              Navigator.pop(context);
+              await ref
+                  .read(walletControllerProvider.notifier)
+                  .requestWithdrawal(amount);
+            },
+            child: const Text('تأكيد السحب'),
           ),
         ],
       ),

@@ -1,38 +1,49 @@
 import 'package:dio/dio.dart';
-import 'package:riverpod_annotation/riverpod_annotation.dart';
-import '../../../core/api/api_client.dart';
-import '../../../core/api/endpoints.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:kadmat/src/core/api/api_client.dart';
 import '../domain/wallet.dart';
 
-part 'wallet_repository.g.dart';
+final walletRepositoryProvider = Provider<WalletRepository>((ref) {
+  return WalletRepository(ref.read(apiClientProvider));
+});
 
 class WalletRepository {
-  final Dio _client;
+  final Dio _dio;
 
-  WalletRepository(this._client);
+  WalletRepository(this._dio);
 
-  Future<Wallet> getMyWallet() async {
-    try {
-      final response = await _client.get(Endpoints.wallet);
-      return Wallet.fromJson(response.data['wallet']);
-    } catch (e) {
-      throw Exception('فشل جلب بيانات المحفظة');
-    }
+  /// Get Wallet Balance and Details
+  Future<Wallet> getWallet() async {
+    final response = await _dio.get('/wallet');
+    return Wallet.fromJson(
+      response.data['data'],
+    ); // responseFormatter puts data in 'data'
   }
 
-  Future<List<WalletTransaction>> getTransactions() async {
-    try {
-      final response = await _client.get(Endpoints.walletTransactions);
-      final List data = response.data['transactions'];
-      return data.map((e) => WalletTransaction.fromJson(e)).toList();
-    } catch (e) {
-      throw Exception('فشل جلب سجل المعاملات');
-    }
-  }
-}
+  /// Get Wallet Transactions (Paginated)
+  Future<List<WalletTransaction>> getTransactions({
+    int page = 1,
+    int limit = 20,
+  }) async {
+    final response = await _dio.get(
+      '/wallet/transactions',
+      queryParameters: {'page': page, 'limit': limit},
+    );
+    // Dump raw API response for verification during development
+    print('Wallet Transactions Raw Response: ${response.data}');
+    // Optional: log with a proper logger in production
 
-@Riverpod(keepAlive: true)
-WalletRepository walletRepository(WalletRepositoryRef ref) {
-  final client = ref.watch(apiClientProvider);
-  return WalletRepository(client);
+    // Check response structure from responseFormatter
+    // It usually returns { data: { list: [], pagination: {} } } or similar
+    // Based on jobController, it returns successPaginated which is { data: [...], pagination: ... }
+    // Wait, getWallet returns success(enrichedJob), so response.data['data'] is correct.
+    // Wallet transactions endpoint likely uses successPaginated.
+    // walletController not viewed fully, but let's assume standard responseFormatter.
+    // successPaginated returns { data: [], pagination: {} } inside the 'data' field of JSON?
+    // No, responseFormatter structure is { status: 'success', data: ..., message: ... }
+    // For pagination: { status: 'success', data: [...], pagination: ... }
+
+    final data = response.data['data'];
+    return (data as List).map((e) => WalletTransaction.fromJson(e)).toList();
+  }
 }

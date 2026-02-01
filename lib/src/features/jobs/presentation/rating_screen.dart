@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_scalify/flutter_scalify.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/app_theme.dart';
+import '../../../core/widgets/kadmat_toast.dart';
 import '../data/job_repository.dart';
 
 class RatingScreen extends ConsumerStatefulWidget {
@@ -39,21 +40,25 @@ class _RatingScreenState extends ConsumerState<RatingScreen> {
         child: Column(
           children: [
             SizedBox(height: 20.h),
-            
+
             // Success Icon
             Container(
               padding: EdgeInsets.all(24.w),
               decoration: BoxDecoration(
-                color: Colors.green.withOpacity(0.2),
+                color: Colors.green.withValues(alpha: 0.2),
                 shape: BoxShape.circle,
               ),
               child: Icon(Icons.check_circle, color: Colors.green, size: 60.s),
             ),
             SizedBox(height: 24.h),
-            
+
             Text(
               'تم إكمال الخدمة بنجاح! 🎉',
-              style: TextStyle(fontSize: 22.fz, fontWeight: FontWeight.bold, color: Colors.white),
+              style: TextStyle(
+                fontSize: 22.fz,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
             ),
             SizedBox(height: 8.h),
             Text(
@@ -82,7 +87,9 @@ class _RatingScreenState extends ConsumerState<RatingScreen> {
                         child: Padding(
                           padding: EdgeInsets.symmetric(horizontal: 4.w),
                           child: Icon(
-                            starIndex <= _rating ? Icons.star : Icons.star_border,
+                            starIndex <= _rating
+                                ? Icons.star
+                                : Icons.star_border,
                             color: Colors.amber,
                             size: 48.s,
                           ),
@@ -124,7 +131,7 @@ class _RatingScreenState extends ConsumerState<RatingScreen> {
                       hintText: 'ساعدنا في تحسين الخدمة...',
                       hintStyle: const TextStyle(color: Colors.white38),
                       filled: true,
-                      fillColor: Colors.white.withOpacity(0.1),
+                      fillColor: Colors.white.withValues(alpha: 0.1),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12.r),
                         borderSide: BorderSide.none,
@@ -145,14 +152,19 @@ class _RatingScreenState extends ConsumerState<RatingScreen> {
                   backgroundColor: Colors.amber,
                   foregroundColor: Colors.black,
                   padding: EdgeInsets.symmetric(vertical: 16.h),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12.r),
+                  ),
                   disabledBackgroundColor: Colors.grey,
                 ),
                 child: _isLoading
                     ? const CircularProgressIndicator()
                     : Text(
                         'إرسال التقييم',
-                        style: TextStyle(fontSize: 18.fz, fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                          fontSize: 18.fz,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
               ),
             ),
@@ -192,25 +204,26 @@ class _RatingScreenState extends ConsumerState<RatingScreen> {
   Future<void> _submitRating() async {
     setState(() => _isLoading = true);
     try {
-      await ref.read(jobRepositoryProvider).rateJob(
-        widget.jobId,
-        _rating,
-        review: _reviewController.text.isNotEmpty ? _reviewController.text : null,
-      );
+      await ref
+          .read(jobRepositoryProvider)
+          .rateJob(
+            widget.jobId,
+            _rating,
+            review: _reviewController.text.isNotEmpty
+                ? _reviewController.text
+                : null,
+          );
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('شكراً لتقييمك! 💙'),
-            backgroundColor: Colors.green,
-          ),
+        KadmatToast.showSuccess(
+          context,
+          title: 'شكراً لتقييمك!',
+          message: '💙 تم إرسال التقييم بنجاح',
         );
         context.go('/');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$e'), backgroundColor: Colors.red),
-        );
+        KadmatToast.showError(context, title: 'خطأ', message: '$e');
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);

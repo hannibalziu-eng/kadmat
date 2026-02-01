@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
@@ -25,7 +26,7 @@ class BiometricAuth extends _$BiometricAuth {
       );
       return didAuthenticate;
     } catch (e) {
-      print('Biometric auth error: $e');
+      debugPrint('Biometric auth error: $e');
       return false;
     }
   }

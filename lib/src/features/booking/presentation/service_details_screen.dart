@@ -1,4 +1,5 @@
-import 'dart:io';
+import 'dart:io' show File;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -102,18 +103,44 @@ class _ServiceDetailsScreenState extends ConsumerState<ServiceDetailsScreen> {
 
     for (var i = 0; i < _selectedImages.length; i++) {
       final image = _selectedImages[i];
-      final ext = path.extension(image.path);
+      final ext = path.extension(image.path).toLowerCase();
       final fileName = '${uuid}_$i$ext'; // Unique filename
 
+      // Determine content type - use XFile.mimeType if available (for web)
+      String contentType = image.mimeType ?? '';
+      if (contentType.isEmpty) {
+        // Fallback to extension-based detection
+        switch (ext) {
+          case '.jpg':
+          case '.jpeg':
+            contentType = 'image/jpeg';
+            break;
+          case '.png':
+            contentType = 'image/png';
+            break;
+          case '.gif':
+            contentType = 'image/gif';
+            break;
+          case '.webp':
+            contentType = 'image/webp';
+            break;
+          default:
+            contentType = 'image/jpeg'; // Default to jpeg
+        }
+      }
+
       try {
+        // Use uploadBinary for web compatibility
+        final bytes = await image.readAsBytes();
         await storage
             .from('job_images')
-            .upload(
+            .uploadBinary(
               fileName,
-              File(image.path),
-              fileOptions: const FileOptions(
+              bytes,
+              fileOptions: FileOptions(
                 cacheControl: '3600',
                 upsert: false,
+                contentType: contentType,
               ),
             );
 
@@ -260,7 +287,7 @@ class _ServiceDetailsScreenState extends ConsumerState<ServiceDetailsScreen> {
                 color: Theme.of(context).cardTheme.color,
                 borderRadius: BorderRadius.circular(16.r),
                 border: Border.all(
-                  color: Theme.of(context).dividerColor.withOpacity(0.1),
+                  color: Theme.of(context).dividerColor.withValues(alpha: 0.1),
                 ),
               ),
               child: Column(
@@ -301,7 +328,7 @@ class _ServiceDetailsScreenState extends ConsumerState<ServiceDetailsScreen> {
                             color: isSelected
                                 ? Theme.of(
                                     context,
-                                  ).primaryColor.withOpacity(0.1)
+                                  ).primaryColor.withValues(alpha: 0.1)
                                 : Theme.of(context).scaffoldBackgroundColor,
                             borderRadius: BorderRadius.circular(12.r),
                             border: Border.all(
@@ -309,7 +336,7 @@ class _ServiceDetailsScreenState extends ConsumerState<ServiceDetailsScreen> {
                                   ? Theme.of(context).primaryColor
                                   : Theme.of(
                                       context,
-                                    ).dividerColor.withOpacity(0.1),
+                                    ).dividerColor.withValues(alpha: 0.1),
                               width: 2.w,
                             ),
                           ),
@@ -356,7 +383,7 @@ class _ServiceDetailsScreenState extends ConsumerState<ServiceDetailsScreen> {
                 color: Theme.of(context).cardTheme.color,
                 borderRadius: BorderRadius.circular(16.r),
                 border: Border.all(
-                  color: Theme.of(context).dividerColor.withOpacity(0.1),
+                  color: Theme.of(context).dividerColor.withValues(alpha: 0.1),
                 ),
               ),
               child: Column(
@@ -431,13 +458,13 @@ class _ServiceDetailsScreenState extends ConsumerState<ServiceDetailsScreen> {
                 padding: EdgeInsets.all(16.w),
                 decoration: BoxDecoration(
                   color: _locationConfirmed
-                      ? Colors.green.withOpacity(0.1)
+                      ? Colors.green.withValues(alpha: 0.1)
                       : Theme.of(context).cardTheme.color,
                   borderRadius: BorderRadius.circular(16.r),
                   border: Border.all(
                     color: _locationConfirmed
                         ? Colors.green
-                        : Theme.of(context).dividerColor.withOpacity(0.1),
+                        : Theme.of(context).dividerColor.withValues(alpha: 0.1),
                     width: 2.w,
                   ),
                 ),
@@ -550,17 +577,24 @@ class _ServiceDetailsScreenState extends ConsumerState<ServiceDetailsScreen> {
   Widget _buildImageItem(int index) {
     return Stack(
       children: [
-        Container(
-          width: 100.w,
-          height: 100.h,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12.r),
-            color: Theme.of(context).cardTheme.color,
-            image: DecorationImage(
-              image: FileImage(File(_selectedImages[index].path)),
-              fit: BoxFit.cover,
-            ),
-          ),
+        FutureBuilder<ImageProvider>(
+          future: _getImageProvider(index),
+          builder: (context, snapshot) {
+            return Container(
+              width: 100.w,
+              height: 100.h,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12.r),
+                color: Theme.of(context).cardTheme.color,
+                image: snapshot.hasData
+                    ? DecorationImage(image: snapshot.data!, fit: BoxFit.cover)
+                    : null,
+              ),
+              child: !snapshot.hasData
+                  ? const Center(child: CircularProgressIndicator())
+                  : null,
+            );
+          },
         ),
         Positioned(
           top: 4,
@@ -579,6 +613,18 @@ class _ServiceDetailsScreenState extends ConsumerState<ServiceDetailsScreen> {
         ),
       ],
     );
+  }
+
+  Future<ImageProvider> _getImageProvider(int index) async {
+    final xfile = _selectedImages[index];
+    if (kIsWeb) {
+      // On web, use MemoryImage with bytes from XFile
+      final bytes = await xfile.readAsBytes();
+      return MemoryImage(bytes);
+    } else {
+      // On mobile, use FileImage
+      return FileImage(File(xfile.path));
+    }
   }
 
   Widget _buildAddImageButton() {

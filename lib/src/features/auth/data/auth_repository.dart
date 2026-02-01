@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -12,25 +13,71 @@ class AuthRepository {
   final Dio _client;
   final _storage = const FlutterSecureStorage();
   final _authStateController = StreamController<String?>.broadcast();
+  late final StreamSubscription<AuthState> _authSubscription;
   String? _currentUser;
   String? _userType;
   Map<String, dynamic>? _userProfile;
 
   AuthRepository(this._client) {
     _checkAuthStatus();
+    _setupAuthListener();
+  }
+
+  void _setupAuthListener() {
+    _authSubscription = Supabase.instance.client.auth.onAuthStateChange.listen((
+      data,
+    ) {
+      final AuthChangeEvent event = data.event;
+      final Session? session = data.session;
+
+      if (event == AuthChangeEvent.signedOut) {
+        _handleSignOut();
+      } else if (event == AuthChangeEvent.signedIn ||
+          event == AuthChangeEvent.tokenRefreshed) {
+        if (session != null) {
+          _updateAuthState(session);
+        }
+      }
+    });
   }
 
   Future<void> _checkAuthStatus() async {
     final session = Supabase.instance.client.auth.currentSession;
-    final userType = await _storage.read(key: 'user_type');
-
     if (session != null) {
-      _currentUser = session.user.email ?? 'user';
-      _userType = userType;
-      _authStateController.add(_currentUser);
+      await _updateAuthState(session);
     } else {
       _authStateController.add(null);
     }
+  }
+
+  Future<void> _updateAuthState(Session session) async {
+    final userType = await _storage.read(key: 'user_type');
+
+    try {
+      if (_userProfile == null) {
+        // Only fetch if we don't have it (optimization)
+        final profileData = await Supabase.instance.client
+            .from('users')
+            .select()
+            .eq('id', session.user.id)
+            .single();
+        _userProfile = profileData;
+      }
+    } catch (e) {
+      debugPrint('⚠️ Failed to fetch profile: $e');
+    }
+
+    _currentUser = session.user.email ?? 'user';
+    _userType = userType;
+    _authStateController.add(_currentUser);
+  }
+
+  Future<void> _handleSignOut() async {
+    await _storage.delete(key: 'user_type');
+    _currentUser = null;
+    _userType = null;
+    _userProfile = null;
+    _authStateController.add(null);
   }
 
   Stream<String?> authStateChanges() => _authStateController.stream;
@@ -45,6 +92,10 @@ class AuthRepository {
     String? requiredUserType,
   }) async {
     try {
+      // Force clean session start to prevent "Invalid Refresh Token" issues
+      // caused by lingering sessions or race conditions.
+      await Supabase.instance.client.auth.signOut();
+
       final response = await _client.post(
         Endpoints.login,
         data: {'email': email, 'password': password},
@@ -64,20 +115,22 @@ class AuthRepository {
         );
       }
 
-      // Hydrate Supabase Session
-      // This is critical: it initializes the Supabase SDK with the session we just got from the backend.
-      // This ensures api_client.dart can access the token via Supabase.instance.client.auth.currentSession
+      // 1. Persist User Type FIRST
+      // This ensures that when setSession triggers the auth listener:
+      // - _updateAuthState reads the correct value from storage
+      // - The Router gets the correct state immediately
+      await _storage.write(key: 'user_type', value: type);
+      _userType = type;
+
+      // 2. Hydrate Supabase Session
+      // This triggers onAuthStateChange -> _updateAuthState
       if (refreshToken != null) {
         await Supabase.instance.client.auth.setSession(refreshToken);
       }
 
-      // We still store user_type for local checks, but auth_token is now managed by Supabase SDK
-      await _storage.write(key: 'user_type', value: type);
-
-      _currentUser = user['email'];
-      _userType = type;
-      _userProfile = Map<String, dynamic>.from(user);
-      _authStateController.add(_currentUser);
+      // _updateAuthState will be triggered by listener via onAuthStateChange,
+      // but we can also manually update local state for immediate feedback/navigation if needed.
+      // However, relying on the listener is safer for consistency.
     } catch (e) {
       if (e is DioException) {
         final message = e.response?.data['message'] ?? 'فشل تسجيل الدخول';
@@ -87,7 +140,6 @@ class AuthRepository {
           '$message (Status: $statusCode, Data: $rawData, Error: ${e.message})',
         );
       }
-      // Re-throw if it's already an Exception (like our user type check)
       rethrow;
     }
   }
@@ -99,6 +151,7 @@ class AuthRepository {
     required String fullName,
     String userType = 'customer',
     String? serviceId,
+    List<String>? documentUrls,
   }) async {
     try {
       await _client.post(
@@ -110,11 +163,21 @@ class AuthRepository {
           'full_name': fullName,
           'user_type': userType,
           if (serviceId != null) 'service_id': serviceId,
+          if (documentUrls != null && documentUrls.isNotEmpty)
+            'document_urls': documentUrls,
         },
       );
 
-      // Auto login after register or ask user to login
-      await signInWithEmailAndPassword(email, password);
+      // Pre-set user type locally to ensure sign-in logic picks it up
+      _userType = userType;
+      await _storage.write(key: 'user_type', value: userType);
+
+      // Auto login after register
+      await signInWithEmailAndPassword(
+        email,
+        password,
+        requiredUserType: userType,
+      );
     } catch (e) {
       if (e is DioException) {
         final message = e.response?.data['message'] ?? 'فشل إنشاء الحساب';
@@ -135,16 +198,41 @@ class AuthRepository {
   }
 
   Future<void> signOut() async {
+    // This will trigger the onAuthStateChange listener with signedOut event
     await Supabase.instance.client.auth.signOut();
-    // await _storage.delete(key: 'auth_token'); // No longer used
-    await _storage.delete(key: 'user_type');
-    _currentUser = null;
-    _userType = null;
-    _userProfile = null;
-    _authStateController.add(null);
+  }
+
+  Future<void> updateProfile({
+    String? fullName,
+    String? phone,
+    String? fcmToken,
+  }) async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) throw Exception('المستخدم غير مسجل الدخول');
+
+    final updates = <String, dynamic>{
+      'updated_at': DateTime.now().toIso8601String(),
+    };
+    if (fullName != null) updates['full_name'] = fullName;
+    if (phone != null) updates['phone'] = phone;
+    if (fcmToken != null) updates['fcm_token'] = fcmToken;
+
+    try {
+      await Supabase.instance.client
+          .from('profiles')
+          .update(updates)
+          .eq('id', user.id);
+
+      if (_userProfile != null) {
+        _userProfile!.addAll(updates);
+      }
+    } catch (e) {
+      throw Exception('فشل تحديث الملف الشخصي: $e');
+    }
   }
 
   void dispose() {
+    _authSubscription.cancel();
     _authStateController.close();
   }
 }
