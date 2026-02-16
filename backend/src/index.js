@@ -16,6 +16,10 @@ import messageRoutes from './routes/messageRoutes.js';
 
 // Import Error Handlers
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
+import {
+    attachRequestContext,
+    normalizeErrorResponse
+} from './middleware/errorContractMiddleware.js';
 
 // Import Utilities
 import logger from './utils/logger.js';
@@ -36,11 +40,20 @@ const PORT = process.env.PORT || 3000;
 // Middlewares
 // =============================================
 
-// Security Headers
-app.use(helmet());
+// Security Headers (configured for development to allow Flutter Web)
+app.use(helmet({
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+    crossOriginOpenerPolicy: { policy: "unsafe-none" },
+    contentSecurityPolicy: false, // Disable for development 
+}));
 
 // CORS (Allow requests from your Flutter app/Web)
-app.use(cors());
+app.use(cors({
+    origin: true, // Allow all origins in development
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'X-Requested-With'],
+}));
 
 // Logging
 app.use(morgan('dev'));
@@ -50,6 +63,10 @@ app.use(express.json());
 
 // Input Sanitization (after body parser)
 app.use(sanitizeInput);
+
+// Request context & error contract normalization
+app.use(attachRequestContext);
+app.use(normalizeErrorResponse);
 
 // Auth Rate Limiter (stricter for auth endpoints)
 const authLimiter = rateLimit({
@@ -150,4 +167,3 @@ if (process.argv[1] === new URL(import.meta.url).pathname) {
         startJobExpiryScheduler();
     });
 }
-

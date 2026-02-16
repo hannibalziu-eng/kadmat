@@ -2,6 +2,7 @@
  * Centralized Error Handler Middleware
  * Converts errors into user-friendly messages while preserving technical details for developers
  */
+import { responseFormatter } from '../utils/responseFormatter.js';
 
 export const errorHandler = (err, req, res, next) => {
     let statusCode = err.statusCode || 500;
@@ -94,25 +95,33 @@ export const errorHandler = (err, req, res, next) => {
         console.error('Error:', errorCode, '-', message);
     }
 
-    // Send response
-    const response = {
-        success: false,
-        error: {
-            code: errorCode,
-            message: userMessage
-        }
-    };
+    const details = {};
+
+    if (err.currentStatus != null) details.currentStatus = err.currentStatus;
+    if (err.attemptedStatus != null) details.attemptedStatus = err.attemptedStatus;
+    if (err.validStates != null) details.validStates = err.validStates;
 
     // Include technical details in development mode
     if (process.env.NODE_ENV === 'development') {
-        response.error.technical = {
+        details.technical = {
             message: message,
             stack: err.stack,
             originalError: err.code || err.name
         };
     }
 
-    res.status(statusCode).json(response);
+    const { response, statusCode: resolvedStatusCode } = responseFormatter.error(
+        errorCode,
+        userMessage,
+        {
+            statusCode,
+            details: Object.keys(details).length > 0 ? details : undefined,
+            requestId: req.requestId,
+            path: req.originalUrl
+        }
+    );
+
+    res.status(resolvedStatusCode).json(response);
 };
 
 // Not Found Handler (404)

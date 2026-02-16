@@ -3,6 +3,8 @@ export const JOB_STATES = {
     SEARCHING: 'searching',
     ACCEPTED: 'accepted',
     PRICE_PENDING: 'price_pending',
+    ON_THE_WAY: 'on_the_way',
+    ARRIVED: 'arrived',
     IN_PROGRESS: 'in_progress',
     PENDING_CONFIRM: 'pending_confirm', // New state
     COMPLETED: 'completed',
@@ -32,6 +34,15 @@ export const VALID_TRANSITIONS = {
         JOB_STATES.CANCELLED
     ],
     [JOB_STATES.PRICE_PENDING]: [
+        JOB_STATES.ON_THE_WAY,
+        JOB_STATES.CANCELLED
+    ],
+    [JOB_STATES.ON_THE_WAY]: [
+        JOB_STATES.ARRIVED,
+        JOB_STATES.IN_PROGRESS,
+        JOB_STATES.CANCELLED
+    ],
+    [JOB_STATES.ARRIVED]: [
         JOB_STATES.IN_PROGRESS,
         JOB_STATES.CANCELLED
     ],
@@ -49,7 +60,8 @@ export const VALID_TRANSITIONS = {
     [JOB_STATES.CANCELLED]: [],
     [JOB_STATES.NO_TECHNICIAN]: [
         JOB_STATES.PENDING,     // Allows retry
-        JOB_STATES.ACCEPTED     // ✅ Allow technicians to accept from this state
+        JOB_STATES.ACCEPTED,    // Allow technicians to accept from this state
+        JOB_STATES.CANCELLED    // Allow customer/technician to cancel explicitly
     ]
 };
 
@@ -105,6 +117,8 @@ export const STATE_DESCRIPTIONS = {
     [JOB_STATES.SEARCHING]: 'جاري البحث عن فني',
     [JOB_STATES.ACCEPTED]: 'تم قبول الطلب',
     [JOB_STATES.PRICE_PENDING]: 'في انتظار موافقتك على السعر',
+    [JOB_STATES.ON_THE_WAY]: 'الفني في الطريق',
+    [JOB_STATES.ARRIVED]: 'الفني وصل إلى الموقع',
     [JOB_STATES.IN_PROGRESS]: 'جاري تنفيذ الخدمة',
     [JOB_STATES.PENDING_CONFIRM]: 'في انتظار تأكيد العميل للإكمال',
     [JOB_STATES.COMPLETED]: 'اكتملت الخدمة',

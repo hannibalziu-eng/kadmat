@@ -23,6 +23,12 @@ jest.unstable_mockModule('../src/config/supabase.js', () => ({
             delete: jest.fn().mockReturnThis(),
             eq: jest.fn().mockReturnThis(),
             in: jest.fn().mockReturnThis(),
+            neq: jest.fn().mockReturnThis(),
+            is: jest.fn().mockReturnThis(),
+            limit: jest.fn(async () => ({
+                data: [],
+                error: null
+            })),
             single: jest.fn(() => ({
                 data: { id: 'mock-job-id', status: 'pending', customer_id: 'mock-customer-id-001' },
                 error: null
@@ -42,6 +48,12 @@ jest.unstable_mockModule('../src/config/supabase.js', () => ({
             delete: jest.fn().mockReturnThis(),
             eq: jest.fn().mockReturnThis(),
             in: jest.fn().mockReturnThis(),
+            neq: jest.fn().mockReturnThis(),
+            is: jest.fn().mockReturnThis(),
+            limit: jest.fn(async () => ({
+                data: [],
+                error: null
+            })),
             single: jest.fn(() => ({
                 data: { id: 'mock-job-id', status: 'pending', customer_id: 'mock-customer-id-001' },
                 error: null

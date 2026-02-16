@@ -100,33 +100,36 @@ async function checkJobExpiry() {
 
                 console.log(`⏱️  [Job ${job.id}] Marked for retry (attempt ${searchAttempts + 1}/3)`);
             } else {
-                // Give up after 3 attempts - mark as expired
+                // Final state remains canonical: no_technician_found.
+                // Stop retrying by clearing next_search_at instead of introducing
+                // a non-canonical "expired" status.
                 await supabaseAdmin
                     .from('jobs')
                     .update({
-                        status: 'expired',
-                        expired_at: new Date().toISOString(),
+                        status: 'no_technician_found',
+                        search_attempts: 3,
+                        next_search_at: null,
+                        last_search_at: new Date().toISOString(),
                         updated_at: new Date().toISOString()
                     })
                     .eq('id', job.id);
 
-                // Notify customer
                 await supabaseAdmin.from('notifications').insert({
                     user_id: job.customer_id,
-                    type: 'job_expired',
-                    title: 'انتهت صلاحية الطلب',
-                    body: 'لم يتم العثور على فني. يمكنك إنشاء طلب جديد.',
+                    type: 'no_technician',
+                    title: 'لم يتم العثور على فني',
+                    body: 'يمكنك إنشاء طلب جديد أو المحاولة لاحقاً.',
                     data: { job_id: job.id },
                     is_read: false
                 });
 
                 await sendPushNotification(job.customer_id, {
-                    title: 'انتهت صلاحية الطلب',
-                    body: 'يمكنك إنشاء طلب جديد',
-                    data: { type: 'job_expired', job_id: job.id }
+                    title: 'لم يتم العثور على فني',
+                    body: 'يمكنك إنشاء طلب جديد أو المحاولة لاحقاً.',
+                    data: { type: 'no_technician', job_id: job.id }
                 });
 
-                console.log(`💀 [Job ${job.id}] Expired after 3 attempts`);
+                console.log(`🛑 [Job ${job.id}] Retry attempts exhausted without technician`);
             }
         } catch (jobError) {
             console.error(`❌ [ExpiryScheduler] Error processing job ${job.id}:`, jobError);

@@ -31,13 +31,31 @@ export const responseFormatter = {
     /**
      * Error response
      */
-    error: (code, message, statusCode = 400) => {
+    error: (code, message, options = 400) => {
+        let statusCode = 400;
+        let details;
+        let requestId;
+        let path;
+
+        if (typeof options === 'number') {
+            statusCode = options;
+        } else if (options && typeof options === 'object') {
+            statusCode = options.statusCode ?? statusCode;
+            details = options.details;
+            requestId = options.requestId;
+            path = options.path;
+        }
+
         const response = {
             success: false,
             error: {
                 code,
-                message
-            }
+                message,
+                ...(details != null && { details }),
+                ...(requestId && { requestId })
+            },
+            timestamp: new Date().toISOString(),
+            ...(path && { path })
         };
 
         return { response, statusCode };
@@ -54,7 +72,14 @@ export const ERROR_CODES = {
     JOB_ALREADY_ACCEPTED: 'JOB_ALREADY_ACCEPTED',
     INSUFFICIENT_PERMISSIONS: 'INSUFFICIENT_PERMISSIONS',
     VALIDATION_FAILED: 'VALIDATION_FAILED',
-    ACCEPT_FAILED: 'ACCEPT_FAILED'
+    ACCEPT_FAILED: 'ACCEPT_FAILED',
+    FORBIDDEN: 'FORBIDDEN',
+    NOT_FOUND: 'NOT_FOUND',
+    CONFLICT: 'CONFLICT',
+    ACTIVE_JOB_LOCKED: 'ACTIVE_JOB_LOCKED',
+    SERVER_ERROR: 'SERVER_ERROR',
+    RATE_LIMITED: 'RATE_LIMITED',
+    SERVICE_UNAVAILABLE: 'SERVICE_UNAVAILABLE'
 };
 
 // HTTP status codes mapping

@@ -31,13 +31,28 @@ export const createJob = async (req, res) => {
         const job = await jobService.create(req.user.id, value);
 
         // Start Smart Search
-        startJobSearch(job.id, value.lat, value.lng, value.service_id);
+        const isTestEnv = process.env.NODE_ENV === 'test' || process.env.JEST_WORKER_ID != null;
+        if (!isTestEnv) {
+            startJobSearch(job.id, value.lat, value.lng, value.service_id);
+        }
 
         return res.status(HTTP_STATUS.CREATED).json(
             responseFormatter.success(job, 'Job created successfully')
         );
     } catch (error) {
         console.error('Create Job Error:', error);
+        if (error.code === 'ACTIVE_JOB_LOCKED') {
+            const details = {};
+            if (error.currentStatus) details.currentStatus = error.currentStatus;
+            if (error.lockedJobId) details.lockedJobId = error.lockedJobId;
+            const formatted = responseFormatter.error(
+                ERROR_CODES.ACTIVE_JOB_LOCKED,
+                error.message,
+                { statusCode: HTTP_STATUS.CONFLICT, details }
+            );
+            return res.status(formatted.statusCode).json(formatted.response);
+        }
+
         const { response, statusCode } = responseFormatter.error(
             ERROR_CODES.DATABASE_ERROR,
             error.message
@@ -98,33 +113,130 @@ export const getNearbyJobs = async (req, res) => {
     }
 };
 
-// 3. Accept Job
+// 3. Accept Job (Legacy - now handled via submitOffer/acceptOffer)
 export const acceptJob = async (req, res) => {
+    const { response, statusCode } = responseFormatter.error(
+        ERROR_CODES.INVALID_STATUS_TRANSITION,
+        'تم إيقاف القبول المباشر. استخدم تقديم عرض عبر المسار الجديد.',
+        {
+            statusCode: HTTP_STATUS.CONFLICT,
+            details: {
+                flow: 'bidding_only',
+                action: 'submit_offer',
+                endpoint: '/api/jobs/:id/submit-offer'
+            }
+        }
+    );
+    return res.status(statusCode).json(response);
+};
+
+// 3.1. Submit Offer (Technician)
+export const submitOffer = async (req, res) => {
     try {
-        const job = await jobService.accept(req.params.id, req.user.id);
-
-        onJobAccepted(job.id);
-
-        return res.json(
-            responseFormatter.success(job, 'Job accepted')
-        );
+        const { price } = req.body;
+        const offer = await jobService.submitOffer(req.params.id, req.user.id, price);
+        return res.status(HTTP_STATUS.CREATED).json(responseFormatter.success(offer, 'Offer submitted successfully'));
     } catch (error) {
-        // Handle specific business errors
-        if (error.code === 'JOB_NOT_FOUND') {
-            const { response, statusCode } = responseFormatter.error(ERROR_CODES.JOB_NOT_FOUND, error.message, HTTP_STATUS.NOT_FOUND);
-            return res.status(statusCode).json(response);
-        }
-        if (error.code === 'JOB_ALREADY_ACCEPTED' || error.code === 'ACCEPT_FAILED') {
-            const { response, statusCode } = responseFormatter.error(ERROR_CODES.JOB_ALREADY_ACCEPTED, error.message, HTTP_STATUS.CONFLICT);
-            return res.status(statusCode).json(response);
-        }
-        if (error.code === 'INVALID_STATUS_TRANSITION') {
-            const { response, statusCode } = responseFormatter.error(ERROR_CODES.JOB_ALREADY_ACCEPTED, error.message, HTTP_STATUS.CONFLICT);
-            return res.status(statusCode).json(response);
+        console.error('Submit Offer Error:', error);
+        const isInvalidState = error.message?.includes('no longer available');
+        const { response, statusCode } = responseFormatter.error(
+            isInvalidState ? ERROR_CODES.INVALID_STATUS_TRANSITION : ERROR_CODES.INVALID_INPUT,
+            error.message || 'Failed to submit offer',
+            isInvalidState ? HTTP_STATUS.CONFLICT : HTTP_STATUS.BAD_REQUEST
+        );
+        return res.status(statusCode).json(response);
+    }
+};
+
+// 3.2. Accept Offer (Customer)
+export const acceptOffer = async (req, res) => {
+    try {
+        // Accept both canonical and legacy payload keys to avoid client drift.
+        const offerId =
+            req.body?.offerId ??
+            req.body?.offer_id ??
+            req.body?.bidId ??
+            req.body?.bid_id;
+        const normalizedOfferId = typeof offerId === 'string' ? offerId.trim() : '';
+
+        // Strict input validation to avoid ambiguous INVALID_INPUT errors downstream.
+        if (!normalizedOfferId) {
+            const formatted = responseFormatter.error(
+                ERROR_CODES.VALIDATION_FAILED,
+                'معرّف العرض مطلوب',
+                {
+                    statusCode: HTTP_STATUS.BAD_REQUEST,
+                    details: { field: 'offerId' }
+                }
+            );
+            return res.status(formatted.statusCode).json(formatted.response);
         }
 
-        const { response, statusCode } = responseFormatter.error(ERROR_CODES.ACCEPT_FAILED, error.message || 'فشل قبول الطلب');
-        return res.status(statusCode).json(response);
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+        if (!uuidRegex.test(normalizedOfferId)) {
+            const formatted = responseFormatter.error(
+                ERROR_CODES.VALIDATION_FAILED,
+                'معرّف العرض غير صالح',
+                {
+                    statusCode: HTTP_STATUS.BAD_REQUEST,
+                    details: { field: 'offerId' }
+                }
+            );
+            return res.status(formatted.statusCode).json(formatted.response);
+        }
+
+        const job = await jobService.acceptOffer(req.params.id, req.user.id, normalizedOfferId);
+
+        onJobAccepted(job.id); // Trigger search stop
+
+        return res.json(responseFormatter.success(job, 'Offer accepted'));
+    } catch (error) {
+        console.error('Accept Offer Error:', error);
+        const message = error.message || 'Failed to accept offer';
+        let code = ERROR_CODES.INVALID_INPUT;
+        let statusCode = HTTP_STATUS.BAD_REQUEST;
+        const details = {};
+
+        if (error.code === 'UNAUTHORIZED' || message.includes('Unauthorized')) {
+            code = ERROR_CODES.UNAUTHORIZED;
+            statusCode = HTTP_STATUS.FORBIDDEN;
+        } else if (
+            error.code === 'JOB_NOT_FOUND' ||
+            error.code === 'NOT_FOUND' ||
+            message.includes('Offer not found') ||
+            message.includes('Job not found')
+        ) {
+            code = ERROR_CODES.NOT_FOUND;
+            statusCode = HTTP_STATUS.NOT_FOUND;
+        } else if (
+            error.code === 'INVALID_STATUS_TRANSITION' ||
+            message.includes('no longer available')
+        ) {
+            code = ERROR_CODES.INVALID_STATUS_TRANSITION;
+            statusCode = HTTP_STATUS.CONFLICT;
+        } else if (error.code === 'ACTIVE_JOB_LOCKED') {
+            code = ERROR_CODES.ACTIVE_JOB_LOCKED;
+            statusCode = HTTP_STATUS.CONFLICT;
+        } else if (error.code === 'ACCEPT_FAILED') {
+            code = ERROR_CODES.SERVER_ERROR;
+            statusCode = HTTP_STATUS.INTERNAL_SERVER_ERROR;
+        }
+
+        if (error.currentStatus) {
+            details.currentStatus = error.currentStatus;
+        }
+        if (error.lockedJobId) {
+            details.lockedJobId = error.lockedJobId;
+        }
+
+        const formatted = responseFormatter.error(
+            code,
+            message,
+            Object.keys(details).length > 0
+                ? { statusCode, details }
+                : statusCode
+        );
+        return res.status(formatted.statusCode).json(formatted.response);
     }
 };
 
@@ -203,7 +315,8 @@ export const completeJob = async (req, res) => {
 // 5.5 Confirm Completion
 export const confirmJobCompletion = async (req, res) => {
     try {
-        const job = await jobService.confirmJobCompletion(req.params.id, req.user.id);
+        const { payment_method } = req.body; // Extract payment method
+        const job = await jobService.confirmJobCompletion(req.params.id, req.user.id, payment_method);
         return res.json(responseFormatter.success(job, 'Job completion confirmed'));
     } catch (error) {
         const { response, statusCode } = responseFormatter.error(
@@ -240,6 +353,51 @@ export const confirmPrice = async (req, res) => {
             error.message
         );
         return res.status(statusCode).json(response);
+    }
+};
+
+// 7.5 Technician progress updates (arrived/start_work)
+export const updateTechnicianProgress = async (req, res) => {
+    try {
+        const progress = req.body?.progress;
+        const job = await jobService.updateTechnicianProgress(
+            req.params.id,
+            req.user.id,
+            progress
+        );
+        return res.json(responseFormatter.success(job, 'Technician progress updated'));
+    } catch (error) {
+        const message = error.message || 'Failed to update technician progress';
+        let code = ERROR_CODES.INVALID_INPUT;
+        let statusCode = HTTP_STATUS.BAD_REQUEST;
+        const details = {};
+
+        if (error.code === 'UNAUTHORIZED') {
+            code = ERROR_CODES.UNAUTHORIZED;
+            statusCode = HTTP_STATUS.FORBIDDEN;
+        } else if (error.code === 'JOB_NOT_FOUND') {
+            code = ERROR_CODES.NOT_FOUND;
+            statusCode = HTTP_STATUS.NOT_FOUND;
+        } else if (error.code === 'INVALID_STATUS_TRANSITION') {
+            code = ERROR_CODES.INVALID_STATUS_TRANSITION;
+            statusCode = HTTP_STATUS.CONFLICT;
+        } else if (error.code === 'DATABASE_ERROR') {
+            code = ERROR_CODES.DATABASE_ERROR;
+            statusCode = HTTP_STATUS.INTERNAL_SERVER_ERROR;
+        }
+
+        if (error.currentStatus) {
+            details.currentStatus = error.currentStatus;
+        }
+
+        const formatted = responseFormatter.error(
+            code,
+            message,
+            Object.keys(details).length > 0
+                ? { statusCode, details }
+                : statusCode
+        );
+        return res.status(formatted.statusCode).json(formatted.response);
     }
 };
 
@@ -313,9 +471,9 @@ export const getJobById = async (req, res) => {
             return res.status(statusCode).json(response);
         }
         // Check if user is authorized (customer or technician involved in the job)
-        // OR if the job is pending/searching (available for technicians to view)
+        // OR if the job is in technician-discoverable pool (available to view)
         const isParticipant = job.customer_id === req.user.id || job.technician_id === req.user.id;
-        const isAvailable = ['pending', 'searching'].includes(job.status);
+        const isAvailable = ['pending', 'searching', 'no_technician_found'].includes(job.status);
 
         if (!isParticipant && !isAvailable) {
             const { response, statusCode } = responseFormatter.error(
@@ -334,6 +492,12 @@ export const getJobById = async (req, res) => {
                 canAccept: job.status === 'pending' && !job.technician_id && req.user.user_type === 'technician',
                 canSetPrice: job.status === 'accepted' && job.technician_id === req.user.id,
                 canConfirmPrice: job.status === 'price_pending' && job.customer_id === req.user.id,
+                canMarkArrived:
+                    (job.status === 'on_the_way' || job.status === 'arrived') &&
+                    job.technician_id === req.user.id,
+                canStartWork:
+                    (job.status === 'arrived' || job.status === 'on_the_way' || job.status === 'in_progress') &&
+                    job.technician_id === req.user.id,
                 canComplete: job.status === 'in_progress' && job.technician_id === req.user.id,
                 canConfirmCompletion: job.status === 'pending_confirm' && job.customer_id === req.user.id, // New permission
                 canRate: job.status === 'completed' && job.customer_id === req.user.id && !job.customer_rating,

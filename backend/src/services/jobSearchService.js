@@ -12,11 +12,36 @@ const SEARCH_TIERS = [
     { radius: 10000, timeout: 300 }   // Tier 3: 10km, 5 minutes
 ];
 
+// In-memory registry for active searches to support cancellation and proper flow control.
+const activeSearches = new Map();
+const SEARCHABLE_STATUSES = ['pending', 'searching', 'no_technician_found'];
+
+async function isJobSearchable(jobId) {
+    try {
+        const { data: job, error } = await supabaseAdmin
+            .from('jobs')
+            .select('status, technician_id')
+            .eq('id', jobId)
+            .maybeSingle();
+
+        if (error || !job) {
+            return false;
+        }
+
+        return SEARCHABLE_STATUSES.includes(job.status) && !job.technician_id;
+    } catch (_) {
+        return false;
+    }
+}
+
 /**
  * Start smart job search
  */
 export async function startJobSearch(jobId, lat, lng, serviceId) {
     console.log(`🔍 [Job ${jobId}] Starting smart search...`);
+
+    // Ensure a single active search process per job.
+    cancelJobSearch(jobId);
 
     const state = {
         jobId,
@@ -24,11 +49,31 @@ export async function startJobSearch(jobId, lat, lng, serviceId) {
         lng,
         serviceId,
         tierIndex: 0,
-        startTime: Date.now()
+        startTime: Date.now(),
+        isCancelled: false
     };
 
+    activeSearches.set(jobId, state);
+
+    // Mark job as "searching" so UI and technicians see the correct lifecycle state.
+    try {
+        await supabaseAdmin
+            .from('jobs')
+            .update({
+                status: 'searching',
+                updated_at: new Date().toISOString()
+            })
+            .eq('id', jobId)
+            .in('status', ['pending', 'searching', 'no_technician_found']);
+    } catch (error) {
+        console.warn(`⚠️ [Job ${jobId}] Failed to mark as searching:`, error?.message || error);
+    }
+
     // Start first tier
-    executeSearchTier(state);
+    executeSearchTier(state).catch((error) => {
+        console.error(`❌ [Job ${jobId}] Search execution failed:`, error);
+        activeSearches.delete(jobId);
+    });
 }
 
 /**
@@ -36,9 +81,23 @@ export async function startJobSearch(jobId, lat, lng, serviceId) {
  */
 async function executeSearchTier(state) {
     try {
+        // Stop immediately if cancelled or replaced.
+        if (state.isCancelled || activeSearches.get(state.jobId) !== state) {
+            return;
+        }
+
+        // Defensive DB-side guard:
+        // if job left searchable states (e.g. cancelled) stop immediately.
+        const searchable = await isJobSearchable(state.jobId);
+        if (!searchable) {
+            activeSearches.delete(state.jobId);
+            return;
+        }
+
         if (state.tierIndex >= SEARCH_TIERS.length) {
             // No technicians found in any tier
             await handleNoTechnicianFound(state);
+            activeSearches.delete(state.jobId);
             return;
         }
 
@@ -60,25 +119,56 @@ async function executeSearchTier(state) {
         logSearch(state.jobId, state.tierIndex, tier.radius, technicians.length, searchDuration);
 
         if (technicians.length > 0) {
+            // Re-check before notifying technicians in case status changed meanwhile.
+            const stillSearchable = await isJobSearchable(state.jobId);
+            if (!stillSearchable || state.isCancelled || activeSearches.get(state.jobId) !== state) {
+                activeSearches.delete(state.jobId);
+                return;
+            }
+
             console.log(`✅ [Job ${state.jobId}] Found ${technicians.length} technicians in Tier ${state.tierIndex + 1} (${searchDuration}ms)`);
 
             // Send notifications to technicians
             await notifyTechnicians(state.jobId, technicians);
 
             // Wait for acceptance
-            await waitForAcceptance(state.jobId, tier.timeout);
-            return;
+            const accepted = await waitForAcceptance(state.jobId, tier.timeout, state);
+
+            // Stop if cancelled while waiting.
+            if (state.isCancelled || activeSearches.get(state.jobId) !== state) {
+                return;
+            }
+
+            if (accepted) {
+                activeSearches.delete(state.jobId);
+                return;
+            }
+
+            // If job is no longer searchable after waiting, do not continue tiers.
+            const canContinue = await isJobSearchable(state.jobId);
+            if (!canContinue) {
+                activeSearches.delete(state.jobId);
+                return;
+            }
         }
 
-        console.log(`⏭️  [Job ${state.jobId}] No technicians in Tier ${state.tierIndex + 1}, moving to next tier...`);
+        console.log(`⏭️  [Job ${state.jobId}] No acceptance in Tier ${state.tierIndex + 1}, moving to next tier...`);
 
         // Move to next tier
         state.tierIndex++;
-        setTimeout(() => executeSearchTier(state), 1000);
+        setTimeout(() => {
+            const current = activeSearches.get(state.jobId);
+            if (!current || current.isCancelled || current !== state) return;
+            executeSearchTier(current).catch((error) => {
+                console.error(`❌ [Job ${state.jobId}] Next tier execution failed:`, error);
+                activeSearches.delete(state.jobId);
+            });
+        }, 1000);
 
     } catch (error) {
         console.error(`❌ [Job ${state.jobId}] Error in tier execution:`, error);
         // Retry or fallback logic could go here
+        activeSearches.delete(state.jobId);
     }
 }
 
@@ -244,10 +334,16 @@ async function notifyTechnicians(jobId, technicians) {
 /**
  * Wait for technician acceptance
  */
-async function waitForAcceptance(jobId, timeoutSeconds) {
+async function waitForAcceptance(jobId, timeoutSeconds, state) {
     return new Promise((resolve) => {
         const startTime = Date.now();
         const checkInterval = setInterval(async () => {
+            if (state?.isCancelled) {
+                clearInterval(checkInterval);
+                resolve(false);
+                return;
+            }
+
             // Check if job was accepted
             const { data: job, error } = await supabaseAdmin
                 .from('jobs')
@@ -267,6 +363,13 @@ async function waitForAcceptance(jobId, timeoutSeconds) {
                 return;
             }
 
+            // Stop search progression if job left searchable states.
+            if (job && !SEARCHABLE_STATUSES.includes(job.status)) {
+                clearInterval(checkInterval);
+                resolve(false);
+                return;
+            }
+
             // Check timeout
             const elapsedSeconds = (Date.now() - startTime) / 1000;
             if (elapsedSeconds >= timeoutSeconds) {
@@ -283,12 +386,18 @@ async function waitForAcceptance(jobId, timeoutSeconds) {
  * Handle no technician found
  */
 async function handleNoTechnicianFound(state) {
+    if (state.isCancelled || activeSearches.get(state.jobId) !== state) return;
+
+    // Last defensive guard before writing terminal search status.
+    const searchable = await isJobSearchable(state.jobId);
+    if (!searchable) return;
+
     console.log(`😔 [Job ${state.jobId}] No technician found in any tier`);
 
     const nextRetryTime = new Date(Date.now() + 3600000); // 1 hour from now
 
     // Update job status
-    const { error: updateError } = await supabaseAdmin
+    const { data: updatedJob, error: updateError } = await supabaseAdmin
         .from('jobs')
         .update({
             status: 'no_technician_found',
@@ -297,10 +406,18 @@ async function handleNoTechnicianFound(state) {
             next_search_at: nextRetryTime.toISOString(),
             updated_at: new Date().toISOString()
         })
-        .eq('id', state.jobId);
+        .eq('id', state.jobId)
+        .in('status', SEARCHABLE_STATUSES)
+        .is('technician_id', null)
+        .select('id')
+        .maybeSingle();
 
-    if (updateError) {
-        console.error(`Error updating job:`, updateError);
+    if (updateError || !updatedJob) {
+        if (updateError) {
+            console.error(`Error updating job:`, updateError);
+        } else {
+            console.log(`ℹ️ [Job ${state.jobId}] Skipped no_technician update (job no longer searchable)`);
+        }
         return;
     }
 
@@ -332,7 +449,11 @@ async function handleNoTechnicianFound(state) {
  */
 export function cleanupSearch(jobId) {
     console.log(`🧹 [Job ${jobId}] Cleaning up search`);
-    // Cancel any pending operations
+    const state = activeSearches.get(jobId);
+    if (state) {
+        state.isCancelled = true;
+        activeSearches.delete(jobId);
+    }
 }
 
 /**
@@ -340,7 +461,7 @@ export function cleanupSearch(jobId) {
  */
 export function cancelJobSearch(jobId) {
     console.log(`🛑 [Job ${jobId}] Cancelling search`);
-    // Logic to stop search logic
+    cleanupSearch(jobId);
 }
 
 /**

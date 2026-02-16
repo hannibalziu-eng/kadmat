@@ -42,7 +42,7 @@ const swaggerOptions = {
                         service_id: { type: 'string', format: 'uuid' },
                         status: {
                             type: 'string',
-                            enum: ['pending', 'searching', 'accepted', 'price_pending', 'customer_agreed', 'in_progress', 'pending_confirm', 'completed', 'cancelled', 'no_technician_found']
+                            enum: ['pending', 'searching', 'accepted', 'price_pending', 'in_progress', 'pending_confirm', 'completed', 'rated', 'cancelled', 'no_technician_found']
                         },
                         lat: { type: 'number', format: 'double' },
                         lng: { type: 'number', format: 'double' },

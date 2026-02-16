@@ -10,13 +10,50 @@ import { startJobSearch } from '../services/jobSearchService.js';
 // Run every hour at minute 0
 const RETRY_SCHEDULE = '0 * * * *'; // 00:00, 01:00, 02:00, etc.
 const MAX_RETRIES = 3; // Max 3 retry attempts
+const MAX_RETRY_JOB_AGE_HOURS = 2; // Do not revive stale requests beyond this age
 
 let schedulerJob = null;
+let isRetryCycleRunning = false;
+
+function isRetryWindowExpired(job) {
+    const createdAt = new Date(job.created_at);
+    if (Number.isNaN(createdAt.getTime())) {
+        return true;
+    }
+
+    const ageMs = Date.now() - createdAt.getTime();
+    const maxAgeMs = MAX_RETRY_JOB_AGE_HOURS * 60 * 60 * 1000;
+    return ageMs > maxAgeMs;
+}
+
+async function hasNewerOpenJob(job) {
+    const { data, error } = await supabaseAdmin
+        .from('jobs')
+        .select('id')
+        .eq('customer_id', job.customer_id)
+        .neq('id', job.id)
+        .in('status', ['pending', 'searching', 'no_technician_found'])
+        .gt('created_at', job.created_at)
+        .limit(1);
+
+    if (error) {
+        console.warn(`⚠️ [Scheduler] Failed superseded-check for ${job.id}:`, error.message);
+        return false;
+    }
+
+    return (data || []).length > 0;
+}
 
 export function startJobRetryScheduler() {
     console.log('🕰 Starting Job Retry Scheduler...');
 
     schedulerJob = cron.schedule(RETRY_SCHEDULE, async () => {
+        if (isRetryCycleRunning) {
+            console.log('⏭️ [Scheduler] Previous retry cycle still running. Skipping this tick.');
+            return;
+        }
+
+        isRetryCycleRunning = true;
         try {
             console.log('🔄 [Scheduler] Checking for jobs needing retry...');
 
@@ -40,6 +77,47 @@ export function startJobRetryScheduler() {
             // Retry each job
             for (const job of jobsToRetry) {
                 try {
+                    if (isRetryWindowExpired(job)) {
+                        const nowIso = new Date().toISOString();
+                        await supabaseAdmin
+                            .from('jobs')
+                            .update({
+                                status: 'cancelled',
+                                cancel_reason: 'retry_window_expired',
+                                cancelled_at: nowIso,
+                                cancelled_by: job.customer_id,
+                                next_search_at: null,
+                                updated_at: nowIso
+                            })
+                            .eq('id', job.id)
+                            .in('status', ['no_technician_found', 'pending', 'searching']);
+
+                        console.log(`🧹 [Scheduler] Cancelled stale retry job ${job.id} (retry window expired).`);
+                        continue;
+                    }
+
+                    // Skip legacy stale jobs when a newer open job already exists
+                    // for the same customer.
+                    const superseded = await hasNewerOpenJob(job);
+                    if (superseded) {
+                        const nowIso = new Date().toISOString();
+                        await supabaseAdmin
+                            .from('jobs')
+                            .update({
+                                status: 'cancelled',
+                                cancel_reason: 'superseded_by_newer_open_job',
+                                cancelled_at: nowIso,
+                                cancelled_by: job.customer_id,
+                                next_search_at: null,
+                                updated_at: nowIso
+                            })
+                            .eq('id', job.id)
+                            .in('status', ['no_technician_found', 'pending', 'searching']);
+
+                        console.log(`🧹 [Scheduler] Cancelled stale retry job ${job.id} (superseded).`);
+                        continue;
+                    }
+
                     console.log(`🔄 [Scheduler] Retrying job ${job.id} (attempt ${job.search_attempts + 1}/${MAX_RETRIES})...`);
 
                     // Reset status to 'pending' and start search again
@@ -71,6 +149,8 @@ export function startJobRetryScheduler() {
 
         } catch (error) {
             console.error('❌ [Scheduler] Fatal error in retry cycle:', error);
+        } finally {
+            isRetryCycleRunning = false;
         }
     });
 
