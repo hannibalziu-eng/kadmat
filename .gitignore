@@ -47,6 +47,7 @@ backend/node_modules/
 backend/.env
 backend/coverage/
 backend/*.log
+backend/logs/
 
 # General
 *.log
@@ -60,3 +61,16 @@ backend/*.log
 *.g.dart
 *.freezed.dart
 *.mocks.dart
+
+# Local workspace artifacts
+analysis_output.txt
+memory/
+
+# Accidental duplicate copies ("... 2")
+.flutter-plugins-dependencies 2
+ios/Flutter/* 2.*
+test/unit/* 2.dart
+.github/workflows 2/
+lib/src/features/notifications/presentation/screens 2/
+linux/flutter/ephemeral/.plugin_symlinks 2/
+windows/flutter/ephemeral/.plugin_symlinks 2/
