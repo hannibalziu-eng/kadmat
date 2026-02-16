@@ -1,0 +1,16 @@
+{
+    "welcome": "مرحباً",
+    "technician_dashboard": "لوحة الفني",
+    "status": {
+        "online": "متصل",
+        "offline": "غير متصل",
+        "busy": "مشغول",
+        "away": "غائب",
+        "dnd": "لا تزعج"
+    },
+    "job": {
+        "accept": "قبول",
+        "reject": "رفض",
+        "details": "التفاصيل"
+    }
+}

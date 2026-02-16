@@ -1,0 +1,16 @@
+{
+    "welcome": "Welcome",
+    "technician_dashboard": "Technician Dashboard",
+    "status": {
+        "online": "Online",
+        "offline": "Offline",
+        "busy": "Busy",
+        "away": "Away",
+        "dnd": "Do Not Disturb"
+    },
+    "job": {
+        "accept": "Accept",
+        "reject": "Reject",
+        "details": "Details"
+    }
+}
