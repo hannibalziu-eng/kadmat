@@ -18,6 +18,8 @@
   - `backend/sql/rpc/check_get_nearby_jobs_contract.sql`
 - Run acceptance contract audit:
   - `cd backend && npm run audit:accept-offer-contract`
+- CI monitor:
+  - `.github/workflows/accept_offer_contract_audit.yml` = PASS
 - Expected:
   - `audit_report.ok = true`
   - accept-offer audit = PASS

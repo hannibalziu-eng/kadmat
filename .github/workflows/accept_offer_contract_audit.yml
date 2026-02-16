@@ -1,0 +1,51 @@
+name: Accept Offer Contract Audit
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/migrations/22_add_jobs_accepted_bid_id.sql"
+      - "backend/migrations/23_create_update_user_location_rpc.sql"
+      - "backend/migrations/24_accept_job_offer_atomic_rpc.sql"
+      - "backend/migrations/25_offer_acceptance_on_the_way_and_locks.sql"
+      - "backend/src/services/jobService.js"
+      - "backend/src/controllers/jobController.js"
+      - "backend/scripts/audit-offer-acceptance-contract.js"
+      - "backend/package.json"
+      - ".github/workflows/accept_offer_contract_audit.yml"
+  schedule:
+    - cron: "30 * * * *"
+  workflow_dispatch:
+
+jobs:
+  audit-accept-offer-contract:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./backend
+
+    steps:
+      - name: Validate required secrets
+        run: |
+          if [ -z "${{ secrets.SUPABASE_URL }}" ] || [ -z "${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" ]; then
+            echo "::error::Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY repository secrets."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js 18.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18.x
+          cache: "npm"
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run accept-offer contract audit
+        run: npm run audit:accept-offer-contract
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}

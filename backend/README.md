@@ -84,6 +84,12 @@ node tests/token-refresh-test.js
 
 # Database verification
 node scripts/db-verification.js
+
+# Nearby jobs RPC contract audit
+npm run audit:rpc
+
+# Accept-offer + location RPC contract audit
+npm run audit:accept-offer-contract
 ```
 
 ## 📊 API Endpoints
@@ -120,6 +126,8 @@ node scripts/db-verification.js
 ## 🚀 Deployment
 
 See [DEPLOYMENT.md](./DEPLOYMENT.md) for detailed production deployment instructions.
+For accept-offer rollout and DB contract verification, use:
+[ACCEPT_OFFER_ROLLOUT_RUNBOOK.md](./ACCEPT_OFFER_ROLLOUT_RUNBOOK.md)
 
 ## 📈 Performance
 
