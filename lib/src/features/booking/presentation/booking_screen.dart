@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:uuid/uuid.dart';
+import '../../../core/navigation/app_routes.dart';
 import '../data/booking_repository.dart';
 import '../domain/booking_model.dart';
 
@@ -83,7 +84,7 @@ class _BookingScreenState extends ConsumerState<BookingScreen> {
           ScaffoldMessenger.of(
             context,
           ).showSnackBar(const SnackBar(content: Text('تم حجز الخدمة بنجاح!')));
-          context.go('/tracking/${booking.id}');
+          context.go(AppRoutes.buildTrackingPath(booking.id));
         }
       } catch (e) {
         if (mounted) {

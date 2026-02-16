@@ -121,7 +121,7 @@ class _TechnicianPriceInputScreenState
         // انتظار قصير ثم الانتقال لشاشة انتظار موافقة العميل
         await Future.delayed(const Duration(milliseconds: 500));
         if (mounted) {
-          context.go('/jobs/${widget.orderId}/technician/waiting');
+          context.go(AppRoutes.buildTechnicianWaitingPath(widget.orderId));
         }
       }
     } catch (e) {
@@ -515,12 +515,11 @@ class _TechnicianPriceInputScreenState
               borderRadius: BorderRadius.circular(12.r),
               child: InkWell(
                 onTap: () {
-                  context.pushNamed(
-                    AppRoutes.chat,
-                    pathParameters: {'jobId': widget.orderId},
+                  context.push(
+                    AppRoutes.buildJobChatPath(widget.orderId),
                     extra: {
-                      'otherUserId': _job?.customer?['id'],
                       'otherUserName': _job?.customer?['full_name'] ?? 'العميل',
+                      'otherUserImage': _job?.customer?['profile_image_url'],
                     },
                   );
                 },
@@ -640,7 +639,7 @@ class _TechnicianPriceInputScreenState
               padding: EdgeInsets.all(8.w),
               decoration: BoxDecoration(
                 color: isHeader
-                    ? Theme.of(context).primaryColor.withOpacity(0.1)
+                    ? Theme.of(context).primaryColor.withValues(alpha: 0.1)
                     : Colors.grey[100],
                 borderRadius: BorderRadius.circular(8.r),
               ),
@@ -679,7 +678,7 @@ class _TechnicianPriceInputScreenState
               Container(
                 padding: EdgeInsets.all(6.w),
                 decoration: BoxDecoration(
-                  color: Colors.blue.withOpacity(0.1),
+                  color: Colors.blue.withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(Icons.open_in_new, size: 16.s, color: Colors.blue),

@@ -1,5 +1,7 @@
 import 'package:go_router/go_router.dart';
 import '../../features/jobs/presentation/screens/customer_screens.dart';
+import '../../features/jobs/presentation/screens/customer_job_tracking_screen.dart';
+import '../../features/jobs/presentation/screens/customer_payment_processing_screen.dart';
 import '../navigation/app_routes.dart';
 
 List<GoRoute> getJobFlowRoutes() {

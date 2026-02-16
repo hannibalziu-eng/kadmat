@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_scalify/flutter_scalify.dart';
 import 'package:go_router/go_router.dart';
+import 'widgets/change_password_dialog.dart';
 
 class AccountSecurityScreen extends StatelessWidget {
   const AccountSecurityScreen({super.key});
@@ -32,10 +33,7 @@ class AccountSecurityScreen extends StatelessWidget {
               subtitle: 'قم بتحديث كلمة المرور الخاصة بك بشكل دوري',
               icon: Icons.lock_outline,
               onTap: () {
-                // TODO: Show change password dialog or navigate
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('سيتم تفعيل هذه الميزة قريباً')),
-                );
+                ChangePasswordDialog.show(context);
               },
             ),
             SizedBox(height: 16.h),
@@ -45,19 +43,19 @@ class AccountSecurityScreen extends StatelessWidget {
               subtitle: 'تأمين حسابك برقم جوال إضافي',
               icon: Icons.security,
               onTap: () {
-                 ScaffoldMessenger.of(context).showSnackBar(
+                ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('سيتم تفعيل هذه الميزة قريباً')),
                 );
               },
             ),
-             SizedBox(height: 16.h),
+            SizedBox(height: 16.h),
             _buildSecurityOption(
               context,
               title: 'الأجهزة المتصلة',
               subtitle: 'إدارة الأجهزة التي سجلت الدخول منها',
               icon: Icons.devices,
               onTap: () {
-                 ScaffoldMessenger.of(context).showSnackBar(
+                ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('سيتم تفعيل هذه الميزة قريباً')),
                 );
               },
@@ -80,20 +78,17 @@ class AccountSecurityScreen extends StatelessWidget {
       contentPadding: EdgeInsets.all(12.w),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12.r),
-        side: BorderSide(color: Colors.grey.withOpacity(0.2)),
+        side: BorderSide(color: Colors.grey.withValues(alpha: 0.2)),
       ),
       leading: Container(
         padding: EdgeInsets.all(8.w),
         decoration: BoxDecoration(
-          color: Colors.green.withOpacity(0.1),
+          color: Colors.green.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(8.r),
         ),
         child: Icon(icon, color: Colors.green),
       ),
-      title: Text(
-        title,
-        style: const TextStyle(fontWeight: FontWeight.bold),
-      ),
+      title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
       subtitle: Text(subtitle),
       trailing: const Icon(Icons.chevron_right),
     );

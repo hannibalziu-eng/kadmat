@@ -6,6 +6,7 @@ import 'package:flutter_scalify/flutter_scalify.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../../core/app_theme.dart';
+import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/widgets/kadmat_toast.dart';
 import '../../data/job_repository.dart';
 
@@ -186,7 +187,9 @@ class _PostServicePhotoScreenState
           message: '✅ تم رفع الصور بنجاح',
         );
         // Navigate to Price Confirmation screen
-        context.go('/jobs/${widget.jobId}/technician/price-confirmation');
+        context.go(
+          AppRoutes.buildTechnicianPriceConfirmationPath(widget.jobId),
+        );
       }
     } catch (e) {
       if (mounted) {

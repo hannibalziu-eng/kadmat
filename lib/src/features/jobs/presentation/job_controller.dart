@@ -8,6 +8,7 @@ import '../data/job_repository.dart';
 import '../domain/job.dart';
 import '../../auth/data/auth_repository.dart';
 import '../../../core/exceptions/app_exceptions.dart';
+import '../../../core/api/api_error.dart';
 
 part 'job_controller.g.dart';
 
@@ -66,13 +67,18 @@ class JobController extends _$JobController {
       }
       // Handle DioException and convert to specific exceptions
       if (e is DioException) {
+        final apiError = ApiError.fromDioException(e);
         if (e.response?.statusCode == 409) {
-          throw JobAlreadyAcceptedException('تم قبول الطلب من فني آخر');
+          throw JobAlreadyAcceptedException(
+            apiError.message.isNotEmpty
+                ? apiError.message
+                : 'تم قبول الطلب من فني آخر',
+          );
         }
         if (e.response?.statusCode == 400) {
-          final errorCode = e.response?.data['error']?['code'];
+          final errorCode = apiError.code;
           if (errorCode == 'INVALID_STATUS_TRANSITION') {
-            final currentStatus = e.response?.data['error']?['currentStatus'];
+            final currentStatus = apiError.detailAsString('currentStatus');
             throw InvalidStatusException(
               'حالة الطلب غير صحيحة',
               currentStatus: currentStatus,

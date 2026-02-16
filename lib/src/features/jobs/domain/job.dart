@@ -1,4 +1,5 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
+import '../../bidding/domain/entities/bid_entity.dart';
 
 part 'job.freezed.dart';
 part 'job.g.dart';
@@ -46,6 +47,16 @@ class Job with _$Job {
     Map<String, dynamic>? permissions,
     Map<String, dynamic>? timeline,
     Map<String, dynamic>? priceSummary,
+    // Bidding System Fields
+    @JsonKey(name: 'bidding_status') @Default('open') String biddingStatus,
+    @JsonKey(name: 'current_wave') @Default(1) int currentWave,
+    @JsonKey(name: 'confirmation_code') String? confirmationCode,
+    @JsonKey(name: 'is_paid') @Default(false) bool isPaid,
+    @JsonKey(name: 'additional_cost') @Default(0.0) double additionalCost,
+    @JsonKey(name: 'accepted_bid_id') String? acceptedBidId,
+    @JsonKey(name: 'proposed_price') double? proposedPrice,
+    @JsonKey(name: 'paid_at') DateTime? paidAt,
+    List<BidEntity>? bids,
   }) = _Job;
 
   const Job._();
@@ -148,6 +159,8 @@ class Job with _$Job {
   @override
   @JsonKey(name: 'priceSummary')
   Map<String, dynamic>? get priceSummary => throw UnimplementedError();
+  @override
+  List<BidEntity>? get bids => throw UnimplementedError();
 }
 
 @freezed

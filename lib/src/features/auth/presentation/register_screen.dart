@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_scalify/flutter_scalify.dart';
+import '../../../core/navigation/app_routes.dart';
 import 'auth_controller.dart';
 
 class RegisterScreen extends ConsumerStatefulWidget {
@@ -41,7 +42,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           );
 
       if (success && mounted) {
-        context.go('/');
+        context.go(AppRoutes.home);
       }
     }
   }
@@ -204,7 +205,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   children: [
                     const Text('لديك حساب بالفعل؟'),
                     TextButton(
-                      onPressed: () => context.push('/login'),
+                      onPressed: () => context.push(AppRoutes.login),
                       child: const Text(
                         'تسجيل الدخول',
                         style: TextStyle(fontWeight: FontWeight.bold),

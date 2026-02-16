@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_scalify/flutter_scalify.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/app_theme.dart';
+import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/widgets/kadmat_toast.dart';
 import '../../data/job_repository.dart';
 import '../../domain/job.dart';
@@ -151,7 +152,7 @@ class _PriceConfirmationScreenState
           message: 'تم إرسال طلب تأكيد الدفع للعميل',
         );
         // Navigate to completed/waiting screen
-        context.go('/jobs/${widget.jobId}/technician/completed');
+        context.go(AppRoutes.buildTechnicianCompletedPath(widget.jobId));
       }
     } catch (e) {
       if (mounted) {
@@ -293,9 +294,9 @@ class _PriceConfirmationScreenState
             Container(
               padding: EdgeInsets.all(16.w),
               decoration: BoxDecoration(
-                color: Colors.orange.withOpacity(0.1),
+                color: Colors.orange.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8.r),
-                border: Border.all(color: Colors.orange.withOpacity(0.3)),
+                border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
               ),
               child: Row(
                 children: [
@@ -400,9 +401,9 @@ class _PriceConfirmationScreenState
             width: double.infinity,
             padding: EdgeInsets.all(16.w),
             decoration: BoxDecoration(
-              color: Colors.green.withOpacity(0.1),
+              color: Colors.green.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12.r),
-              border: Border.all(color: Colors.green.withOpacity(0.3)),
+              border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
             ),
             child: Column(
               children: [

@@ -15,9 +15,11 @@ class WalletRepository {
   /// Get Wallet Balance and Details
   Future<Wallet> getWallet() async {
     final response = await _dio.get('/wallet');
-    return Wallet.fromJson(
-      response.data['data'],
-    ); // responseFormatter puts data in 'data'
+    final data =
+        response.data['data'] ??
+        response.data['wallet'] ??
+        response.data['result'];
+    return Wallet.fromJson(Map<String, dynamic>.from(data as Map));
   }
 
   /// Get Wallet Transactions (Paginated)
@@ -29,21 +31,44 @@ class WalletRepository {
       '/wallet/transactions',
       queryParameters: {'page': page, 'limit': limit},
     );
-    // Dump raw API response for verification during development
-    print('Wallet Transactions Raw Response: ${response.data}');
-    // Optional: log with a proper logger in production
 
-    // Check response structure from responseFormatter
-    // It usually returns { data: { list: [], pagination: {} } } or similar
-    // Based on jobController, it returns successPaginated which is { data: [...], pagination: ... }
-    // Wait, getWallet returns success(enrichedJob), so response.data['data'] is correct.
-    // Wallet transactions endpoint likely uses successPaginated.
-    // walletController not viewed fully, but let's assume standard responseFormatter.
-    // successPaginated returns { data: [], pagination: {} } inside the 'data' field of JSON?
-    // No, responseFormatter structure is { status: 'success', data: ..., message: ... }
-    // For pagination: { status: 'success', data: [...], pagination: ... }
-
-    final data = response.data['data'];
+    final data =
+        response.data['data'] ??
+        response.data['transactions'] ??
+        const <dynamic>[];
     return (data as List).map((e) => WalletTransaction.fromJson(e)).toList();
+  }
+
+  /// Request Withdrawal
+  Future<WithdrawRequest> requestWithdrawal({
+    required double amount,
+    String? bankAccount,
+    String? notes,
+  }) async {
+    final response = await _dio.post(
+      '/wallet/withdraw',
+      data: {
+        'amount': amount,
+        if (bankAccount != null) 'bank_account': bankAccount,
+        if (notes != null) 'notes': notes,
+      },
+    );
+
+    final data = response.data['data'] ?? const <String, dynamic>{};
+    return WithdrawRequest.fromJson(Map<String, dynamic>.from(data as Map));
+  }
+
+  Future<List<WithdrawRequest>> getWithdrawRequests({
+    int page = 1,
+    int limit = 20,
+  }) async {
+    final response = await _dio.get(
+      '/wallet/withdrawals',
+      queryParameters: {'page': page, 'limit': limit},
+    );
+    final data = response.data['data'] ?? const <dynamic>[];
+    return (data as List)
+        .map((e) => WithdrawRequest.fromJson(Map<String, dynamic>.from(e)))
+        .toList();
   }
 }

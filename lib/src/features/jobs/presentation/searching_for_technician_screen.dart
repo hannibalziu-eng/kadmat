@@ -7,7 +7,12 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/app_theme.dart';
+import '../../../core/navigation/app_routes.dart';
+import '../../../core/navigation/job_flow_redirects.dart';
+import '../../../core/exceptions/app_exceptions.dart';
+import '../../../core/utils/error_handler.dart';
 import '../data/job_repository.dart';
+import '../domain/job_status.dart';
 import '../../../common_widgets/badge_widget.dart';
 
 class SearchingForTechnicianScreen extends ConsumerStatefulWidget {
@@ -36,14 +41,16 @@ class _SearchingForTechnicianScreenState
   late AnimationController _rippleController;
 
   int _searchRadius = 2000; // meters
-  int _currentTier = 1;
-  int _estimatedTime = 3; // minutes
+  final int _currentTier = 1;
+  final int _estimatedTime = 3; // minutes
+  bool _isCancelling = false;
+  bool _handledTerminalState = false;
   bool _technicianFound = false;
+  String? _acceptingOfferId;
   Map<String, dynamic>? _technician;
-  bool _showingNoTechMessage = false; // Show "no tech yet" without blocking
+  final bool _showingNoTechMessage =
+      false; // Show "no tech yet" without blocking
   StreamSubscription? _jobSubscription;
-  late DateTime _searchStartTime; // Track when search started
-
   // Default location (Riyadh) - will be replaced by actual location
   late double _lat;
   late double _lng;
@@ -54,7 +61,6 @@ class _SearchingForTechnicianScreenState
 
     _lat = widget.lat ?? 24.7136;
     _lng = widget.lng ?? 46.6753;
-    _searchStartTime = DateTime.now(); // Record search start time
 
     // Pulse animation
     _pulseController = AnimationController(
@@ -71,8 +77,9 @@ class _SearchingForTechnicianScreenState
     // Start listening to job changes
     _startListening();
 
-    // Backup: Poll every 3 seconds to ensure we don't miss updates
-    Timer.periodic(const Duration(seconds: 3), (timer) {
+    // Backup: Poll every 10 seconds to ensure we don't miss updates
+    // (Real-time subscription is primary, this is fallback)
+    _pollTimer = Timer.periodic(const Duration(seconds: 10), (timer) {
       if (!mounted || _technicianFound) {
         timer.cancel();
         return;
@@ -80,6 +87,15 @@ class _SearchingForTechnicianScreenState
       _checkJobStatus();
     });
   }
+
+  Timer? _pollTimer; // Store timer reference for cleanup
+
+  static final RegExp _uuidRegex = RegExp(
+    r'^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
+    caseSensitive: false,
+  );
+
+  bool _isValidUuid(String value) => _uuidRegex.hasMatch(value.trim());
 
   Future<void> _checkJobStatus() async {
     try {
@@ -97,10 +113,22 @@ class _SearchingForTechnicianScreenState
         '🔍 Polling Result: Status=${job.status}, TechID=${job.technicianId}, Navigating=$_navigating',
       );
 
-      if (job.status == 'accepted' &&
-          job.technicianId != null &&
-          !_navigating) {
-        debugPrint('✅ Polling: Job accepted! TechID: ${job.technicianId}');
+      final normalizedStatus = JobStatus.normalize(job.status);
+      if (normalizedStatus == JobStatus.cancelled && !_handledTerminalState) {
+        _handledTerminalState = true;
+        _stopSearchListeners();
+        if (mounted) {
+          context.go(AppRoutes.home);
+        }
+        return;
+      }
+
+      final route = customerRouteForJobStatus(
+        status: job.status,
+        jobId: widget.jobId,
+      );
+      if (route != null && !_navigating) {
+        debugPrint('✅ Polling: Redirecting customer to $route');
         _handleFoundTechnician(job);
       }
     } catch (e) {
@@ -118,92 +146,223 @@ class _SearchingForTechnicianScreenState
     });
 
     Future.delayed(const Duration(seconds: 5), () {
-      if (mounted) {
-        context.go('/active-job/${widget.jobId}');
-      }
+      if (!mounted) return;
+      final route = customerRouteForJobStatus(
+        status: (job.status ?? '').toString(),
+        jobId: widget.jobId,
+      );
+      context.go(route ?? AppRoutes.buildCustomerInProgressPath(widget.jobId));
     });
   }
 
   bool _navigating = false; // Guard to prevent double navigation
 
-  void _startListening() {
-    final jobRepo = ref.read(jobRepositoryProvider);
-    _jobSubscription = jobRepo
-        .watchJob(widget.jobId)
-        .listen(
-          (job) {
-            debugPrint(
-              '🕵️‍♀️ SearchingScreen: Job Update -> Status: ${job.status}, TechID: ${job.technicianId}',
-            );
-
-            // Update search radius from job data
-            if (job.searchRadius != null && job.searchRadius != _searchRadius) {
-              setState(() {
-                _searchRadius = job.searchRadius!;
-                _currentTier = _searchRadius <= 2000
-                    ? 1
-                    : (_searchRadius <= 5000 ? 2 : 3);
-                _estimatedTime = _currentTier == 1
-                    ? 3
-                    : (_currentTier == 2 ? 5 : 8);
-              });
-            }
-
-            if (job.status == 'accepted' &&
-                job.technicianId != null &&
-                !_navigating) {
-              debugPrint(
-                '✅ SearchingScreen: Job accepted! TechID: ${job.technicianId}',
-              );
-              _handleFoundTechnician(job);
-            } else if (job.status == 'no_technician_found' && !_navigating) {
-              // Don't navigate away! Keep listening for late acceptance.
-              // Only show the message after 30 seconds to avoid showing it too quickly
-              final elapsedSeconds = DateTime.now()
-                  .difference(_searchStartTime)
-                  .inSeconds;
-              debugPrint(
-                '⚠️ SearchingScreen: No technician found yet (elapsed: ${elapsedSeconds}s), still listening...',
-              );
-
-              if (mounted && !_showingNoTechMessage) {
-                if (elapsedSeconds >= 30) {
-                  setState(() => _showingNoTechMessage = true);
-                } else {
-                  // Schedule it
-                  final remaining = 30 - elapsedSeconds;
-                  Timer(Duration(seconds: remaining), () {
-                    if (mounted &&
-                        !_showingNoTechMessage &&
-                        !_navigating &&
-                        !_technicianFound) {
-                      setState(() => _showingNoTechMessage = true);
-                    }
-                  });
-                }
-              }
-            }
-          },
-          onError: (e) {
-            debugPrint('🔴 SearchingScreen: Job watch error: $e');
-          },
-        );
-  }
+  StreamSubscription? _offersSubscription;
+  List<Map<String, dynamic>> _offers = [];
 
   @override
   void dispose() {
     _pulseController.dispose();
     _rippleController.dispose();
     _jobSubscription?.cancel();
+    _offersSubscription?.cancel();
+    _pollTimer?.cancel(); // Cancel polling timer
     super.dispose();
+  }
+
+  void _stopSearchListeners() {
+    _jobSubscription?.cancel();
+    _jobSubscription = null;
+    _offersSubscription?.cancel();
+    _offersSubscription = null;
+    _pollTimer?.cancel();
+    _pollTimer = null;
+  }
+
+  void _startListening() {
+    final jobRepo = ref.read(jobRepositoryProvider);
+
+    // Watch Job Status
+    _jobSubscription = jobRepo.watchJob(widget.jobId).listen((job) {
+      debugPrint('🕵️‍♀️ Job Update -> Status: ${job.status}');
+      final normalizedStatus = JobStatus.normalize(job.status);
+
+      if (normalizedStatus == JobStatus.cancelled && !_handledTerminalState) {
+        _handledTerminalState = true;
+        _stopSearchListeners();
+        if (mounted) {
+          context.go(AppRoutes.home);
+        }
+        return;
+      }
+
+      if (job.searchRadius != null && job.searchRadius != _searchRadius) {
+        setState(() {
+          _searchRadius = job.searchRadius!;
+          // Update tiers...
+        });
+      }
+
+      final route = customerRouteForJobStatus(
+        status: job.status,
+        jobId: widget.jobId,
+      );
+      if (route != null && !_navigating) {
+        _handleFoundTechnician(job);
+      }
+    }, onError: (e) => debugPrint('🔴 Job watch error: $e'));
+
+    // Watch Offers
+    _offersSubscription = jobRepo.watchJobOffers(widget.jobId).listen((offers) {
+      debugPrint('💰 Offers Update: ${offers.length} offers received');
+      if (mounted) {
+        setState(() {
+          _offers = offers;
+        });
+      }
+    }, onError: (e) => debugPrint('🔴 Offers watch error: $e'));
+  }
+
+  Future<void> _acceptOffer(String offerId) async {
+    final normalizedOfferId = offerId.trim();
+    if (_acceptingOfferId != null) return;
+
+    if (!_isValidUuid(normalizedOfferId)) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('معرّف العرض غير صالح، حدّث الصفحة وحاول مجددًا'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    setState(() => _acceptingOfferId = normalizedOfferId);
+    try {
+      await ref
+          .read(jobRepositoryProvider)
+          .acceptOffer(widget.jobId, normalizedOfferId);
+      // Logic handled by job stream listener (status -> accepted)
+    } on InvalidStatusException catch (e) {
+      if (!mounted) return;
+      final current = JobStatus.normalize(e.currentStatus ?? '');
+      const acceptedOrRunning = <String>{
+        JobStatus.accepted,
+        JobStatus.pricePending,
+        JobStatus.inProgress,
+        JobStatus.pendingConfirm,
+        JobStatus.completed,
+        JobStatus.rated,
+      };
+
+      if (acceptedOrRunning.contains(current)) {
+        final route = customerRouteForJobStatus(
+          status: current,
+          jobId: widget.jobId,
+        );
+        context.go(
+          route ?? AppRoutes.buildCustomerInProgressPath(widget.jobId),
+        );
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message), backgroundColor: Colors.orange),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      try {
+        final latest = await ref
+            .read(jobRepositoryProvider)
+            .getJobById(widget.jobId);
+        if (!mounted) return;
+        if (latest != null &&
+            latest.technicianId != null &&
+            latest.technicianId!.isNotEmpty) {
+          final route = customerRouteForJobStatus(
+            status: latest.status,
+            jobId: widget.jobId,
+          );
+          context.go(
+            route ?? AppRoutes.buildCustomerInProgressPath(widget.jobId),
+          );
+          return;
+        }
+      } catch (_) {}
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('فشل قبول العرض: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _acceptingOfferId = null);
+      }
+    }
+  }
+
+  Future<void> _cancelJobAndExit() async {
+    if (_isCancelling) return;
+
+    setState(() => _isCancelling = true);
+    _navigating = true;
+
+    try {
+      await ref.read(jobRepositoryProvider).cancelJob(widget.jobId);
+      _stopSearchListeners();
+
+      if (!mounted) return;
+      context.go(AppRoutes.home);
+    } on InvalidStatusException catch (e) {
+      final normalized = JobStatus.normalize(e.currentStatus ?? '');
+      final isAlreadyTerminal =
+          normalized == JobStatus.cancelled ||
+          normalized == JobStatus.completed ||
+          normalized == JobStatus.rated;
+
+      if (isAlreadyTerminal) {
+        _stopSearchListeners();
+        if (mounted) context.go(AppRoutes.home);
+        return;
+      }
+
+      if (mounted) {
+        ErrorHandler.handle(context, e);
+      }
+      _navigating = false;
+    } on JobNotFoundException {
+      _stopSearchListeners();
+      if (mounted) context.go(AppRoutes.home);
+    } catch (e) {
+      if (mounted) {
+        ErrorHandler.handle(context, e);
+      }
+      _navigating = false;
+    } finally {
+      if (mounted) {
+        setState(() => _isCancelling = false);
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppTheme.backgroundDark,
-      body: SafeArea(
-        child: _technicianFound ? _buildFoundScreen() : _buildSearchingScreen(),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (didPop) return;
+        _showCancelDialog();
+      },
+      child: Scaffold(
+        backgroundColor: AppTheme.backgroundDark,
+        body: SafeArea(
+          child: _technicianFound
+              ? _buildFoundScreen()
+              : _buildSearchingScreen(),
+        ),
       ),
     );
   }
@@ -259,6 +418,7 @@ class _SearchingForTechnicianScreenState
                         urlTemplate:
                             'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
                         subdomains: const ['a', 'b', 'c', 'd'],
+                        retinaMode: true,
                         userAgentPackageName: 'com.kadmat.app',
                       ),
                       // Animated search radius circle
@@ -335,8 +495,8 @@ class _SearchingForTechnicianScreenState
                       ),
                     ],
                   ),
-                ),
-              ).animate().fadeIn(delay: 500.ms),
+                ).animate().fadeIn(delay: 500.ms),
+              ),
             ],
           ),
         ),
@@ -435,6 +595,7 @@ class _SearchingForTechnicianScreenState
             ],
           ),
         ).animate().fadeIn().slideY(begin: 0.3),
+        _buildOffersList(),
       ],
     );
   }
@@ -712,7 +873,8 @@ class _SearchingForTechnicianScreenState
 
           // Skip button
           TextButton(
-            onPressed: () => context.go('/active-job/${widget.jobId}'),
+            onPressed: () =>
+                context.go(AppRoutes.buildCustomerSearchingPath(widget.jobId)),
             child: Text(
               'الانتقال الآن ←',
               style: TextStyle(fontSize: 16.fz, color: AppTheme.primaryColor),
@@ -737,7 +899,7 @@ class _SearchingForTechnicianScreenState
   void _showCancelDialog() {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         backgroundColor: AppTheme.surfaceDark,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20.r),
@@ -761,25 +923,188 @@ class _SearchingForTechnicianScreenState
             children: [
               Expanded(
                 child: TextButton(
-                  onPressed: () => Navigator.pop(context),
+                  onPressed: () => Navigator.pop(dialogContext),
                   child: const Text('لا، استمر'),
                 ),
               ),
               Expanded(
                 child: ElevatedButton(
-                  onPressed: () async {
-                    Navigator.pop(context);
-                    // Cancel the job
-                    await ref
-                        .read(jobRepositoryProvider)
-                        .cancelJob(widget.jobId);
-                    if (mounted) context.go('/');
-                  },
+                  onPressed: _isCancelling
+                      ? null
+                      : () async {
+                          Navigator.pop(dialogContext);
+                          await _cancelJobAndExit();
+                        },
                   style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                  child: const Text('نعم، إلغاء'),
+                  child: Text(_isCancelling ? 'جاري الإلغاء...' : 'نعم، إلغاء'),
                 ),
               ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOffersList() {
+    if (_offers.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      height: 280.h,
+      width: double.infinity, // Ensure full width
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceDark,
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(30.r),
+          topRight: Radius.circular(30.r),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black54,
+            blurRadius: 20,
+            offset: Offset(0, -5),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: EdgeInsets.all(16.w),
+            child: Row(
+              children: [
+                Text(
+                  'عروض الفنيين (${_offers.length})',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 18.fz,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const Spacer(),
+                if (_offers.length > 1)
+                  Text(
+                    'اسحب للمزيد ←',
+                    style: TextStyle(color: Colors.white54, fontSize: 12.fz),
+                  ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: PageView.builder(
+              controller: PageController(viewportFraction: 0.9),
+              itemCount: _offers.length,
+              itemBuilder: (context, index) {
+                return _buildOfferCard(_offers[index]);
+              },
+            ),
+          ),
+          SizedBox(height: 16.h),
+        ],
+      ),
+    ).animate().slideY(begin: 1.0, duration: 400.ms, curve: Curves.easeOutBack);
+  }
+
+  Widget _buildOfferCard(Map<String, dynamic> offer) {
+    final tech = offer['technician'] ?? {};
+    final price = offer['price'];
+    final offerId = (offer['id'] ?? '').toString().trim();
+    final isOfferValid = _isValidUuid(offerId);
+    final isAcceptingThisOffer = _acceptingOfferId == offerId;
+
+    return Container(
+      margin: EdgeInsets.symmetric(horizontal: 6.w),
+      padding: EdgeInsets.all(16.w),
+      decoration: BoxDecoration(
+        color: AppTheme.backgroundDark,
+        borderRadius: BorderRadius.circular(20.r),
+        border: Border.all(color: AppTheme.primaryColor.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              CircleAvatar(
+                radius: 30.r,
+                backgroundColor: Colors.grey[800],
+                backgroundImage: tech['profile_image_url'] != null
+                    ? NetworkImage(tech['profile_image_url'])
+                    : null,
+                child: tech['profile_image_url'] == null
+                    ? const Icon(Icons.person, color: Colors.white)
+                    : null,
+              ),
+              SizedBox(width: 12.w),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      tech['full_name'] ?? 'فني',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16.fz,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Row(
+                      children: [
+                        Icon(Icons.star, color: Colors.amber, size: 14.s),
+                        Text(
+                          ' ${tech['rating'] ?? 5.0}',
+                          style: TextStyle(color: Colors.white70),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 8.h),
+                decoration: BoxDecoration(
+                  color: AppTheme.primaryColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12.r),
+                  border: Border.all(color: AppTheme.primaryColor),
+                ),
+                child: Text(
+                  '$price ﷼',
+                  style: TextStyle(
+                    color: AppTheme.primaryColor,
+                    fontSize: 20.fz,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const Spacer(),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: (!isOfferValid || _acceptingOfferId != null)
+                  ? null
+                  : () => _acceptOffer(offerId),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primaryColor,
+                padding: EdgeInsets.symmetric(vertical: 12.h),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12.r),
+                ),
+              ),
+              child: isAcceptingThisOffer
+                  ? SizedBox(
+                      width: 18.s,
+                      height: 18.s,
+                      child: const CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Text(
+                      isOfferValid ? 'قبول العرض' : 'عرض غير صالح',
+                      style: TextStyle(
+                        fontSize: 16.fz,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+            ),
           ),
         ],
       ),

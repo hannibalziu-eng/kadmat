@@ -9,6 +9,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 import 'package:path/path.dart' as path;
+import '../../../core/navigation/app_routes.dart';
 import '../../jobs/data/job_repository.dart';
 
 class ServiceDetailsScreen extends ConsumerStatefulWidget {
@@ -190,7 +191,9 @@ class _ServiceDetailsScreenState extends ConsumerState<ServiceDetailsScreen> {
           try {
             debugPrint('📍 Getting location...');
             final position = await Geolocator.getCurrentPosition(
-              desiredAccuracy: LocationAccuracy.high,
+              locationSettings: const LocationSettings(
+                accuracy: LocationAccuracy.high,
+              ),
             );
             debugPrint(
               '📍 Location found: ${position.latitude}, ${position.longitude}',
@@ -226,16 +229,8 @@ class _ServiceDetailsScreenState extends ConsumerState<ServiceDetailsScreen> {
       }
 
       if (job != null && mounted) {
-        // Navigate to searching screen
-        context.push(
-          '/searching-for-technician',
-          extra: {
-            'jobId': job.id,
-            'serviceName': widget.serviceName,
-            'lat': lat,
-            'lng': lng,
-          },
-        );
+        // Navigate using canonical customer searching route.
+        context.push(AppRoutes.buildCustomerSearchingPath(job.id));
       } else if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -537,7 +532,7 @@ class _ServiceDetailsScreenState extends ConsumerState<ServiceDetailsScreen> {
           color: Theme.of(context).cardTheme.color,
           border: Border(
             top: BorderSide(
-              color: Theme.of(context).dividerColor.withOpacity(0.1),
+              color: Theme.of(context).dividerColor.withValues(alpha: 0.1),
             ),
           ),
         ),
@@ -636,7 +631,7 @@ class _ServiceDetailsScreenState extends ConsumerState<ServiceDetailsScreen> {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12.r),
           border: Border.all(
-            color: Theme.of(context).dividerColor.withOpacity(0.1),
+            color: Theme.of(context).dividerColor.withValues(alpha: 0.1),
             width: 2.w,
             style: BorderStyle.solid,
           ),

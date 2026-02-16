@@ -5,14 +5,33 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../core/app_theme.dart';
 import '../domain/technician_profile.dart';
+import 'technician_profile_controller.dart';
 
-class TechnicianProfileScreen extends ConsumerWidget {
+class TechnicianPublicProfileScreen extends ConsumerWidget {
   final String technicianId;
 
-  const TechnicianProfileScreen({super.key, required this.technicianId});
+  const TechnicianPublicProfileScreen({super.key, required this.technicianId});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    if (technicianId.trim().isEmpty) {
+      return Scaffold(
+        backgroundColor: AppTheme.backgroundDark,
+        appBar: AppBar(
+          title: const Text('بروفايل الفني'),
+          centerTitle: true,
+          backgroundColor: Colors.transparent,
+        ),
+        body: Center(
+          child: Text(
+            'تعذر فتح الملف الشخصي: معرف الفني غير صالح',
+            style: TextStyle(color: Colors.white70, fontSize: 14.fz),
+            textAlign: TextAlign.center,
+          ),
+        ),
+      );
+    }
+
     final profileAsync = ref.watch(technicianProfileProvider(technicianId));
 
     return Scaffold(
@@ -51,13 +70,56 @@ class TechnicianProfileScreen extends ConsumerWidget {
         ),
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (err, stack) => Center(
-          child: Text(
-            'حدث خطأ: $err',
-            style: const TextStyle(color: Colors.red),
+          child: Padding(
+            padding: EdgeInsets.all(20.w),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.warning_amber_rounded,
+                  color: Colors.orange,
+                  size: 40.s,
+                ),
+                SizedBox(height: 10.h),
+                Text(
+                  _friendlyProfileError(err),
+                  style: TextStyle(color: Colors.white70, fontSize: 14.fz),
+                  textAlign: TextAlign.center,
+                ),
+                SizedBox(height: 12.h),
+                ElevatedButton.icon(
+                  onPressed: () =>
+                      ref.invalidate(technicianProfileProvider(technicianId)),
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('إعادة المحاولة'),
+                ),
+              ],
+            ),
           ),
         ),
       ),
     );
+  }
+
+  String _friendlyProfileError(Object error) {
+    final normalized = error.toString().toLowerCase();
+    if (normalized.contains('socketexception') ||
+        normalized.contains('failed host lookup') ||
+        normalized.contains('timeout')) {
+      return 'تعذر تحميل ملف الفني الآن. تحقق من اتصال الإنترنت ثم حاول مجددًا.';
+    }
+    if (normalized.contains('jwt') || normalized.contains('unauthorized')) {
+      return 'انتهت الجلسة الحالية. أعد تسجيل الدخول للمتابعة.';
+    }
+    return 'حدث خطأ أثناء تحميل ملف الفني. حاول مرة أخرى.';
+  }
+
+  ImageProvider? _networkImageOrNull(String? rawUrl) {
+    final url = rawUrl?.trim();
+    if (url == null || url.isEmpty) return null;
+    final uri = Uri.tryParse(url);
+    if (uri == null || !uri.hasScheme || !uri.hasAuthority) return null;
+    return NetworkImage(url);
   }
 
   // بيانات الفني الأساسية
@@ -74,10 +136,8 @@ class TechnicianProfileScreen extends ConsumerWidget {
           CircleAvatar(
             radius: 60.r,
             backgroundColor: AppTheme.primaryColor,
-            backgroundImage: profile.profileImageUrl != null
-                ? NetworkImage(profile.profileImageUrl!)
-                : null,
-            child: profile.profileImageUrl == null
+            backgroundImage: _networkImageOrNull(profile.profileImageUrl),
+            child: _networkImageOrNull(profile.profileImageUrl) == null
                 ? Icon(Icons.person, color: Colors.white, size: 60.s)
                 : null,
           ),
@@ -97,7 +157,7 @@ class TechnicianProfileScreen extends ConsumerWidget {
           // التخصص - Hardcoded temporarily as backend might not return it in this endpoint yet
           // Or we can update backend to return service name if linked
           Text(
-            'فني خدمات عامة', // Placeholder until service linkage is explicit on User model
+            profile.specialization ?? 'فني خدمات عامة',
             style: TextStyle(fontSize: 14.fz, color: Colors.white70),
             textAlign: TextAlign.center,
           ),
@@ -276,19 +336,36 @@ class TechnicianProfileScreen extends ConsumerWidget {
         children: [
           // صورة المشروع
           Expanded(
-            child: Container(
-              decoration: BoxDecoration(
-                color: AppTheme.primaryColor.withValues(alpha: 0.2),
-                borderRadius: BorderRadius.only(
-                  topLeft: Radius.circular(12.r),
-                  topRight: Radius.circular(12.r),
-                ),
-                image: DecorationImage(
-                  image: NetworkImage(item.imageUrl),
-                  fit: BoxFit.cover,
-                ),
-              ),
-            ),
+            child: _networkImageOrNull(item.imageUrl) == null
+                ? Container(
+                    decoration: BoxDecoration(
+                      color: AppTheme.primaryColor.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.only(
+                        topLeft: Radius.circular(12.r),
+                        topRight: Radius.circular(12.r),
+                      ),
+                    ),
+                    child: Center(
+                      child: Icon(
+                        Icons.image_not_supported_outlined,
+                        color: Colors.white70,
+                        size: 28.s,
+                      ),
+                    ),
+                  )
+                : Container(
+                    decoration: BoxDecoration(
+                      color: AppTheme.primaryColor.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.only(
+                        topLeft: Radius.circular(12.r),
+                        topRight: Radius.circular(12.r),
+                      ),
+                      image: DecorationImage(
+                        image: _networkImageOrNull(item.imageUrl)!,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                  ),
           ),
           // معلومات المشروع
           Padding(
@@ -371,10 +448,8 @@ class TechnicianProfileScreen extends ConsumerWidget {
               CircleAvatar(
                 radius: 20.r,
                 backgroundColor: AppTheme.primaryColor,
-                backgroundImage: review.reviewerImage != null
-                    ? NetworkImage(review.reviewerImage!)
-                    : null,
-                child: review.reviewerImage == null
+                backgroundImage: _networkImageOrNull(review.reviewerImage),
+                child: _networkImageOrNull(review.reviewerImage) == null
                     ? Text(
                         review.reviewerName.isNotEmpty
                             ? review.reviewerName[0].toUpperCase()

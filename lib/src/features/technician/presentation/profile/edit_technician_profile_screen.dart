@@ -21,6 +21,7 @@ class _EditTechnicianProfileScreenState
   late TextEditingController _titleController;
   late TextEditingController _bioController;
   late TextEditingController _locationController;
+  String? _avatarUrl;
   bool _isLoading = false;
 
   @override
@@ -45,6 +46,9 @@ class _EditTechnicianProfileScreenState
           _titleController.text = userProfile['title'] ?? '';
           _bioController.text = userProfile['bio'] ?? '';
           _locationController.text = userProfile['location'] ?? '';
+          _avatarUrl =
+              userProfile['avatar_url'] as String? ??
+              userProfile['profile_image_url'] as String?;
         });
       }
     }
@@ -81,9 +85,14 @@ class _EditTechnicianProfileScreenState
                 children: [
                   CircleAvatar(
                     radius: 50.r,
-                    backgroundImage: const NetworkImage(
-                      'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400',
-                    ),
+                    backgroundColor: Colors.grey.shade300,
+                    backgroundImage:
+                        _avatarUrl != null && _avatarUrl!.isNotEmpty
+                        ? NetworkImage(_avatarUrl!)
+                        : null,
+                    child: _avatarUrl == null || _avatarUrl!.isEmpty
+                        ? Icon(Icons.person, color: Colors.white, size: 40.s)
+                        : null,
                   ),
                   Positioned(
                     bottom: 0,
@@ -166,20 +175,18 @@ class _EditTechnicianProfileScreenState
                                     'bio': _bioController.text,
                                   });
 
-                              if (mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('تم حفظ التغييرات بنجاح'),
-                                  ),
-                                );
-                                context.pop();
-                              }
+                              if (!context.mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('تم حفظ التغييرات بنجاح'),
+                                ),
+                              );
+                              context.pop();
                             } catch (e) {
-                              if (mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('خطأ: $e')),
-                                );
-                              }
+                              if (!context.mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('خطأ: $e')),
+                              );
                             } finally {
                               if (mounted) setState(() => _isLoading = false);
                             }

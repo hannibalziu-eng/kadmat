@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:hive/hive.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../api/api_client.dart';
@@ -12,9 +13,11 @@ import 'pending_request.dart';
 part 'work_queue_service.g.dart';
 
 @Riverpod(keepAlive: true)
-WorkQueueService workQueueService(WorkQueueServiceRef ref) {
+WorkQueueService workQueueService(Ref ref) {
   final apiClient = ref.watch(apiClientProvider);
-  return WorkQueueService(apiClient);
+  final service = WorkQueueService(apiClient);
+  ref.onDispose(service.dispose);
+  return service;
 }
 
 class WorkQueueService {
@@ -22,9 +25,11 @@ class WorkQueueService {
   late Box<PendingRequest> _queueBox;
   final _uuid = const Uuid();
   bool _isSyncing = false;
+  late final Future<void> _ready;
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
 
   WorkQueueService(this._apiClient) {
-    _init();
+    _ready = _init();
   }
 
   Future<void> _init() async {
@@ -38,7 +43,9 @@ class WorkQueueService {
 
     // Listen to meaningful connectivity changes
     // Only trigger on connectivity GAINED, not every change
-    Connectivity().onConnectivityChanged.listen((results) {
+    _connectivitySubscription = Connectivity().onConnectivityChanged.listen((
+      results,
+    ) {
       if (results.any((result) => result != ConnectivityResult.none)) {
         syncPendingRequests();
       }
@@ -54,6 +61,8 @@ class WorkQueueService {
     required String method,
     required Map<String, dynamic> payload,
   }) async {
+    await _ready;
+
     final request = PendingRequest(
       id: _uuid.v4(),
       endpoint: endpoint,
@@ -73,6 +82,8 @@ class WorkQueueService {
 
   /// Process the queue
   Future<void> syncPendingRequests() async {
+    await _ready;
+
     if (_isSyncing) return;
     if (_queueBox.isEmpty) return;
 
@@ -135,4 +146,8 @@ class WorkQueueService {
 
   // Expose queue length for UI indicators
   int get queueLength => _queueBox.length;
+
+  void dispose() {
+    _connectivitySubscription?.cancel();
+  }
 }

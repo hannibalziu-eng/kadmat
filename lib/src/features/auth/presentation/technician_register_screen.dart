@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
+import '../../../core/navigation/app_routes.dart';
 import '../../../core/providers/photo_upload_provider.dart';
 import 'widgets/social_auth_button.dart';
 import 'auth_controller.dart';
@@ -135,7 +136,7 @@ class _TechnicianRegisterScreenState
           );
 
       if (success && mounted) {
-        context.go('/technician/home');
+        context.go(AppRoutes.technicianHome);
       }
     } catch (e) {
       if (mounted) {

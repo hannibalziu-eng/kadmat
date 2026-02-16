@@ -61,3 +61,59 @@ class WalletTransaction with _$WalletTransaction {
   @JsonKey(name: 'created_at')
   DateTime get createdAt => throw UnimplementedError();
 }
+
+class WithdrawRequest {
+  WithdrawRequest({
+    required this.id,
+    required this.userId,
+    required this.walletId,
+    required this.amount,
+    required this.currency,
+    required this.status,
+    this.bankAccount,
+    this.notes,
+    this.rejectionReason,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String userId;
+  final String walletId;
+  final double amount;
+  final String currency;
+  final String status;
+  final String? bankAccount;
+  final String? notes;
+  final String? rejectionReason;
+  final DateTime createdAt;
+
+  factory WithdrawRequest.fromJson(Map<String, dynamic> json) {
+    return WithdrawRequest(
+      id: json['id']?.toString() ?? '',
+      userId: json['user_id']?.toString() ?? '',
+      walletId: json['wallet_id']?.toString() ?? '',
+      amount: (json['amount'] as num?)?.toDouble() ?? 0,
+      currency: json['currency']?.toString() ?? 'SAR',
+      status: json['status']?.toString() ?? 'pending',
+      bankAccount: json['bank_account']?.toString(),
+      notes: json['notes']?.toString(),
+      rejectionReason: json['rejection_reason']?.toString(),
+      createdAt:
+          DateTime.tryParse(json['created_at']?.toString() ?? '') ??
+          DateTime.now(),
+    );
+  }
+
+  String get localizedStatus {
+    switch (status) {
+      case 'approved':
+        return 'مقبول';
+      case 'rejected':
+        return 'مرفوض';
+      case 'paid':
+        return 'مدفوع';
+      default:
+        return 'قيد المراجعة';
+    }
+  }
+}

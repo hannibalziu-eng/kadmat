@@ -27,6 +27,8 @@ class ErrorMessages {
   static const String cannotAcceptWhileLocked =
       'لا يمكنك قبول طلبات جديدة حالياً';
   static const String lockCheckFailed = 'فشل التحقق من حالة القفل';
+  static const String activeJobLocked =
+      'لديك طلب نشط حالياً. أكمل الطلب الحالي أولاً';
 
   // Payment Errors
   static const String priceRequired = 'يجب إدخال السعر';
@@ -54,6 +56,9 @@ class ErrorMessages {
   static const String serverError = 'خطأ في الخادم. يرجى المحاولة لاحقاً';
   static const String requestFailed = 'فشل الطلب';
   static const String unauthorized = 'غير مصرح. يرجى تسجيل الدخول مرة أخرى';
+  static const String rateLimited = 'طلبات كثيرة. يرجى المحاولة بعد قليل';
+  static const String forbidden = 'ليست لديك صلاحية لتنفيذ هذا الإجراء';
+  static const String invalidInput = 'البيانات المدخلة غير صحيحة';
 
   // General Errors
   static const String unknownError = 'حدث خطأ غير متوقع';
@@ -67,6 +72,54 @@ class ErrorMessages {
   static const String jobCompleteSuccess = 'تم إتمام الطلب بنجاح';
   static const String paymentConfirmSuccess = 'تم تأكيد الدفع بنجاح';
   static const String paymentApprovalSuccess = 'تم الموافقة على الدفع بنجاح';
+
+  /// Resolve message from backend API error code.
+  /// Falls back to backend message if provided.
+  static String fromApiCode(String? code, {String? fallback}) {
+    switch (code) {
+      case 'JOB_ALREADY_ACCEPTED':
+        return 'تم قبول الطلب من فني آخر';
+      case 'INVALID_STATUS_TRANSITION':
+        return 'حالة الطلب تغيرت. تم تحديث الشاشة';
+      case 'JOB_NOT_FOUND':
+      case 'NOT_FOUND':
+        return jobNotFound;
+      case 'UNAUTHORIZED':
+        return unauthorized;
+      case 'FORBIDDEN':
+      case 'INSUFFICIENT_PERMISSIONS':
+        return forbidden;
+      case 'ACTIVE_JOB_LOCKED':
+        return activeJobLocked;
+      case 'CONFLICT':
+        return (fallback != null && fallback.isNotEmpty) ? fallback : activeJobLocked;
+      case 'VALIDATION_FAILED':
+      case 'INVALID_INPUT':
+        return (fallback != null && fallback.isNotEmpty)
+            ? fallback
+            : invalidInput;
+      case 'RATE_LIMITED':
+        return rateLimited;
+      case 'DATABASE_ERROR':
+      case 'SERVER_ERROR':
+        if (fallback != null && fallback.isNotEmpty) {
+          final lower = fallback.toLowerCase();
+          if (lower.contains('accepted_bid_id')) {
+            return 'قاعدة البيانات تحتاج تحديثًا (accepted_bid_id)';
+          }
+          if (lower.contains('failed to assign job')) {
+            return 'تعذر تثبيت الطلب على الفني. حاول مرة أخرى';
+          }
+        }
+        return serverError;
+      case 'SERVICE_UNAVAILABLE':
+        return 'الخدمة غير متاحة مؤقتاً';
+      default:
+        return (fallback != null && fallback.isNotEmpty)
+            ? fallback
+            : unknownError;
+    }
+  }
 
   /// Get user-friendly error message from exception
   static String fromException(dynamic error) {

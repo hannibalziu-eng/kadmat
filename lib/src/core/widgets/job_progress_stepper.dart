@@ -129,8 +129,12 @@ class JobProgressStepper extends StatelessWidget {
       case 'price_pending':
       case 'counter_offer':
         return 2;
+      case 'on_the_way':
+      case 'arrived':
       case 'in_progress':
         return 3;
+      case 'pending_confirm':
+      case 'pending_confirmation':
       case 'completed':
         return 4;
       case 'rated':
@@ -148,8 +152,12 @@ class JobProgressStepper extends StatelessWidget {
         return 2;
       case 'counter_offer':
         return 2;
+      case 'on_the_way':
+      case 'arrived':
       case 'in_progress':
         return 3;
+      case 'pending_confirm':
+      case 'pending_confirmation':
       case 'completed':
       case 'rated':
         return 5;

@@ -40,7 +40,8 @@ class JobStatusBadge extends StatelessWidget {
   }
 
   _StatusConfig _getStatusConfig(String status) {
-    switch (status) {
+    final normalizedStatus = JobStatus.normalize(status);
+    switch (normalizedStatus) {
       case JobStatus.pending:
       case JobStatus.searching:
         return _StatusConfig(
@@ -48,31 +49,40 @@ class JobStatusBadge extends StatelessWidget {
           Colors.orange,
           'قيد الانتظار',
         );
-      case JobStatus.acceptedByTech:
       case JobStatus.accepted:
         return _StatusConfig(Icons.check_circle, Colors.blue, 'تم قبول الطلب');
-      case JobStatus.priceSent:
       case JobStatus.pricePending:
         return _StatusConfig(Icons.attach_money, Colors.purple, 'عرض السعر');
-      case JobStatus.customerAgreed:
-        return _StatusConfig(Icons.handshake, Colors.indigo, 'تمت الموافقة');
+      case JobStatus.onTheWay:
+        return _StatusConfig(
+          Icons.directions_car_filled,
+          Colors.blueAccent,
+          'الفني في الطريق',
+        );
+      case JobStatus.arrived:
+        return _StatusConfig(Icons.place, Colors.teal, 'الفني وصل');
       case JobStatus.inProgress:
         return _StatusConfig(Icons.engineering, Colors.blue, 'جاري التنفيذ');
+      case JobStatus.pendingConfirm:
+        return _StatusConfig(
+          Icons.task_alt,
+          Colors.indigo,
+          'بانتظار تأكيد العميل',
+        );
       case JobStatus.completed:
         return _StatusConfig(Icons.check_circle_outline, Colors.teal, 'منجز');
-      case JobStatus.paymentPending:
-        return _StatusConfig(Icons.payment, Colors.orange, 'بانتظار الدفع');
       case JobStatus.paid:
         return _StatusConfig(Icons.verified, Colors.green, 'مدفوع');
-      case JobStatus.reviewed:
       case JobStatus.rated:
         return _StatusConfig(Icons.star, Colors.amber, 'تم التقييم');
       case JobStatus.cancelled:
         return _StatusConfig(Icons.cancel, Colors.red, 'ملغي');
+      case JobStatus.noTechnicianFound:
+        return _StatusConfig(Icons.search_off, Colors.grey, 'لا يوجد فني متاح');
       case 'rejected':
         return _StatusConfig(Icons.block, Colors.red, 'مرفوض');
       default:
-        return _StatusConfig(Icons.help, Colors.grey, status);
+        return _StatusConfig(Icons.help, Colors.grey, normalizedStatus);
     }
   }
 }
@@ -321,18 +331,18 @@ class JobTimeline extends StatelessWidget {
 
   static const _steps = [
     (JobStatus.pending, 'الطلب', Icons.add_circle),
-    (JobStatus.acceptedByTech, 'القبول', Icons.person_add),
-    (JobStatus.priceSent, 'السعر', Icons.attach_money),
-    (JobStatus.customerAgreed, 'الموافقة', Icons.handshake),
+    (JobStatus.accepted, 'القبول', Icons.person_add),
+    (JobStatus.pricePending, 'السعر', Icons.attach_money),
     (JobStatus.inProgress, 'التنفيذ', Icons.engineering),
+    (JobStatus.pendingConfirm, 'التأكيد', Icons.task_alt),
     (JobStatus.completed, 'الإنجاز', Icons.check_circle_outline),
-    (JobStatus.paymentPending, 'الدفع', Icons.payment),
-    (JobStatus.reviewed, 'التقييم', Icons.star),
+    (JobStatus.rated, 'التقييم', Icons.star),
   ];
 
   @override
   Widget build(BuildContext context) {
-    final currentIndex = _steps.indexWhere((s) => s.$1 == currentStatus);
+    final normalizedStatus = JobStatus.normalize(currentStatus);
+    final currentIndex = _steps.indexWhere((s) => s.$1 == normalizedStatus);
 
     return Container(
       padding: EdgeInsets.symmetric(vertical: 16.h),

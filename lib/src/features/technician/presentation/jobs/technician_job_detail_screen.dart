@@ -3,15 +3,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_scalify/flutter_scalify.dart';
 import 'package:go_router/go_router.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../../../core/app_theme.dart';
+import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/widgets/kadmat_toast.dart';
 import '../../../../core/widgets/shimmer_skeletons.dart';
-import '../../../../core/exceptions/app_exceptions.dart';
+import '../../../../core/services/location/location_service.dart';
 import '../../../jobs/data/job_repository.dart';
 import '../../../jobs/domain/job.dart';
-import '../../../jobs/presentation/job_controller.dart';
 
 class TechnicianJobDetailScreen extends ConsumerStatefulWidget {
   final String jobId;
@@ -37,7 +38,18 @@ class _TechnicianJobDetailScreenState
   void initState() {
     super.initState();
     _startListening();
+    _fetchJob();
     _fetchPhotos();
+  }
+
+  Future<void> _fetchJob() async {
+    try {
+      final job = await ref.read(jobRepositoryProvider).getJobById(widget.jobId);
+      if (!mounted || job == null) return;
+      setState(() => _job = job);
+    } catch (_) {
+      // Realtime stream keeps state eventually; ignore one-shot fetch failures.
+    }
   }
 
   Future<void> _fetchPhotos() async {
@@ -82,6 +94,8 @@ class _TechnicianJobDetailScreenState
         body: const DetailSkeleton(),
       );
     }
+
+    final currentLocation = ref.watch(locationStreamProvider).valueOrNull;
 
     return Scaffold(
       backgroundColor: AppTheme.backgroundDark,
@@ -187,7 +201,7 @@ class _TechnicianJobDetailScreenState
                       ),
                       SizedBox(width: 8.w),
                       Text(
-                        'المسافة المقدرة: 5.2 كم (10 دقائق)', // Mocked for now, or calc
+                        _distanceAndEtaText(currentLocation),
                         style: TextStyle(
                           fontSize: 14.fz,
                           color: Colors.grey[700],
@@ -243,7 +257,7 @@ class _TechnicianJobDetailScreenState
                 ),
               ),
             // Initial Price
-            if (_job!.initialPrice != null)
+            if (_job!.initialPrice != null && _job!.initialPrice! > 0)
               _buildInfoCard(
                 title: 'السعر الابتدائي',
                 icon: Icons.monetization_on,
@@ -289,6 +303,25 @@ class _TechnicianJobDetailScreenState
     );
   }
 
+  String _distanceAndEtaText(Position? currentLocation) {
+    if (currentLocation == null || _job == null) {
+      return 'المسافة غير متاحة حالياً';
+    }
+
+    final meters = Geolocator.distanceBetween(
+      currentLocation.latitude,
+      currentLocation.longitude,
+      _job!.lat,
+      _job!.lng,
+    );
+
+    final km = meters / 1000;
+    // Conservative ETA estimate based on city speed (35 km/h)
+    final etaMinutes = ((km / 35) * 60).ceil().clamp(1, 240);
+
+    return 'المسافة التقريبية: ${km.toStringAsFixed(1)} كم (حوالي $etaMinutes دقيقة)';
+  }
+
   Widget _buildStatusBadge() {
     final status = _job!.status;
     Color color;
@@ -301,6 +334,12 @@ class _TechnicianJobDetailScreenState
         text = 'في انتظار القبول';
         icon = Icons.hourglass_empty;
         break;
+      case 'searching':
+      case 'no_technician_found':
+        color = Colors.orange;
+        text = 'متاح لتقديم عرض';
+        icon = Icons.local_offer_outlined;
+        break;
       case 'accepted':
         color = Colors.blue;
         text = 'مقبول - أدخل السعر';
@@ -310,6 +349,16 @@ class _TechnicianJobDetailScreenState
         color = Colors.purple;
         text = 'انتظار موافقة العميل';
         icon = Icons.pending;
+        break;
+      case 'on_the_way':
+        color = Colors.blueAccent;
+        text = 'في الطريق إلى العميل';
+        icon = Icons.directions_car;
+        break;
+      case 'arrived':
+        color = Colors.teal;
+        text = 'وصلت إلى الموقع';
+        icon = Icons.place;
         break;
       case 'in_progress':
         color = Colors.green;
@@ -323,7 +372,7 @@ class _TechnicianJobDetailScreenState
         break;
       default:
         color = Colors.grey;
-        text = status ?? 'غير معروف';
+        text = status;
         icon = Icons.info;
     }
 
@@ -490,7 +539,7 @@ class _TechnicianJobDetailScreenState
                   child: ElevatedButton.icon(
                     onPressed: () {
                       context.push(
-                        '/jobs/${widget.jobId}/chat',
+                        AppRoutes.buildJobChatPath(widget.jobId),
                         extra: {
                           'otherUserName': customerName,
                           'otherUserImage': customerPhoto,
@@ -669,7 +718,10 @@ class _TechnicianJobDetailScreenState
 
   // Price Summary Card showing all price information
   Widget _buildPriceSummaryCard() {
-    final initialPrice = _job!.initialPrice;
+    final initialPriceRaw = _job!.initialPrice;
+    final initialPrice = (initialPriceRaw != null && initialPriceRaw > 0)
+        ? initialPriceRaw
+        : null;
     final technicianPrice = _job!.technicianPrice;
     final status = _job!.status;
 
@@ -716,8 +768,11 @@ class _TechnicianJobDetailScreenState
           ],
 
           // Final Price (if approved)
-          if (status == 'in_progress' ||
+          if (status == 'on_the_way' ||
+              status == 'arrived' ||
+              status == 'in_progress' ||
               status == 'completed' ||
+              status == 'pending_confirm' ||
               status == 'pending_confirmation') ...[
             SizedBox(height: 12.h),
             Container(
@@ -808,11 +863,17 @@ class _TechnicianJobDetailScreenState
 
     switch (status) {
       case 'pending':
-        return _buildAcceptButton();
+      case 'searching':
+      case 'no_technician_found':
+        return _buildSubmitOfferButton();
       case 'accepted':
         return _buildPriceInput();
       case 'price_pending':
         return _buildWaitingForCustomer();
+      case 'on_the_way':
+        return _buildArrivedButton();
+      case 'arrived':
+        return _buildStartWorkButton();
       case 'in_progress':
         return _buildCompleteButton();
       default:
@@ -820,11 +881,11 @@ class _TechnicianJobDetailScreenState
     }
   }
 
-  Widget _buildAcceptButton() {
+  Widget _buildSubmitOfferButton() {
     return ElevatedButton(
-      onPressed: _isLoading ? null : _acceptJob,
+      onPressed: _isLoading ? null : () => _showSubmitOfferDialog(),
       style: ElevatedButton.styleFrom(
-        backgroundColor: Colors.green, // Explicit Green
+        backgroundColor: AppTheme.primaryColor,
         foregroundColor: Colors.white,
         padding: EdgeInsets.symmetric(vertical: 16.h),
         shape: RoundedRectangleBorder(
@@ -839,9 +900,55 @@ class _TechnicianJobDetailScreenState
               child: CircularProgressIndicator(color: Colors.white),
             )
           : Text(
-              'قبول الطلب والانتقال لتحديد السعر',
+              'تقديم عرض سعر',
               style: TextStyle(fontSize: 16.fz, fontWeight: FontWeight.bold),
             ),
+    );
+  }
+
+  void _showSubmitOfferDialog() {
+    _priceController.clear();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppTheme.surfaceDark,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20.r),
+        ),
+        title: Text('تقديم عرض', style: TextStyle(color: Colors.white)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: _priceController,
+              keyboardType: TextInputType.number,
+              style: TextStyle(color: Colors.white),
+              decoration: InputDecoration(
+                hintText: 'السعر المقترح (ريال)',
+                hintStyle: TextStyle(color: Colors.white54),
+                filled: true,
+                fillColor: Colors.black12,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12.r),
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('إلغاء'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _submitOffer();
+            },
+            child: Text('إرسال'),
+          ),
+        ],
+      ),
     );
   }
 
@@ -963,6 +1070,42 @@ class _TechnicianJobDetailScreenState
     );
   }
 
+  Widget _buildArrivedButton() {
+    return ElevatedButton.icon(
+      onPressed: _isLoading ? null : () => _updateTechnicianProgress('arrived'),
+      icon: const Icon(Icons.place),
+      label: Text(
+        'تأكيد الوصول',
+        style: TextStyle(fontSize: 16.fz, fontWeight: FontWeight.bold),
+      ),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: Colors.teal,
+        foregroundColor: Colors.white,
+        padding: EdgeInsets.symmetric(vertical: 16.h),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
+      ),
+    );
+  }
+
+  Widget _buildStartWorkButton() {
+    return ElevatedButton.icon(
+      onPressed: _isLoading
+          ? null
+          : () => _updateTechnicianProgress('start_work'),
+      icon: const Icon(Icons.play_arrow),
+      label: Text(
+        'بدء العمل',
+        style: TextStyle(fontSize: 16.fz, fontWeight: FontWeight.bold),
+      ),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: Colors.blue,
+        foregroundColor: Colors.white,
+        padding: EdgeInsets.symmetric(vertical: 16.h),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
+      ),
+    );
+  }
+
   Widget _buildCompleteButton() {
     return Column(
       children: [
@@ -988,7 +1131,7 @@ class _TechnicianJobDetailScreenState
         SizedBox(height: 16.h),
         ElevatedButton(
           onPressed: () =>
-              context.go('/jobs/${widget.jobId}/technician/in-progress'),
+              context.go(AppRoutes.buildTechnicianInProgressPath(widget.jobId)),
           style: ElevatedButton.styleFrom(
             backgroundColor: Colors.blue,
             padding: EdgeInsets.symmetric(vertical: 16.h),
@@ -1012,66 +1155,35 @@ class _TechnicianJobDetailScreenState
     );
   }
 
-  Future<void> _acceptJob() async {
+  Future<void> _submitOffer() async {
+    final price = double.tryParse(_priceController.text);
+    if (price == null || price <= 0) {
+      KadmatToast.showWarning(
+        context,
+        title: 'خطأ',
+        message: 'يرجى إدخال سعر صحيح',
+      );
+      return;
+    }
+
     setState(() => _isLoading = true);
     try {
-      await ref.read(jobControllerProvider.notifier).acceptJob(widget.jobId);
+      await ref.read(jobRepositoryProvider).submitOffer(widget.jobId, price);
 
       if (mounted) {
         KadmatToast.showSuccess(
           context,
-          title: 'نجاح قبول الطلب',
-          message: '✅ تم قبول الطلب بنجاح – جاري فتح شاشة تحديد السعر…',
+          title: 'تم إرسال العرض',
+          message: '✅ تم إرسال عرضك بنجاح. سنشعرك عند قبول العميل.',
         );
-        // Navigate directly to set price screen
-        context.go('/jobs/${widget.jobId}/technician/set-price');
-      }
-    } on JobAlreadyAcceptedException catch (e) {
-      if (mounted) {
-        KadmatToast.showError(
-          context,
-          title: 'تم قبول الطلب',
-          message: e.message,
-        );
-      }
-    } on TechnicianLockedException catch (e) {
-      if (mounted) {
-        KadmatToast.showWarning(
-          context,
-          title: 'طلب قيد التنفيذ',
-          message: e.message,
-        );
-      }
-    } on InvalidStatusException catch (e) {
-      if (mounted) {
-        KadmatToast.showError(
-          context,
-          title: 'حالة غير صحيحة',
-          message: e.message,
-        );
-      }
-    } on NetworkException catch (e) {
-      if (mounted) {
-        KadmatToast.showError(
-          context,
-          title: 'خطأ في الاتصال',
-          message: e.message,
-        );
-      }
-    } on JobNotFoundException catch (e) {
-      if (mounted) {
-        KadmatToast.showError(
-          context,
-          title: 'الطلب غير موجود',
-          message: e.message,
-        );
+        Navigator.pop(context); // Go back to jobs list
       }
     } catch (e) {
       if (mounted) {
         KadmatToast.showError(
           context,
-          title: 'خطأ',
-          message: 'فشل قبول الطلب. يرجى المحاولة مرة أخرى.',
+          title: 'فشل إرسال العرض',
+          message: _friendlyActionError(e),
         );
       }
     } finally {
@@ -1107,11 +1219,67 @@ class _TechnicianJobDetailScreenState
         KadmatToast.showError(
           context,
           title: 'فشل إرسال السعر',
-          message: e.toString(),
+          message: _friendlyActionError(e),
         );
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  Future<void> _updateTechnicianProgress(String progress) async {
+    setState(() => _isLoading = true);
+    try {
+      await ref
+          .read(jobRepositoryProvider)
+          .updateTechnicianProgress(widget.jobId, progress: progress);
+      await _fetchJob();
+
+      if (!mounted) return;
+      final successMessage = progress == 'arrived'
+          ? 'تم تسجيل وصولك إلى موقع العميل.'
+          : 'تم تحديث الحالة إلى: بدء التنفيذ.';
+      KadmatToast.showSuccess(
+        context,
+        title: 'تم تحديث الحالة',
+        message: successMessage,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      KadmatToast.showError(
+        context,
+        title: 'تعذر تحديث الحالة',
+        message: _friendlyActionError(e),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  String _friendlyActionError(Object error) {
+    final normalized = error.toString().toLowerCase();
+    if (normalized.contains('socketexception') ||
+        normalized.contains('failed host lookup')) {
+      return 'لا يوجد اتصال بالإنترنت حالياً.';
+    }
+    if (normalized.contains('invalidjwttoken') ||
+        normalized.contains('jwt') ||
+        normalized.contains('expired')) {
+      return 'انتهت الجلسة. يرجى تسجيل الدخول مرة أخرى.';
+    }
+    if (normalized.contains('invalid status') ||
+        normalized.contains('invalid_status_transition')) {
+      return 'تعذر تنفيذ الإجراء بسبب حالة الطلب الحالية.';
+    }
+    if (normalized.contains('no longer available') ||
+        normalized.contains('لم يعد') ||
+        normalized.contains('غير متاح')) {
+      return 'هذا الطلب لم يعد متاحاً الآن. حدّث القائمة واختر طلباً آخر.';
+    }
+    if (normalized.contains('already submitted') ||
+        normalized.contains('قدمت عرض')) {
+      return 'تم تحديث عرضك مسبقاً لهذا الطلب.';
+    }
+    return 'تعذر إرسال البيانات الآن. يرجى المحاولة مرة أخرى.';
   }
 }

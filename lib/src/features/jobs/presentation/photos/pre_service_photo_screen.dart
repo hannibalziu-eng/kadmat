@@ -5,8 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_scalify/flutter_scalify.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/app_theme.dart';
+import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/widgets/kadmat_toast.dart';
 import '../../data/job_repository.dart';
 
@@ -179,11 +179,11 @@ class _PreServicePhotoScreenState extends ConsumerState<PreServicePhotoScreen> {
         _descriptionController.text.trim(),
       );
 
-      // Update job status to in_progress
-      await Supabase.instance.client
-          .from('jobs')
-          .update({'status': 'in_progress'})
-          .eq('id', widget.jobId);
+      // Start work if the backend is still in on_the_way/arrived stage.
+      await repository.updateTechnicianProgress(
+        widget.jobId,
+        progress: 'start_work',
+      );
 
       if (mounted) {
         KadmatToast.showSuccess(
@@ -192,7 +192,7 @@ class _PreServicePhotoScreenState extends ConsumerState<PreServicePhotoScreen> {
           message: '✅ تم رفع الصور وبدء الخدمة',
         );
         // Navigate to In Progress screen
-        context.go('/jobs/${widget.jobId}/technician/in-progress');
+        context.go(AppRoutes.buildTechnicianInProgressPath(widget.jobId));
       }
     } catch (e) {
       if (mounted) {

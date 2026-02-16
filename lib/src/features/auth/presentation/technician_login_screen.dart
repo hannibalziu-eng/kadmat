@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/navigation/app_routes.dart';
 import 'auth_controller.dart';
 
 class TechnicianLoginScreen extends ConsumerStatefulWidget {
@@ -34,7 +35,7 @@ class _TechnicianLoginScreenState extends ConsumerState<TechnicianLoginScreen> {
           );
 
       if (success && mounted) {
-        context.go('/technician/home');
+        context.go(AppRoutes.technicianHome);
       }
     }
   }
@@ -147,7 +148,7 @@ class _TechnicianLoginScreenState extends ConsumerState<TechnicianLoginScreen> {
                 Align(
                   alignment: Alignment.centerLeft,
                   child: TextButton(
-                    onPressed: () => context.push('/forgot-password'),
+                    onPressed: () => context.push(AppRoutes.forgotPassword),
                     style: TextButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 8),
                       minimumSize: Size.zero,
@@ -196,7 +197,8 @@ class _TechnicianLoginScreenState extends ConsumerState<TechnicianLoginScreen> {
                       style: TextStyle(color: subtitleColor),
                     ),
                     TextButton(
-                      onPressed: () => context.push('/technician/register'),
+                      onPressed: () =>
+                          context.push(AppRoutes.technicianRegister),
                       child: const Text(
                         'أنشئ حساباً جديداً',
                         style: TextStyle(fontWeight: FontWeight.bold),
@@ -207,7 +209,7 @@ class _TechnicianLoginScreenState extends ConsumerState<TechnicianLoginScreen> {
                 const SizedBox(height: 16),
                 // Guest Mode Button (Development)
                 TextButton(
-                  onPressed: () => context.push('/technician/home'),
+                  onPressed: () => context.push(AppRoutes.technicianHome),
                   style: TextButton.styleFrom(foregroundColor: Colors.grey),
                   child: const Text(
                     'الدخول كزائر (للتطوير) 🔧',

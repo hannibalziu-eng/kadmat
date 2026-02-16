@@ -2,17 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_scalify/flutter_scalify.dart';
 import 'package:go_router/go_router.dart';
-// Using alias for intl to avoid conflicts if needed, though usually standard
 
 import '../../../../core/app_theme.dart';
-import '../../../../core/providers/notifications_provider.dart';
+import '../../../../core/navigation/app_routes.dart';
+import '../../../auth/data/auth_repository.dart';
+import '../../data/notification_repository.dart';
 
 class NotificationsScreen extends ConsumerWidget {
   const NotificationsScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final notifications = ref.watch(notificationListProvider);
+    final notificationsAsync = ref.watch(liveNotificationsProvider);
+    final notifications =
+        notificationsAsync.valueOrNull ?? const <NotificationItem>[];
 
     return Scaffold(
       backgroundColor: AppTheme.backgroundDark,
@@ -32,14 +35,33 @@ class NotificationsScreen extends ConsumerWidget {
             IconButton(
               icon: const Icon(Icons.done_all, color: Colors.white70),
               tooltip: 'تحديد الكل كمقروء',
-              onPressed: () {
-                ref.read(notificationListProvider.notifier).markAllAsRead();
+              onPressed: () async {
+                try {
+                  await ref
+                      .read(notificationRepositoryProvider)
+                      .markAllAsRead();
+                } catch (_) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('تعذر تحديث الإشعارات')),
+                    );
+                  }
+                }
               },
             ),
         ],
       ),
-      body: notifications.isEmpty
-          ? Center(
+      body: notificationsAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (_, __) => Center(
+          child: Text(
+            'تعذر تحميل الإشعارات',
+            style: TextStyle(fontSize: 16.fz, color: Colors.white70),
+          ),
+        ),
+        data: (items) {
+          if (items.isEmpty) {
+            return Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -55,66 +77,88 @@ class NotificationsScreen extends ConsumerWidget {
                   ),
                 ],
               ),
-            )
-          : RefreshIndicator(
-              onRefresh: () async {
-                // Should fetch from API ideally
-                await Future.delayed(const Duration(seconds: 1));
-              },
-              child: ListView.separated(
-                padding: EdgeInsets.all(16.w),
-                itemCount: notifications.length,
-                separatorBuilder: (context, index) => SizedBox(height: 12.h),
-                itemBuilder: (context, index) {
-                  final notification = notifications[index];
-                  return Dismissible(
-                    key: Key(notification.id),
-                    direction: DismissDirection.endToStart,
-                    background: Container(
-                      decoration: BoxDecoration(
-                        color: Colors.red,
-                        borderRadius: BorderRadius.circular(12.r),
-                      ),
-                      alignment: AlignmentDirectional.centerStart,
-                      padding: EdgeInsetsDirectional.only(start: 20.w),
-                      child: const Icon(Icons.delete, color: Colors.white),
+            );
+          }
+
+          return RefreshIndicator(
+            onRefresh: () async {
+              ref.invalidate(liveNotificationsProvider);
+              await ref.read(liveNotificationsProvider.future);
+            },
+            child: ListView.separated(
+              padding: EdgeInsets.all(16.w),
+              itemCount: items.length,
+              separatorBuilder: (context, index) => SizedBox(height: 12.h),
+              itemBuilder: (context, index) {
+                final notification = items[index];
+                return Dismissible(
+                  key: Key(notification.id),
+                  direction: DismissDirection.endToStart,
+                  background: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.red,
+                      borderRadius: BorderRadius.circular(12.r),
                     ),
-                    onDismissed: (_) {
-                      ref
-                          .read(notificationListProvider.notifier)
+                    alignment: AlignmentDirectional.centerStart,
+                    padding: EdgeInsetsDirectional.only(start: 20.w),
+                    child: const Icon(Icons.delete, color: Colors.white),
+                  ),
+                  confirmDismiss: (_) async {
+                    try {
+                      await ref
+                          .read(notificationRepositoryProvider)
                           .deleteNotification(notification.id);
-                    },
-                    child: _NotificationItem(notification: notification),
-                  );
-                },
-              ),
+                      return true;
+                    } catch (_) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('تعذر حذف الإشعار')),
+                        );
+                      }
+                      return false;
+                    }
+                  },
+                  child: _NotificationItem(notification: notification),
+                );
+              },
             ),
+          );
+        },
+      ),
     );
   }
 }
 
 class _NotificationItem extends ConsumerWidget {
-  final NotificationModel notification;
+  final NotificationItem notification;
 
   const _NotificationItem({required this.notification});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return GestureDetector(
-      onTap: () {
-        // Mark as read
+      onTap: () async {
         if (!notification.isRead) {
-          ref
-              .read(notificationListProvider.notifier)
-              .markAsRead(notification.id);
+          try {
+            await ref
+                .read(notificationRepositoryProvider)
+                .markAsRead(notification.id);
+          } catch (_) {}
         }
 
-        // Navigate if jobId exists
-        if (notification.jobId != null) {
-          // Determine route based on user type or logic
-          // For technician, usually detail or requests
-          // Assuming technician context for now or generic job detail flow
-          context.push('/jobs/${notification.jobId}/technician/detail');
+        final dataJobId = _extractJobId(notification);
+        if (dataJobId == null || dataJobId.isEmpty) return;
+
+        final userType = ref.read(authRepositoryProvider).userType;
+        if (userType == 'technician') {
+          if (context.mounted) {
+            context.push(AppRoutes.buildTechnicianJobDetailPath(dataJobId));
+          }
+          return;
+        }
+
+        if (context.mounted) {
+          context.push(AppRoutes.buildCustomerSearchingPath(dataJobId));
         }
       },
       child: Container(
@@ -164,7 +208,7 @@ class _NotificationItem extends ConsumerWidget {
                         ),
                       ),
                       Text(
-                        _formatTime(notification.timestamp),
+                        _formatTime(notification.createdAt),
                         style: TextStyle(
                           color: Colors.white38,
                           fontSize: 12.fz,
@@ -174,7 +218,7 @@ class _NotificationItem extends ConsumerWidget {
                   ),
                   SizedBox(height: 6.h),
                   Text(
-                    notification.body,
+                    notification.body ?? '',
                     style: TextStyle(color: Colors.white70, fontSize: 14.fz),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
@@ -203,6 +247,7 @@ class _NotificationItem extends ConsumerWidget {
       case 'new_job':
         return Icons.work_outline;
       case 'price_set':
+      case 'price_pending':
         return Icons.monetization_on_outlined;
       case 'completed':
         return Icons.check_circle_outline;
@@ -224,5 +269,11 @@ class _NotificationItem extends ConsumerWidget {
     } else {
       return '${time.month}/${time.day}';
     }
+  }
+
+  String? _extractJobId(NotificationItem item) {
+    final dynamic value = item.data['job_id'] ?? item.data['jobId'];
+    if (value is String) return value;
+    return null;
   }
 }

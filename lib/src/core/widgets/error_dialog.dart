@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:dio/dio.dart';
+import '../api/api_error.dart';
 
 /// Reusable Error Dialog Widget
 /// Shows user-friendly error messages with optional retry action
@@ -78,19 +80,14 @@ class ErrorDialog extends StatelessWidget {
     String message = 'حدث خطأ غير متوقع';
     String? technicalDetails;
 
-    if (error.response?.data is Map) {
-      final data = error.response!.data as Map;
-
-      // Check for our API error format
-      if (data['error'] != null && data['error']['message'] != null) {
-        message = data['error']['message'];
-
-        // Technical details in development
-        if (data['error']['technical'] != null) {
-          technicalDetails = data['error']['technical'].toString();
-        }
-      } else if (data['message'] != null) {
-        message = data['message'];
+    if (error is DioException) {
+      final apiError = ApiError.fromData(
+        error.response?.data,
+        statusCode: error.response?.statusCode,
+      );
+      message = apiError.message;
+      if (apiError.requestId != null) {
+        technicalDetails = 'requestId: ${apiError.requestId}';
       }
     } else if (error.message != null) {
       message = error.message;

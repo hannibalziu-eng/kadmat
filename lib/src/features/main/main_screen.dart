@@ -4,7 +4,9 @@ import 'package:go_router/go_router.dart';
 import '../../core/services/fcm_service.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_scalify/flutter_scalify.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/app_theme.dart';
+import '../../core/navigation/app_routes.dart';
 import '../home/presentation/home_screen.dart';
 import '../messages/presentation/messages_screen.dart';
 import '../orders/presentation/orders_screen.dart';
@@ -32,45 +34,59 @@ class _MainScreenState extends ConsumerState<MainScreen> {
   ];
 
   StreamSubscription? _fcmSubscription;
+  ProviderSubscription<AsyncValue<String?>>? _authSubscription;
 
   @override
   void initState() {
     super.initState();
     _setupNotificationListener();
+    _setupAuthListener();
   }
 
   void _setupNotificationListener() {
-    _fcmSubscription = FcmService().navigationStream.listen((payload) {
+    final pushGateway = ref.read(pushGatewayProvider);
+    _fcmSubscription = pushGateway.navigationStream.listen((payload) {
       if (payload.isNotEmpty) {
-        context.push('/active-job/$payload');
+        if (!mounted) return;
+        context.push(AppRoutes.buildCustomerSearchingPath(payload));
       }
     });
+  }
+
+  void _setupAuthListener() {
+    _authSubscription = ref.listenManual<AsyncValue<String?>>(
+      authStateChangesProvider,
+      (_, next) {
+        next.when(
+          data: (_) {
+            final authenticatedUserId =
+                Supabase.instance.client.auth.currentUser?.id;
+            if (authenticatedUserId == null) return;
+
+            final notificationService = ref.read(notificationServiceProvider);
+            unawaited(notificationService.initialize());
+            notificationService.listenForCustomerJobUpdates(
+              authenticatedUserId,
+            );
+            notificationService.listenForMessages(authenticatedUserId);
+          },
+          error: (_, __) {},
+          loading: () {},
+        );
+      },
+      fireImmediately: true,
+    );
   }
 
   @override
   void dispose() {
     _fcmSubscription?.cancel();
+    _authSubscription?.close();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    // Listen for auth state changes to initialize notification service
-    ref.listen(authStateChangesProvider, (previous, next) {
-      next.when(
-        data: (userId) {
-          if (userId != null) {
-            // Check if user is customer (default for MainScreen)
-            final notificationService = ref.read(notificationServiceProvider);
-            notificationService.listenForCustomerJobUpdates(userId);
-            notificationService.listenForMessages(userId);
-          }
-        },
-        error: (error, stackTrace) {},
-        loading: () {},
-      );
-    });
-
     return Scaffold(
       extendBody: true,
       body: IndexedStack(index: _currentIndex, children: _pages),

@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'endpoints.dart';
 
@@ -10,7 +12,7 @@ part 'api_client.g.dart';
 Completer<void>? _refreshCompleter;
 
 @Riverpod(keepAlive: true)
-Dio apiClient(ApiClientRef ref) {
+Dio apiClient(Ref ref) {
   final dio = Dio(
     BaseOptions(
       baseUrl: Endpoints.baseUrl,
@@ -38,18 +40,20 @@ Dio apiClient(ApiClientRef ref) {
         if (session != null) {
           // Check if token is expired or about to expire (within 60 seconds)
           if (session.isExpired) {
-            print('⏰ Token expired/expiring. Refreshing BEFORE request...');
+            debugPrint(
+              '⏰ Token expired/expiring. Refreshing BEFORE request...',
+            );
             try {
               final response = await Supabase.instance.client.auth
                   .refreshSession();
               if (response.session != null) {
-                print('✅ Token refreshed proactively.');
+                debugPrint('✅ Token refreshed proactively.');
                 options.headers['Authorization'] =
                     'Bearer ${response.session!.accessToken}';
                 return handler.next(options);
               }
             } catch (e) {
-              print(
+              debugPrint(
                 '⚠️ Proactive refresh failed: $e. Proceeding with old token...',
               );
             }
@@ -57,15 +61,17 @@ Dio apiClient(ApiClientRef ref) {
 
           final token = session.accessToken;
           options.headers['Authorization'] = 'Bearer $token';
-          print('✅ Token Added to Request: ${token.substring(0, 10)}...');
+          debugPrint('✅ Token Added to Request: ${token.substring(0, 10)}...');
         } else {
-          print('⚠️ No Supabase session found for request: ${options.path}');
+          debugPrint(
+            '⚠️ No Supabase session found for request: ${options.path}',
+          );
         }
 
         return handler.next(options);
       },
       onError: (err, handler) async {
-        print(
+        debugPrint(
           '🚨 Interceptor Error: ${err.message} | Path: ${err.requestOptions.path}',
         );
 
@@ -80,14 +86,16 @@ Dio apiClient(ApiClientRef ref) {
 
           // If no session exists, we can't refresh. Force logout/error.
           if (session == null) {
-            print('❌ 401 received but no session exists. Cannot refresh.');
+            debugPrint('❌ 401 received but no session exists. Cannot refresh.');
             return handler.next(err);
           }
 
           // 1. Check if token was already refreshed by another concurrent request
           if (currentToken != null &&
               'Bearer ${session.accessToken}' != currentToken) {
-            print('🔄 Token already refreshed (Pre-lock check). Retrying...');
+            debugPrint(
+              '🔄 Token already refreshed (Pre-lock check). Retrying...',
+            );
             return _retryRequest(
               dio,
               err.requestOptions,
@@ -98,12 +106,12 @@ Dio apiClient(ApiClientRef ref) {
 
           // 2. Refresh Lock
           if (_refreshCompleter != null && !_refreshCompleter!.isCompleted) {
-            print('⏳ Refresh in progress. Waiting for lock...');
+            debugPrint('⏳ Refresh in progress. Waiting for lock...');
             await _refreshCompleter!.future;
 
             final newSession = Supabase.instance.client.auth.currentSession;
             if (newSession != null) {
-              print('✅ Lock released. Using new token.');
+              debugPrint('✅ Lock released. Using new token.');
               return _retryRequest(
                 dio,
                 err.requestOptions,
@@ -111,21 +119,21 @@ Dio apiClient(ApiClientRef ref) {
                 handler,
               );
             } else {
-              print('❌ Lock released but no session found.');
+              debugPrint('❌ Lock released but no session found.');
               return handler.next(err);
             }
           }
 
           // 3. Initiate Refresh
           _refreshCompleter = Completer<void>();
-          print('🔄 401 Detected. Acquiring Lock & Refreshing Session...');
+          debugPrint('🔄 401 Detected. Acquiring Lock & Refreshing Session...');
 
           try {
             final response = await Supabase.instance.client.auth
                 .refreshSession();
 
             if (response.session != null) {
-              print('✅ Supabase Session Refreshed!');
+              debugPrint('✅ Supabase Session Refreshed!');
               _refreshCompleter?.complete();
               _refreshCompleter = null;
 
@@ -136,13 +144,13 @@ Dio apiClient(ApiClientRef ref) {
                 handler,
               );
             } else {
-              print('❌ Supabase Refresh Failed: No session returned.');
+              debugPrint('❌ Supabase Refresh Failed: No session returned.');
               _refreshCompleter?.complete();
               _refreshCompleter = null;
               return handler.next(err);
             }
           } catch (e) {
-            print('❌ Supabase Refresh Exception: $e');
+            debugPrint('❌ Supabase Refresh Exception: $e');
             _refreshCompleter?.complete();
             _refreshCompleter = null;
 
@@ -160,7 +168,7 @@ Dio apiClient(ApiClientRef ref) {
             }
 
             if (shouldForceLogout) {
-              print('🚨 Fatal Auth Error detected. Forcing Sign Out...');
+              debugPrint('🚨 Fatal Auth Error detected. Forcing Sign Out...');
               try {
                 await Supabase.instance.client.auth.signOut();
               } catch (_) {}

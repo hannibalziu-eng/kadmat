@@ -166,7 +166,7 @@ class _CustomerPaymentApprovalScreenState
           ),
         );
 
-        context.go('/');
+        context.go(AppRoutes.home);
       }
     } catch (e) {
       if (mounted) {

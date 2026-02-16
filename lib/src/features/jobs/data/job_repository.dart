@@ -4,25 +4,45 @@ import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../core/api/api_client.dart';
+import '../../../core/api/api_error.dart';
 import '../../../core/api/endpoints.dart';
 import '../../../core/services/photo_upload_service.dart';
 import '../../../core/services/offline/work_queue_service.dart';
 import '../../../core/realtime/supabase_realtime_service.dart';
 import '../../../core/exceptions/app_exceptions.dart';
+import '../../../core/utils/error_messages.dart';
 
 import '../domain/job.dart';
+import '../domain/job_visibility_policy.dart';
+import '../domain/job_status.dart';
+
+import '../domain/i_job_repository.dart';
 
 part 'job_repository.g.dart';
 
-class JobRepository {
+class JobRepository implements IJobRepository {
   final Dio _client;
   final PhotoUploadService _photoService;
   final WorkQueueService _workQueue;
   final SupabaseRealtimeService _realtimeService;
+  static const Set<String> _activeLockStatuses = {
+    JobStatus.onTheWay,
+    JobStatus.arrived,
+    JobStatus.inProgress,
+    JobStatus.pendingConfirm,
+  };
+  static final RegExp _uuidRegex = RegExp(
+    r'^[0-9a-fA-F]{8}-'
+    r'[0-9a-fA-F]{4}-'
+    r'[1-5][0-9a-fA-F]{3}-'
+    r'[89abAB][0-9a-fA-F]{3}-'
+    r'[0-9a-fA-F]{12}$',
+  );
 
   JobRepository(
     this._client,
@@ -32,10 +52,12 @@ class JobRepository {
   );
 
   /// Fetch nearby jobs using Supabase RPC for scalable server-side filtering
+
+  @override
   Future<List<Job>> getNearbyJobsRpc({
     required double lat,
     required double lng,
-    int radiusMeters = 5000,
+    int radiusMeters = 10000,
     int limit = 50,
     String? serviceId,
   }) async {
@@ -70,18 +92,28 @@ class JobRepository {
         );
       }
 
-      // Filter by serviceId if provided
-      if (serviceId != null) {
-        debugPrint('🔍 Filtering by Service ID: $serviceId');
-        // TEMPORARILY DISABLED FILTER to verify data visibility
-        /* 
-        jobs = jobs.where((job) {
-             final jobServiceId = job.serviceId ?? job.service?['id'];
-             return jobServiceId == serviceId;
-        }).toList();
-        */
+      // Filter by serviceId only when it has a valid UUID shape.
+      // Some legacy technician profiles can store non-UUID values, and
+      // strict filtering in that case hides all requests unexpectedly.
+      final normalizedServiceId = serviceId?.trim();
+      if (normalizedServiceId != null && normalizedServiceId.isNotEmpty) {
+        if (_uuidRegex.hasMatch(normalizedServiceId)) {
+          jobs = jobs
+              .where((job) => job.serviceId == normalizedServiceId)
+              .toList();
+        } else {
+          debugPrint(
+            '⚠️ Skipping service filter. Invalid technician service_id format: $normalizedServiceId',
+          );
+        }
+      }
+
+      // Defensive client-side filtering with centralized policy.
+      jobs = JobVisibilityPolicy.filterForTechnicianQueue(jobs);
+
+      if (kDebugMode) {
         debugPrint(
-          '⚠️ FILTER DISABLED CHECK: Would have filtered to: ${jobs.where((job) => (job.serviceId ?? job.service?['id']) == serviceId).length}',
+          '📦 Nearby jobs after filter: ${jobs.length} (serviceId=${serviceId ?? 'any'})',
         );
       }
 
@@ -93,6 +125,7 @@ class JobRepository {
     }
   }
 
+  @override
   Future<Job?> createJob({
     required String serviceId,
     required double lat,
@@ -127,9 +160,9 @@ class JobRepository {
 
       // Instead of returning null, throw a detailed exception
       final statusCode = response.statusCode;
-      final errorMessage =
-          response.data['message'] ?? 'استجابة غير متوقعة من الخادم';
-      final errorCode = response.data['code'] ?? 'UNKNOWN_ERROR';
+      final apiError = ApiError.fromData(response.data, statusCode: statusCode);
+      final errorMessage = apiError.message;
+      final errorCode = apiError.code ?? 'UNKNOWN_ERROR';
 
       debugPrint(
         '⚠️ [createJob] Unexpected response: statusCode=$statusCode, code=$errorCode, message=$errorMessage',
@@ -153,9 +186,13 @@ class JobRepository {
       String errorMessage = 'فشل إنشاء الطلب';
       String errorCode = 'NETWORK_ERROR';
 
-      if (responseData != null && responseData is Map) {
-        errorMessage = responseData['message'] ?? errorMessage;
-        errorCode = responseData['code'] ?? errorCode;
+      if (responseData != null) {
+        final apiError = ApiError.fromData(
+          responseData,
+          statusCode: statusCode,
+        );
+        errorMessage = apiError.message;
+        errorCode = apiError.code ?? errorCode;
       } else {
         errorMessage = e.message ?? errorMessage;
       }
@@ -184,6 +221,8 @@ class JobRepository {
   }
 
   /// Get a single job by ID with full details
+
+  @override
   Future<Job?> getJobById(String jobId) async {
     try {
       final response = await _client.get('/jobs/$jobId');
@@ -215,6 +254,7 @@ class JobRepository {
     }
   }
 
+  @override
   Future<List<Job>> getNearbyJobs({
     required double lat,
     required double lng,
@@ -253,6 +293,7 @@ class JobRepository {
     }
   }
 
+  @override
   Future<List<Job>> getMyJobs() async {
     try {
       final response = await _client.get(Endpoints.myJobs);
@@ -286,6 +327,7 @@ class JobRepository {
     }
   }
 
+  @override
   Future<Job> acceptJob(String jobId) async {
     // Check connectivity
     final connectivityResult = await Connectivity().checkConnectivity();
@@ -314,15 +356,17 @@ class JobRepository {
       }
 
       // Handle specific error codes from backend
-      final error = body['error'];
-      final code = error?['code'] ?? 'UNKNOWN_ERROR';
-      final message = error?['message'] ?? 'فشل قبول الطلب';
+      final apiError = ApiError.fromData(body);
+      final code = apiError.code ?? 'UNKNOWN_ERROR';
+      final message = apiError.message;
+      final currentStatus =
+          apiError.detailAsString('currentStatus') ??
+          (body['error']?['currentStatus'] as String?);
 
       switch (code) {
         case 'JOB_ALREADY_ACCEPTED':
           throw JobAlreadyAcceptedException(message);
         case 'INVALID_STATUS_TRANSITION':
-          final currentStatus = error?['currentStatus'] as String?;
           throw InvalidStatusException(message, currentStatus: currentStatus);
         case 'JOB_NOT_FOUND':
           throw JobNotFoundException(message);
@@ -355,11 +399,12 @@ class JobRepository {
         throw JobAlreadyAcceptedException('تم قبول الطلب من فني آخر');
       }
       if (e.response?.statusCode == 400) {
-        final errorCode = e.response?.data['error']?['code'];
+        final apiError = ApiError.fromDioException(e);
+        final errorCode = apiError.code;
         if (errorCode == 'INVALID_STATUS_TRANSITION') {
-          final currentStatus = e.response?.data['error']?['currentStatus'];
+          final currentStatus = apiError.detailAsString('currentStatus');
           throw InvalidStatusException(
-            'حالة الطلب غير صحيحة',
+            ErrorMessages.invalidJobStatus,
             currentStatus: currentStatus,
           );
         }
@@ -384,6 +429,7 @@ class JobRepository {
     }
   }
 
+  @override
   Future<Job> setPrice(
     String jobId,
     double price, {
@@ -404,6 +450,7 @@ class JobRepository {
     }
   }
 
+  @override
   Future<Job> confirmPrice(String jobId) async {
     try {
       final response = await _client.post(Endpoints.confirmPrice(jobId));
@@ -426,10 +473,10 @@ class JobRepository {
 
           final techPrice = jobData['technician_price'];
 
-          final data = await Supabase.instance.client
-              .from('jobs')
-              .update({
-                'status': 'customer_agreed',
+              final data = await Supabase.instance.client
+                  .from('jobs')
+                  .update({
+                'status': 'on_the_way',
                 'price_confirmed_at': DateTime.now().toIso8601String(),
                 'final_price': techPrice,
               })
@@ -448,6 +495,44 @@ class JobRepository {
     }
   }
 
+  @override
+  Future<Job> updateTechnicianProgress(
+    String jobId, {
+    required String progress,
+  }) async {
+    final normalized = progress.trim().toLowerCase();
+    if (normalized.isEmpty) {
+      throw Exception('progress is required');
+    }
+
+    try {
+      final response = await _client.post(
+        Endpoints.technicianProgress(jobId),
+        data: {'progress': normalized},
+      );
+
+      final body = response.data;
+      if (body == null || body['success'] != true) {
+        final apiError = ApiError.fromData(body, statusCode: response.statusCode);
+        final message = ErrorMessages.fromApiCode(
+          apiError.code,
+          fallback: apiError.message,
+        );
+        throw Exception(message);
+      }
+
+      return Job.fromJson(body['data']);
+    } on DioException catch (e) {
+      final apiError = ApiError.fromDioException(e);
+      final message = ErrorMessages.fromApiCode(
+        apiError.code,
+        fallback: apiError.message,
+      );
+      throw Exception(message);
+    }
+  }
+
+  @override
   Future<Job> requestJobCompletion(
     String jobId, {
     double? finalPrice,
@@ -477,10 +562,15 @@ class JobRepository {
     }
   }
 
-  Future<Job> confirmJobCompletion(String jobId) async {
+  @override
+  Future<Job> confirmJobCompletion(
+    String jobId, {
+    String? paymentMethod,
+  }) async {
     try {
       final response = await _client.post(
         '/jobs/$jobId/confirm-completion',
+        data: paymentMethod != null ? {'payment_method': paymentMethod} : null,
       ); // New endpoint logic
 
       final body = response.data;
@@ -494,6 +584,7 @@ class JobRepository {
     }
   }
 
+  @override
   Future<Job> rateJob(String jobId, int rating, {String? review}) async {
     try {
       final response = await _client.post(
@@ -512,10 +603,71 @@ class JobRepository {
     }
   }
 
+  @override
   Future<void> cancelJob(String jobId, {String? reason}) async {
     try {
-      await _client.post(Endpoints.cancelJob(jobId), data: {'reason': reason});
+      final response = await _client.post(
+        Endpoints.cancelJob(jobId),
+        data: {'reason': reason},
+      );
+
+      final body = response.data;
+      if (body is Map && body['success'] == false) {
+        final apiError = ApiError.fromData(
+          body,
+          statusCode: response.statusCode,
+        );
+        final code = apiError.code ?? 'UNKNOWN_ERROR';
+
+        if (code == 'INVALID_STATUS_TRANSITION') {
+          throw InvalidStatusException(
+            apiError.message.isNotEmpty
+                ? apiError.message
+                : ErrorMessages.invalidJobStatus,
+            currentStatus: apiError.detailAsString('currentStatus'),
+          );
+        }
+
+        if (code == 'JOB_NOT_FOUND') {
+          throw JobNotFoundException(
+            apiError.message.isNotEmpty
+                ? apiError.message
+                : 'لم يتم العثور على الطلب',
+          );
+        }
+
+        throw Exception(
+          apiError.message.isNotEmpty ? apiError.message : 'فشل إلغاء الطلب',
+        );
+      }
+    } on DioException catch (e) {
+      final apiError = ApiError.fromDioException(e);
+
+      if (e.response?.statusCode == 400 &&
+          apiError.code == 'INVALID_STATUS_TRANSITION') {
+        throw InvalidStatusException(
+          apiError.message.isNotEmpty
+              ? apiError.message
+              : ErrorMessages.invalidJobStatus,
+          currentStatus: apiError.detailAsString('currentStatus'),
+        );
+      }
+
+      if (e.response?.statusCode == 404 || apiError.code == 'JOB_NOT_FOUND') {
+        throw JobNotFoundException(
+          apiError.message.isNotEmpty
+              ? apiError.message
+              : 'لم يتم العثور على الطلب',
+        );
+      }
+
+      throw Exception(
+        apiError.message.isNotEmpty ? apiError.message : 'فشل إلغاء الطلب',
+      );
     } catch (e) {
+      if (e is InvalidStatusException || e is JobNotFoundException) {
+        rethrow;
+      }
       throw Exception('فشل إلغاء الطلب');
     }
   }
@@ -523,9 +675,15 @@ class JobRepository {
   Future<Job?> getJob(String jobId) async {
     try {
       final response = await _client.get('${Endpoints.jobs}/$jobId');
-      if (response.statusCode == 200) {
-        // If generic get endpoint isn't available, we can fallback to supabase select
-        return Job.fromJson(response.data['job']);
+      final body = response.data;
+      if (response.statusCode == 200 && body != null && body is Map) {
+        final jobData = body['data'] ?? body['job'];
+        if (jobData is Map<String, dynamic>) {
+          return Job.fromJson(jobData);
+        }
+        if (jobData is Map) {
+          return Job.fromJson(Map<String, dynamic>.from(jobData));
+        }
       }
       return null;
     } catch (e) {
@@ -534,6 +692,7 @@ class JobRepository {
     }
   }
 
+  @override
   Stream<Job> watchJob(String jobId) {
     return Supabase.instance.client
         .from('jobs')
@@ -568,6 +727,7 @@ class JobRepository {
         });
   }
 
+  @override
   Stream<List<Job>> watchMyActiveJobs(String userId) {
     return Supabase.instance.client
         .from('jobs')
@@ -585,6 +745,227 @@ class JobRepository {
         });
   }
 
+  /// Submit an offer for a job (Technician)
+  Future<void> submitOffer(String jobId, double price) async {
+    try {
+      final response = await _client.post(
+        Endpoints.submitOffer(jobId),
+        data: {'price': price},
+      );
+
+      final body = response.data;
+      if (body is Map && body['success'] == false) {
+        final apiError = ApiError.fromData(
+          body,
+          statusCode: response.statusCode,
+        );
+        throw Exception(
+          apiError.message.isNotEmpty
+              ? apiError.message
+              : 'تعذر إرسال العرض حالياً',
+        );
+      }
+    } on DioException catch (e) {
+      final apiError = ApiError.fromDioException(e);
+      final errorCode = apiError.code;
+      final message = apiError.message.isNotEmpty
+          ? apiError.message
+          : 'تعذر إرسال العرض حالياً';
+
+      if (e.response?.statusCode == 404 || errorCode == 'JOB_NOT_FOUND') {
+        throw JobNotFoundException(message);
+      }
+
+      if (e.response?.statusCode == 409 ||
+          errorCode == 'INVALID_STATUS_TRANSITION') {
+        throw InvalidStatusException(
+          message,
+          currentStatus: apiError.detailAsString('currentStatus'),
+        );
+      }
+
+      if (errorCode == 'JOB_ALREADY_ACCEPTED' ||
+          message.contains('accepted by another technician')) {
+        throw JobAlreadyAcceptedException(message);
+      }
+
+      throw Exception(message);
+    } catch (e) {
+      if (e is InvalidStatusException ||
+          e is JobAlreadyAcceptedException ||
+          e is JobNotFoundException) {
+        rethrow;
+      }
+      throw Exception('فشل تقديم العرض');
+    }
+  }
+
+  /// Accept an offer (Customer)
+  Future<Job> acceptOffer(String jobId, String offerId) async {
+    final normalizedOfferId = offerId.trim();
+    if (normalizedOfferId.isEmpty) {
+      throw Exception('معرّف العرض مفقود. حدّث الصفحة وحاول مرة أخرى');
+    }
+
+    final uuidRegex = RegExp(
+      r'^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
+      caseSensitive: false,
+    );
+    if (!uuidRegex.hasMatch(normalizedOfferId)) {
+      throw Exception('معرّف العرض غير صالح. حدّث الصفحة وحاول مرة أخرى');
+    }
+
+    try {
+      final response = await _client.post(
+        Endpoints.acceptOffer(jobId),
+        data: {'offerId': normalizedOfferId},
+      );
+
+      final body = response.data;
+      if (body['success'] == true) {
+        return Job.fromJson(body['data']);
+      }
+      final apiError = ApiError.fromData(body, statusCode: response.statusCode);
+      final message = ErrorMessages.fromApiCode(
+        apiError.code,
+        fallback: apiError.message,
+      );
+      throw InvalidStatusException(
+        message,
+        currentStatus: apiError.detailAsString('currentStatus'),
+      );
+    } on DioException catch (e) {
+      if (e.type == DioExceptionType.connectionTimeout ||
+          e.type == DioExceptionType.receiveTimeout ||
+          e.type == DioExceptionType.sendTimeout ||
+          e.type == DioExceptionType.connectionError) {
+        throw NetworkException(ErrorMessages.connectionTimeout);
+      }
+
+      final apiError = ApiError.fromDioException(e);
+      final message = ErrorMessages.fromApiCode(
+        apiError.code,
+        fallback: apiError.message,
+      );
+      const terminalOrAcceptedStatuses = <String>{
+        'accepted',
+        'price_pending',
+        'on_the_way',
+        'arrived',
+        'in_progress',
+        'pending_confirm',
+        'completed',
+        'rated',
+      };
+
+      if (e.response?.statusCode == 404 ||
+          apiError.code == 'JOB_NOT_FOUND' ||
+          apiError.code == 'NOT_FOUND') {
+        throw JobNotFoundException(message);
+      }
+
+      if (e.response?.statusCode == 409 ||
+          apiError.code == 'INVALID_STATUS_TRANSITION' ||
+          apiError.code == 'CONFLICT') {
+        final currentStatus = apiError.detailAsString('currentStatus');
+
+        // Race-safe behavior:
+        // if backend reports a transition conflict but job has already advanced,
+        // treat acceptance as succeeded and return latest job snapshot.
+        if (currentStatus != null &&
+            terminalOrAcceptedStatuses.contains(
+              currentStatus.toLowerCase().trim(),
+            )) {
+          try {
+            final latest = await getJobById(jobId);
+            if (latest != null) return latest;
+          } catch (_) {
+            // Fall through to explicit InvalidStatusException below.
+          }
+        }
+
+        throw InvalidStatusException(message, currentStatus: currentStatus);
+      }
+
+      // Additional race-safe handling:
+      // backend can return 500/ACCEPT_FAILED while assignment actually succeeded
+      // (e.g. post-assignment side effect failure or transient DB issue).
+      final isPotentialServerRace =
+          e.response?.statusCode == 500 ||
+          apiError.code == 'SERVER_ERROR' ||
+          apiError.code == 'ACCEPT_FAILED';
+      if (isPotentialServerRace) {
+        try {
+          final latest = await getJobById(jobId);
+          final normalizedLatestStatus = latest?.status.toLowerCase().trim();
+          final technicianId = latest?.technicianId;
+          final hasAssignedTechnician =
+              technicianId != null && technicianId.isNotEmpty;
+          if (latest != null &&
+              hasAssignedTechnician &&
+              normalizedLatestStatus != null &&
+              terminalOrAcceptedStatuses.contains(normalizedLatestStatus)) {
+            return latest;
+          }
+        } catch (_) {
+          // Keep original backend error message below.
+        }
+      }
+
+      throw Exception(message.isNotEmpty ? message : 'فشل قبول العرض');
+    } catch (e) {
+      if (e is JobNotFoundException ||
+          e is InvalidStatusException ||
+          e is NetworkException) {
+        rethrow;
+      }
+      if (e is Exception) {
+        rethrow;
+      }
+      throw Exception('تعذر قبول العرض حالياً');
+    }
+  }
+
+  /// Watch offers for a specific job (Customer)
+  Stream<List<Map<String, dynamic>>> watchJobOffers(String jobId) {
+    return Supabase.instance.client
+        .from('job_offers')
+        .stream(primaryKey: ['id'])
+        .eq('job_id', jobId)
+        .order('price', ascending: true) // Best price first
+        .asyncMap((offers) async {
+          final pendingActiveOffers = offers.where((offer) {
+            final status = offer['status']?.toString();
+            final isActive = offer['is_active'] == true;
+            return status == 'pending' && isActive;
+          }).toList();
+
+          // Enrich with technician details
+          // This is N+1 but acceptable for small number of offers (usually < 5)
+          // Better approach would be a View or RPC, but this is quick for now.
+          final enrichedOffers = <Map<String, dynamic>>[];
+
+          for (final offer in pendingActiveOffers) {
+            try {
+              final tech = await Supabase.instance.client
+                  .from('users')
+                  .select('id, full_name, rating, profile_image_url')
+                  .eq('id', offer['technician_id'])
+                  .maybeSingle();
+
+              if (tech == null) continue;
+              enrichedOffers.add({...offer, 'technician': tech});
+            } catch (e) {
+              debugPrint('⚠️ Failed to enrich offer ${offer['id']}: $e');
+              // Keep basic offer visible even if technician enrich fails.
+              enrichedOffers.add({...offer, 'technician': const {}});
+            }
+          }
+          return enrichedOffers;
+        });
+  }
+
+  @override
   Stream<Map<String, dynamic>> trackTechnician(String technicianId) {
     return Supabase.instance.client
         .from('users')
@@ -600,6 +981,8 @@ class JobRepository {
 
   /// Upload pre-service photos for a job
   /// Returns list of photo URLs
+
+  @override
   Future<List<String>> uploadPreServicePhotos(
     String jobId,
     List<XFile> photos,
@@ -646,6 +1029,8 @@ class JobRepository {
 
   /// Upload post-service photos for a job
   /// Returns list of photo URLs
+
+  @override
   Future<List<String>> uploadPostServicePhotos(
     String jobId,
     List<XFile> photos,
@@ -690,6 +1075,8 @@ class JobRepository {
   // uploadPostServicePhotosFromXFile removed as it is now redundant.
 
   /// Get all photos for a job
+
+  @override
   Future<Map<String, List<String>>> getJobPhotos(String jobId) async {
     try {
       debugPrint('📷 Fetching photos for job: $jobId');
@@ -740,13 +1127,16 @@ class JobRepository {
       final userId = Supabase.instance.client.auth.currentUser?.id;
       if (userId == null) return false;
 
-      // Check if technician has any job in 'in_progress' or 'accepted' status
-      // 'price_pending' does NOT lock the technician anymore
+      // Lock when the technician has an active assigned job.
       final jobs = await Supabase.instance.client
           .from('jobs')
           .select('id, status')
           .eq('technician_id', userId)
-          .filter('status', 'in', '("in_progress")')
+          .filter(
+            'status',
+            'in',
+            '("on_the_way","arrived","in_progress","pending_confirm")',
+          )
           .limit(1);
 
       final isLocked = jobs.isNotEmpty;
@@ -768,7 +1158,11 @@ class JobRepository {
           .from('jobs')
           .select('id')
           .eq('technician_id', userId)
-          .filter('status', 'in', '("in_progress")')
+          .filter(
+            'status',
+            'in',
+            '("on_the_way","arrived","in_progress","pending_confirm")',
+          )
           .limit(1);
 
       if (jobs.isEmpty) return null;
@@ -780,16 +1174,19 @@ class JobRepository {
   }
 
   /// Watch technician lock status in real-time
+
+  @override
   Stream<bool> watchTechnicianLockStatus(String userId) {
     return Supabase.instance.client
         .from('jobs')
         .stream(primaryKey: ['id'])
         .eq('technician_id', userId)
         .map((data) {
-          // Check if any job is in 'in_progress' or 'accepted' status
-          // 'price_pending' does NOT lock the technician
+          // Lock stream follows active in-service statuses.
           final hasLockedJob = data.any(
-            (job) => ['in_progress'].contains(job['status']),
+            (job) => _activeLockStatuses.contains(
+              JobStatus.normalize((job['status'] ?? '').toString()),
+            ),
           );
           return hasLockedJob;
         });
@@ -885,9 +1282,79 @@ class JobRepository {
 
   /// Watch all jobs for a user (customer or technician)
   Stream<List<Job>> watchMyJobs(String userId, {bool isTechnician = false}) {
-    // Determine column based on user type (handled in service, but we pass flag)
-    // Using the centralized service for consistency
-    return _realtimeService.streamMyJobs(userId, isTechnician: isTechnician);
+    late StreamController<List<Job>> controller;
+    StreamSubscription<List<Job>>? realtimeJobsSubscription;
+    StreamSubscription<void>? changeSubscription;
+    Timer? pollingTimer;
+
+    var isRefreshing = false;
+    var lastRefresh = DateTime.fromMillisecondsSinceEpoch(0);
+
+    Future<void> refreshJobs({bool force = false}) async {
+      if (controller.isClosed || isRefreshing) return;
+      if (!force &&
+          DateTime.now().difference(lastRefresh) < const Duration(seconds: 2)) {
+        return;
+      }
+
+      isRefreshing = true;
+      try {
+        final jobs = await getMyJobs();
+        if (!controller.isClosed) {
+          controller.add(jobs);
+        }
+        lastRefresh = DateTime.now();
+      } catch (e) {
+        debugPrint('⚠️ watchMyJobs refresh failed: $e');
+      } finally {
+        isRefreshing = false;
+      }
+    }
+
+    controller = StreamController<List<Job>>(
+      onListen: () async {
+        // Initial snapshot from HTTP avoids hard dependency on realtime handshake.
+        await refreshJobs(force: true);
+
+        // Fast path: realtime my-jobs stream. If it times out, polling still works.
+        realtimeJobsSubscription = _realtimeService
+            .streamMyJobs(userId, isTechnician: isTechnician)
+            .listen(
+              (jobs) {
+                if (!controller.isClosed) {
+                  controller.add(jobs);
+                }
+                lastRefresh = DateTime.now();
+              },
+              onError: (Object error, StackTrace stackTrace) {
+                debugPrint(
+                  '⚠️ watchMyJobs realtime stream failed, fallback to polling: $error',
+                );
+              },
+            );
+
+        // Change notifications trigger immediate refetch when available.
+        changeSubscription = _realtimeService.streamJobTableChanges().listen(
+          (_) => refreshJobs(),
+          onError: (Object error, StackTrace stackTrace) {
+            debugPrint('⚠️ watchMyJobs change-stream error: $error');
+          },
+        );
+
+        // Hard fallback path to keep dashboard fresh even when realtime is unstable.
+        pollingTimer = Timer.periodic(
+          const Duration(seconds: 10),
+          (_) => refreshJobs(),
+        );
+      },
+      onCancel: () async {
+        await realtimeJobsSubscription?.cancel();
+        await changeSubscription?.cancel();
+        pollingTimer?.cancel();
+      },
+    );
+
+    return controller.stream;
   }
 
   // Stream nearby jobs using the RealtimeService
@@ -896,7 +1363,7 @@ class JobRepository {
   Stream<List<Job>> watchNearbyJobs({
     required double lat,
     required double lng,
-    double radius = 5000,
+    double radius = 10000,
     String? serviceId,
   }) async* {
     // 1. Initial Fetch
@@ -913,29 +1380,63 @@ class JobRepository {
       yield [];
     }
 
-    // 2. Setup Realtime Subscription via Service
-    final changesStream = _realtimeService.streamJobTableChanges();
+    // 2. Setup trigger stream driven by realtime events + periodic polling
+    final triggerController = StreamController<void>();
+    StreamSubscription<void>? realtimeSubscription;
+    Timer? pollingTimer;
 
-    // 3. Listen to changes and refetch
-    await for (final _ in changesStream) {
-      debugPrint('🔔 Realtime update received! Triggering refetch...');
-      try {
-        final updatedJobs = await getNearbyJobsRpc(
-          lat: lat,
-          lng: lng,
-          radiusMeters: radius.toInt(),
-          serviceId: serviceId,
-        );
-        yield updatedJobs;
-      } catch (e) {
-        debugPrint('❌ Refetch failed: $e');
+    void triggerRefetch() {
+      if (!triggerController.isClosed) {
+        triggerController.add(null);
       }
+    }
+
+    realtimeSubscription = _realtimeService.streamJobTableChanges().listen(
+      (_) => triggerRefetch(),
+      onError: (Object error, StackTrace stackTrace) {
+        debugPrint('⚠️ Realtime change stream error: $error');
+      },
+    );
+
+    pollingTimer = Timer.periodic(
+      const Duration(seconds: 8),
+      (_) => triggerRefetch(),
+    );
+
+    // 3. Consume triggers and refetch with throttling
+    DateTime lastFetchTime = DateTime.now();
+
+    try {
+      await for (final _ in triggerController.stream) {
+        // Throttle: Max 1 fetch every 2 seconds to prevent flooding
+        if (DateTime.now().difference(lastFetchTime) <
+            const Duration(seconds: 2)) {
+          continue;
+        }
+
+        lastFetchTime = DateTime.now();
+        try {
+          final updatedJobs = await getNearbyJobsRpc(
+            lat: lat,
+            lng: lng,
+            radiusMeters: radius.toInt(),
+            serviceId: serviceId,
+          );
+          yield updatedJobs;
+        } catch (e) {
+          debugPrint('❌ Refetch failed: $e');
+        }
+      }
+    } finally {
+      await realtimeSubscription.cancel();
+      pollingTimer.cancel();
+      await triggerController.close();
     }
   }
 }
 
 @Riverpod(keepAlive: true)
-JobRepository jobRepository(JobRepositoryRef ref) {
+JobRepository jobRepository(Ref ref) {
   final client = ref.watch(apiClientProvider);
   final photoService = PhotoUploadService(Supabase.instance.client);
   final workQueue = ref.watch(workQueueServiceProvider);

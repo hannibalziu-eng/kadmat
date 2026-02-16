@@ -23,7 +23,7 @@ import '../features/jobs/presentation/searching_for_technician_screen.dart';
 import '../features/technician/presentation/jobs/technician_job_detail_screen.dart';
 import '../features/jobs/presentation/customer_active_job_screen.dart';
 
-import '../features/technician/presentation/technician_profile_screen.dart';
+import '../features/technician/presentation/technician_public_profile_screen.dart';
 // New job flow screens
 import '../features/jobs/presentation/screens/customer_screens.dart';
 import '../features/jobs/presentation/screens/technician_screens.dart';
@@ -37,6 +37,9 @@ import '../features/jobs/presentation/screens/customer_service_completion_confir
 import '../features/notifications/presentation/screens/notifications_screen.dart';
 import '../features/jobs/presentation/screens/customer_service_request_screen.dart';
 import '../features/jobs/presentation/screens/customer_job_tracking_screen.dart';
+import '../features/bidding/presentation/screens/customer_live_bidding_screen.dart';
+import '../features/bidding/presentation/screens/technician_bidding_screen.dart';
+import '../features/bidding/presentation/screens/waitlist_offer_screen.dart';
 import '../features/wallet/presentation/wallet_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -44,6 +47,8 @@ import 'navigation/app_routes.dart';
 
 part 'router.g.dart';
 
+// Legacy router kept for reference and compatibility during migration.
+// Active runtime router is defined in lib/src/core/router_modular.dart.
 @riverpod
 GoRouter goRouter(Ref ref) {
   final authState = ref.watch(authStateChangesProvider);
@@ -240,7 +245,7 @@ GoRouter goRouter(Ref ref) {
         path: AppRoutes.customerJobSearching,
         builder: (context, state) {
           final jobId = state.pathParameters['jobId']!;
-          return CustomerSearchingScreen(jobId: jobId);
+          return CustomerLiveBiddingScreen(jobId: jobId);
         },
       ),
       GoRoute(
@@ -343,6 +348,20 @@ GoRouter goRouter(Ref ref) {
           return TechnicianCompleteWorkScreen(jobId: jobId);
         },
       ),
+      GoRoute(
+        path: AppRoutes.technicianBidding,
+        builder: (context, state) {
+          final jobId = state.pathParameters['jobId']!;
+          return TechnicianBiddingScreen(jobId: jobId);
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.waitlistOffer,
+        builder: (context, state) {
+          final waitlistId = state.pathParameters['waitlistId']!;
+          return WaitlistOfferScreen(waitlistId: waitlistId);
+        },
+      ),
 
       // Photo Capture Routes
       GoRoute(
@@ -381,7 +400,7 @@ GoRouter goRouter(Ref ref) {
         path: AppRoutes.technicianProfile,
         builder: (context, state) {
           final technicianId = state.pathParameters['technicianId']!;
-          return TechnicianProfileScreen(technicianId: technicianId);
+          return TechnicianPublicProfileScreen(technicianId: technicianId);
         },
       ),
       GoRoute(
@@ -396,11 +415,11 @@ GoRouter goRouter(Ref ref) {
         path: AppRoutes.chat,
         builder: (context, state) {
           final jobId = state.pathParameters['jobId']!;
-          final extra = state.extra as Map<String, dynamic>;
+          final extra = state.extra as Map<String, dynamic>? ?? const {};
           return ChatScreen(
             jobId: jobId,
-            otherUserName: extra['otherUserName'],
-            otherUserImage: extra['otherUserImage'],
+            otherUserName: extra['otherUserName']?.toString(),
+            otherUserImage: extra['otherUserImage']?.toString(),
           );
         },
       ),

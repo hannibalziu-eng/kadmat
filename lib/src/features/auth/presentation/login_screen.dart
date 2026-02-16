@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_scalify/flutter_scalify.dart';
+import '../../../core/navigation/app_routes.dart';
 import 'auth_controller.dart';
+import 'widgets/oauth_login_screen.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -33,7 +35,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             requiredUserType: 'customer',
           );
       if (success && mounted) {
-        context.go('/');
+        context.go(AppRoutes.home);
       }
     }
   }
@@ -104,7 +106,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   alignment: Alignment.centerLeft,
                   child: TextButton(
                     onPressed: () {
-                      context.push('/forgot-password');
+                      context.push(AppRoutes.forgotPassword);
                     },
                     child: const Text('نسيت كلمة المرور؟'),
                   ),
@@ -144,12 +146,25 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           final success = await ref
                               .read(authControllerProvider.notifier)
                               .signInAsGuest();
-                          if (success && mounted) {
-                            context.go('/');
-                          }
+                          if (!context.mounted || !success) return;
+                          context.go(AppRoutes.home);
                         },
                   icon: const Icon(Icons.person_outline),
                   label: const Text('دخول كزائر'),
+                ),
+                const SizedBox(height: 16),
+                OutlinedButton.icon(
+                  onPressed: state.isLoading
+                      ? null
+                      : () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => const OAuthLoginScreen(),
+                            ),
+                          );
+                        },
+                  icon: const Icon(Icons.alternate_email),
+                  label: const Text('تسجيل الدخول الاجتماعي'),
                 ),
               ],
             ),

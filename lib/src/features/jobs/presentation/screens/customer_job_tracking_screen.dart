@@ -6,6 +6,8 @@ import 'package:go_router/go_router.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../../../../core/app_theme.dart';
+import '../../../../core/navigation/app_routes.dart';
+import '../../../../core/navigation/job_flow_redirects.dart';
 import '../../../../core/widgets/job_progress_stepper.dart';
 import '../../../messages/presentation/chat_screen.dart';
 import '../../data/job_repository.dart';
@@ -41,7 +43,7 @@ class _CustomerJobTrackingScreenState
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: BackButton(
-          onPressed: () => context.go('/'), // Go home on back
+          onPressed: () => context.go(AppRoutes.home), // Go home on back
           color: Colors.black, // Dark icon for visibility on map (usually)
           // But I'll add a container background if needed or check theme.
           // AppTheme dark? Then text is white. Map is light?
@@ -66,23 +68,16 @@ class _CustomerJobTrackingScreenState
   }
 
   Widget _buildContent(Job job) {
-    // If job is completed, navigate away or show completion UI
-    // Ideally this logic belongs in a listener, but build side-effect is risky.
-    // I'll keep it simple for now or use `ref.listen` in `build` if strictly needed.
-    // Logic: If status is 'completed' -> go to rate screen.
-    // I will add a listener in `build` via `ref.listen` implicitly or just check here.
+    final route = customerRouteForJobStatus(
+      status: job.status,
+      jobId: widget.jobId,
+    );
+    final inProgressRoute = AppRoutes.buildCustomerInProgressPath(widget.jobId);
 
-    if (job.status == JobStatus.completed) {
-      // Use a post-frame callback to navigate
+    if (route != null && route != inProgressRoute) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) context.go('/jobs/${widget.jobId}/customer/rate');
-      });
-    } else if (job.status == JobStatus.paymentPending) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        // Navigate to payment/confirmation
-        if (mounted) {
-          context.go('/jobs/${widget.jobId}/customer/confirm-completion');
-        }
+        if (!mounted) return;
+        context.go(route);
       });
     }
 
@@ -252,14 +247,16 @@ class _CustomerJobTrackingScreenState
   }
 
   String _getStatusMessage(String status) {
-    switch (status) {
+    final normalizedStatus = JobStatus.normalize(status);
+    switch (normalizedStatus) {
+      case JobStatus.onTheWay:
+        return 'الفني في الطريق إليك الآن...';
+      case JobStatus.arrived:
+        return 'الفني وصل إلى موقعك.';
       case JobStatus.inProgress:
         return 'الفني يعمل على طلبك الآن...';
       case JobStatus.accepted:
-      case JobStatus.acceptedByTech:
         return 'تم قبول الطلب، الفني في الطريق!';
-      case JobStatus.customerAgreed:
-        return 'بانتظار وصول الفني...';
       default:
         return 'جاري التنفيذ...';
     }

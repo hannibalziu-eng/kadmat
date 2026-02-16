@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/api/endpoints.dart';
 import '../domain/service.dart';
@@ -46,12 +47,12 @@ class ServiceRepository {
 }
 
 @Riverpod(keepAlive: true)
-ServiceRepository serviceRepository(ServiceRepositoryRef ref) {
+ServiceRepository serviceRepository(Ref ref) {
   final client = ref.watch(apiClientProvider);
   return ServiceRepository(client);
 }
 
 @riverpod
-Future<List<Service>> allServices(AllServicesRef ref) {
+Future<List<Service>> allServices(Ref ref) {
   return ref.watch(serviceRepositoryProvider).getServices();
 }

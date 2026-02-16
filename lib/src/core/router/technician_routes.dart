@@ -1,7 +1,7 @@
 import 'package:go_router/go_router.dart';
 import '../../features/technician/presentation/technician_main_screen.dart';
 import '../../features/technician/presentation/jobs/technician_job_detail_screen.dart';
-import '../../features/technician/presentation/technician_profile_screen.dart';
+import '../../features/technician/presentation/technician_public_profile_screen.dart';
 import '../navigation/app_routes.dart';
 
 List<GoRoute> getTechnicianRoutes() {
@@ -21,7 +21,7 @@ List<GoRoute> getTechnicianRoutes() {
       path: AppRoutes.technicianProfile,
       builder: (context, state) {
         final technicianId = state.pathParameters['technicianId']!;
-        return TechnicianProfileScreen(technicianId: technicianId);
+        return TechnicianPublicProfileScreen(technicianId: technicianId);
       },
     ),
   ];

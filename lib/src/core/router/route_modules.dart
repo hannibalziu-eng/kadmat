@@ -1,5 +1,53 @@
 import 'package:go_router/go_router.dart';
-import 'package:flutter/material.dart';
+
+// Auth Features
+import '../../features/auth/presentation/onboarding_screen.dart';
+import '../../features/auth/presentation/welcome_screen.dart';
+import '../../features/auth/presentation/login_screen.dart';
+import '../../features/auth/presentation/register_screen.dart';
+import '../../features/auth/presentation/forgot_password_screen.dart';
+import '../../features/auth/presentation/technician_landing_screen.dart';
+import '../../features/auth/presentation/technician_login_screen.dart';
+import '../../features/auth/presentation/technician_register_screen.dart';
+
+// Home & Core Features
+import '../../features/main/main_screen.dart';
+import '../../features/booking/presentation/booking_screen.dart';
+import '../../features/booking/presentation/service_details_screen.dart';
+import '../../features/messages/presentation/messages_screen.dart';
+import '../../features/messages/presentation/chat_screen.dart';
+import '../../features/tracking/presentation/tracking_screen.dart';
+import '../../features/wallet/presentation/wallet_screen.dart';
+import '../../features/notifications/presentation/screens/notifications_screen.dart';
+
+// Technician Features
+import '../../features/technician/presentation/technician_main_screen.dart';
+import '../../features/technician/presentation/jobs/technician_job_detail_screen.dart';
+import '../../features/technician/presentation/technician_public_profile_screen.dart';
+import '../../features/technician/presentation/screens/technician_settings_screen.dart';
+import '../../features/technician/presentation/screens/technician_help_screen.dart';
+
+// Job & Order Features
+import '../../features/jobs/presentation/screens/customer_job_tracking_screen.dart';
+import '../../features/jobs/presentation/screens/customer_payment_processing_screen.dart';
+import '../../features/jobs/presentation/payment/customer_payment_approval_screen.dart';
+import '../../features/jobs/presentation/screens/customer_screens.dart';
+import '../../features/jobs/presentation/screens/technician_screens.dart';
+import '../../features/jobs/presentation/screens/customer_service_request_screen.dart';
+import '../../features/jobs/presentation/screens/technician_complete_work_screen.dart';
+import '../../features/jobs/presentation/screens/customer_service_completion_confirmation_screen.dart';
+import '../../features/bidding/presentation/screens/technician_bidding_screen.dart';
+import '../../features/bidding/presentation/screens/waitlist_offer_screen.dart';
+
+// Payment & Photos
+import '../../features/jobs/presentation/photos/pre_service_photo_screen.dart';
+import '../../features/jobs/presentation/photos/post_service_photo_screen.dart';
+import '../../features/jobs/presentation/payment/price_confirmation_screen.dart';
+import '../../features/orders/presentation/technician_price_input_screen.dart';
+
+// Admin Features
+import '../admin/presentation/screens/admin_dashboard_screen.dart';
+import '../navigation/app_routes.dart';
 
 /// Modular route definitions for better organization and maintainability
 class RouteModules {
@@ -78,7 +126,7 @@ class RouteModules {
           ),
           GoRoute(
             path: 'customer-wallet',
-            builder: (context, state) => const CustomerWalletScreen(),
+            builder: (context, state) => const WalletScreen(),
           ),
           GoRoute(
             path: 'notifications',
@@ -92,22 +140,30 @@ class RouteModules {
   static List<GoRoute> getTechnicianRoutes() {
     return [
       GoRoute(
-        path: '/technician/home',
+        path: AppRoutes.technicianHome,
         builder: (context, state) => const TechnicianMainScreen(),
       ),
       GoRoute(
-        path: '/technician/job/:jobId',
+        path: AppRoutes.technicianJobDetail,
         builder: (context, state) {
           final jobId = state.pathParameters['jobId']!;
           return TechnicianJobDetailScreen(jobId: jobId);
         },
       ),
       GoRoute(
-        path: '/technician-profile/:technicianId',
+        path: AppRoutes.technicianProfile,
         builder: (context, state) {
           final technicianId = state.pathParameters['technicianId']!;
-          return TechnicianProfileScreen(technicianId: technicianId);
+          return TechnicianPublicProfileScreen(technicianId: technicianId);
         },
+      ),
+      GoRoute(
+        path: AppRoutes.technicianSettings,
+        builder: (context, state) => const TechnicianSettingsScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.technicianHelp,
+        builder: (context, state) => const TechnicianHelpScreen(),
       ),
     ];
   }
@@ -116,63 +172,72 @@ class RouteModules {
     return [
       // Customer Job Flow
       GoRoute(
-        path: '/active-job/:jobId',
-        builder: (context, state) {
-          final jobId = state.pathParameters['jobId']!;
-          return CustomerActiveJobScreen(jobId: jobId);
+        path: AppRoutes.activeJob,
+        // Legacy alias: keep deep links working but route to canonical flow entry.
+        redirect: (context, state) {
+          final jobId = state.pathParameters['jobId'];
+          if (jobId == null || jobId.isEmpty) return AppRoutes.home;
+          return AppRoutes.buildCustomerSearchingPath(jobId);
         },
       ),
       GoRoute(
-        path: '/jobs/:jobId/customer/searching',
+        path: AppRoutes.customerJobSearching,
         builder: (context, state) {
           final jobId = state.pathParameters['jobId']!;
           return CustomerSearchingScreen(jobId: jobId);
         },
       ),
       GoRoute(
-        path: '/jobs/:jobId/customer/technician-found',
+        path: AppRoutes.customerTechnicianFound,
         builder: (context, state) {
           final jobId = state.pathParameters['jobId']!;
           return CustomerTechnicianFoundScreen(jobId: jobId);
         },
       ),
       GoRoute(
-        path: '/jobs/:jobId/customer/price-offer',
+        path: AppRoutes.customerPriceOffer,
         builder: (context, state) {
           final jobId = state.pathParameters['jobId']!;
           return CustomerPriceOfferScreen(jobId: jobId);
         },
       ),
       GoRoute(
-        path: '/jobs/:jobId/customer/in-progress',
+        path: AppRoutes.customerInProgress,
         builder: (context, state) {
           final jobId = state.pathParameters['jobId']!;
           return CustomerJobTrackingScreen(jobId: jobId);
         },
       ),
       GoRoute(
-        path: '/jobs/:jobId/customer/payment-processing',
+        path: AppRoutes.customerPaymentProcessing,
         builder: (context, state) {
           final jobId = state.pathParameters['jobId']!;
           return CustomerPaymentProcessingScreen(jobId: jobId);
         },
       ),
       GoRoute(
-        path: '/jobs/:jobId/customer/rate',
+        path: AppRoutes.customerPaymentApproval,
+        builder: (context, state) {
+          final jobId = state.pathParameters['jobId']!;
+          return CustomerPaymentApprovalScreen(jobId: jobId);
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.customerRate,
         builder: (context, state) {
           final jobId = state.pathParameters['jobId']!;
           return CustomerRateScreen(jobId: jobId);
         },
       ),
       GoRoute(
-        path: '/jobs/:jobId/customer/completed',
+        path: AppRoutes.customerCompleted,
         builder: (context, state) {
           final jobId = state.pathParameters['jobId']!;
           return CustomerCompletedScreen(jobId: jobId);
         },
       ),
       GoRoute(
-        path: '/jobs/:jobId/customer/confirm-completion',
+        path: AppRoutes.customerConfirmCompletion,
         builder: (context, state) {
           final jobId = state.pathParameters['jobId']!;
           return CustomerServiceCompletionConfirmationScreen(jobId: jobId);
@@ -180,79 +245,113 @@ class RouteModules {
       ),
       // Technician Job Flow
       GoRoute(
-        path: '/jobs/:jobId/technician/accepted',
+        path: AppRoutes.technicianAccepted,
         builder: (context, state) {
           final jobId = state.pathParameters['jobId']!;
           return TechnicianAcceptedScreen(jobId: jobId);
         },
       ),
       GoRoute(
-        path: '/jobs/:jobId/technician/set-price',
+        path: AppRoutes.technicianJobDetailV2,
+        builder: (context, state) {
+          final jobId = state.pathParameters['jobId']!;
+          return TechnicianJobDetailScreen(jobId: jobId);
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.technicianSetPrice,
         builder: (context, state) {
           final jobId = state.pathParameters['jobId']!;
           return TechnicianPriceInputScreen(orderId: jobId);
         },
       ),
       GoRoute(
-        path: '/jobs/:jobId/technician/waiting',
+        path: AppRoutes.technicianWaiting,
         builder: (context, state) {
           final jobId = state.pathParameters['jobId']!;
           return TechnicianWaitingScreen(jobId: jobId);
         },
       ),
       GoRoute(
-        path: '/jobs/:jobId/technician/in-progress',
+        path: AppRoutes.technicianInProgress,
         builder: (context, state) {
           final jobId = state.pathParameters['jobId']!;
           return TechnicianInProgressScreen(jobId: jobId);
         },
       ),
       GoRoute(
-        path: '/jobs/:jobId/technician/completed',
+        path: AppRoutes.technicianCompleted,
         builder: (context, state) {
           final jobId = state.pathParameters['jobId']!;
           return TechnicianCompletedScreen(jobId: jobId);
         },
       ),
       GoRoute(
-        path: '/jobs/:jobId/technician/pre-photos',
+        path: AppRoutes.technicianPrePhotos,
         builder: (context, state) {
           final jobId = state.pathParameters['jobId']!;
           return PreServicePhotoScreen(jobId: jobId);
         },
       ),
       GoRoute(
-        path: '/jobs/:jobId/technician/post-photos',
+        path: AppRoutes.technicianPostPhotos,
         builder: (context, state) {
           final jobId = state.pathParameters['jobId']!;
           return PostServicePhotoScreen(jobId: jobId);
         },
       ),
       GoRoute(
-        path: '/jobs/:jobId/technician/price-confirmation',
+        path: AppRoutes.technicianPriceConfirmation,
         builder: (context, state) {
           final jobId = state.pathParameters['jobId']!;
           return PriceConfirmationScreen(jobId: jobId);
         },
       ),
       GoRoute(
-        path: '/jobs/:jobId/technician/complete-work-input',
+        path: AppRoutes.technicianCompleteWorkInput,
         builder: (context, state) {
           final jobId = state.pathParameters['jobId']!;
           return TechnicianCompleteWorkScreen(jobId: jobId);
         },
       ),
       GoRoute(
-        path: '/jobs/:jobId/chat',
+        path: AppRoutes.technicianBidding,
         builder: (context, state) {
           final jobId = state.pathParameters['jobId']!;
-          final extra = state.extra as Map<String, dynamic>;
+          return TechnicianBiddingScreen(jobId: jobId);
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.waitlistOffer,
+        builder: (context, state) {
+          final waitlistId = state.pathParameters['waitlistId']!;
+          return WaitlistOfferScreen(waitlistId: waitlistId);
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.chat,
+        builder: (context, state) {
+          final jobId = state.pathParameters['jobId']!;
+          final extra = state.extra as Map<String, dynamic>? ?? const {};
           return ChatScreen(
             jobId: jobId,
-            otherUserName: extra['otherUserName'],
-            otherUserImage: extra['otherUserImage'],
+            otherUserName: extra['otherUserName']?.toString(),
+            otherUserImage: extra['otherUserImage']?.toString(),
           );
         },
+      ),
+    ];
+  }
+
+  static List<GoRoute> getAdminRoutes() {
+    return [
+      GoRoute(
+        path: '/admin',
+        builder: (context, state) => const AdminDashboardScreen(),
+      ),
+      GoRoute(
+        path: '/admin/dashboard',
+        builder: (context, state) => const AdminDashboardScreen(),
       ),
     ];
   }
@@ -260,7 +359,7 @@ class RouteModules {
   static List<GoRoute> getUtilityRoutes() {
     return [
       GoRoute(
-        path: '/technician-price-input',
+        path: AppRoutes.technicianPriceInput,
         builder: (context, state) {
           final extra = state.extra as Map<String, dynamic>;
           return TechnicianPriceInputScreen(
@@ -270,353 +369,28 @@ class RouteModules {
         },
       ),
       GoRoute(
-        path: '/customer-confirmation',
-        pageBuilder: (context, state) {
-          final extra = state.extra as Map<String, dynamic>;
-          return CustomTransitionPage(
-            key: state.pageKey,
-            child: CustomerPriceConfirmationDialog(
-              price: extra['price'],
-              technicianName: extra['technicianName'],
-              serviceName: extra['serviceName'],
-            ),
-            transitionsBuilder:
-                (context, animation, secondaryAnimation, child) {
-                  return FadeTransition(opacity: animation, child: child);
-                },
-            opaque: false,
-            barrierDismissible: false,
-            barrierColor: Colors.black.withValues(alpha: 0.5),
-          );
-        },
-      ),
-      GoRoute(
-        path: '/searching-for-technician',
-        builder: (context, state) {
+        path: AppRoutes.searchingForTechnician,
+        // Legacy route fallback: redirect to canonical searching screen when possible.
+        redirect: (context, state) {
           final extra = state.extra as Map<String, dynamic>?;
-          return SearchingForTechnicianScreen(
-            jobId: extra?['jobId'] ?? '',
-            serviceName: extra?['serviceName'] ?? '',
-            lat: extra?['lat'] as double?,
-            lng: extra?['lng'] as double?,
-          );
+          final jobId = extra?['jobId']?.toString();
+          if (jobId != null && jobId.isNotEmpty) {
+            return AppRoutes.buildCustomerSearchingPath(jobId);
+          }
+          return AppRoutes.home;
         },
       ),
       GoRoute(
-        path: '/customer/create-request',
+        path: AppRoutes.customerCreateRequest,
         builder: (context, state) => const CustomerServiceRequestScreen(),
       ),
       GoRoute(
-        path: '/rate-job/:jobId',
+        path: AppRoutes.rateJob,
         redirect: (context, state) {
           final jobId = state.pathParameters['jobId']!;
-          return '/jobs/$jobId/customer/rate';
+          return AppRoutes.buildCustomerRatePath(jobId);
         },
       ),
     ];
   }
-}
-
-// Import these screen widgets in your router file
-// These are placeholders for type checking
-class OnboardingScreen extends StatelessWidget {
-  const OnboardingScreen({super.key});
-  @override
-  Widget build(BuildContext context) => const SizedBox();
-}
-
-class WelcomeScreen extends StatelessWidget {
-  const WelcomeScreen({super.key});
-  @override
-  Widget build(BuildContext context) => const SizedBox();
-}
-
-class LoginScreen extends StatelessWidget {
-  const LoginScreen({super.key});
-  @override
-  Widget build(BuildContext context) => const SizedBox();
-}
-
-class RegisterScreen extends StatelessWidget {
-  const RegisterScreen({super.key});
-  @override
-  Widget build(BuildContext context) => const SizedBox();
-}
-
-class ForgotPasswordScreen extends StatelessWidget {
-  const ForgotPasswordScreen({super.key});
-  @override
-  Widget build(BuildContext context) => const SizedBox();
-}
-
-class TechnicianLandingScreen extends StatelessWidget {
-  const TechnicianLandingScreen({super.key});
-  @override
-  Widget build(BuildContext context) => const SizedBox();
-}
-
-class TechnicianLoginScreen extends StatelessWidget {
-  const TechnicianLoginScreen({super.key});
-  @override
-  Widget build(BuildContext context) => const SizedBox();
-}
-
-class TechnicianRegisterScreen extends StatelessWidget {
-  const TechnicianRegisterScreen({super.key});
-  @override
-  Widget build(BuildContext context) => const SizedBox();
-}
-
-class MainScreen extends StatelessWidget {
-  const MainScreen({super.key});
-  @override
-  Widget build(BuildContext context) => const SizedBox();
-}
-
-class BookingScreen extends StatelessWidget {
-  const BookingScreen({super.key, required this.serviceId});
-  final String serviceId;
-  @override
-  Widget build(BuildContext context) => const SizedBox();
-}
-
-class ServiceDetailsScreen extends StatelessWidget {
-  const ServiceDetailsScreen({
-    super.key,
-    required this.serviceId,
-    required this.serviceName,
-  });
-  final String serviceId, serviceName;
-  @override
-  Widget build(BuildContext context) => const SizedBox();
-}
-
-class MessagesScreen extends StatelessWidget {
-  const MessagesScreen({super.key});
-  @override
-  Widget build(BuildContext context) => const SizedBox();
-}
-
-class TrackingScreen extends StatelessWidget {
-  const TrackingScreen({super.key, required this.bookingId});
-  final String bookingId;
-  @override
-  Widget build(BuildContext context) => const SizedBox();
-}
-
-class WalletScreen extends StatelessWidget {
-  const WalletScreen({super.key});
-  @override
-  Widget build(BuildContext context) => const SizedBox();
-}
-
-class CustomerWalletScreen extends StatelessWidget {
-  const CustomerWalletScreen({super.key});
-  @override
-  Widget build(BuildContext context) => const SizedBox();
-}
-
-class NotificationsScreen extends StatelessWidget {
-  const NotificationsScreen({super.key});
-  @override
-  Widget build(BuildContext context) => const SizedBox();
-}
-
-class TechnicianMainScreen extends StatelessWidget {
-  const TechnicianMainScreen({super.key});
-  @override
-  Widget build(BuildContext context) => const SizedBox();
-}
-
-class TechnicianJobDetailScreen extends StatelessWidget {
-  const TechnicianJobDetailScreen({super.key, required this.jobId});
-  final String jobId;
-  @override
-  Widget build(BuildContext context) => const SizedBox();
-}
-
-class TechnicianProfileScreen extends StatelessWidget {
-  const TechnicianProfileScreen({super.key, required this.technicianId});
-  final String technicianId;
-  @override
-  Widget build(BuildContext context) => const SizedBox();
-}
-
-class CustomerActiveJobScreen extends StatelessWidget {
-  const CustomerActiveJobScreen({super.key, required this.jobId});
-  final String jobId;
-  @override
-  Widget build(BuildContext context) => const SizedBox();
-}
-
-class CustomerSearchingScreen extends StatelessWidget {
-  const CustomerSearchingScreen({super.key, required this.jobId});
-  final String jobId;
-  @override
-  Widget build(BuildContext context) => const SizedBox();
-}
-
-class CustomerTechnicianFoundScreen extends StatelessWidget {
-  const CustomerTechnicianFoundScreen({super.key, required this.jobId});
-  final String jobId;
-  @override
-  Widget build(BuildContext context) => const SizedBox();
-}
-
-class CustomerPriceOfferScreen extends StatelessWidget {
-  const CustomerPriceOfferScreen({super.key, required this.jobId});
-  final String jobId;
-  @override
-  Widget build(BuildContext context) => const SizedBox();
-}
-
-class CustomerJobTrackingScreen extends StatelessWidget {
-  const CustomerJobTrackingScreen({super.key, required this.jobId});
-  final String jobId;
-  @override
-  Widget build(BuildContext context) => const SizedBox();
-}
-
-class CustomerPaymentProcessingScreen extends StatelessWidget {
-  const CustomerPaymentProcessingScreen({super.key, required this.jobId});
-  final String jobId;
-  @override
-  Widget build(BuildContext context) => const SizedBox();
-}
-
-class CustomerRateScreen extends StatelessWidget {
-  const CustomerRateScreen({super.key, required this.jobId});
-  final String jobId;
-  @override
-  Widget build(BuildContext context) => const SizedBox();
-}
-
-class CustomerCompletedScreen extends StatelessWidget {
-  const CustomerCompletedScreen({super.key, required this.jobId});
-  final String jobId;
-  @override
-  Widget build(BuildContext context) => const SizedBox();
-}
-
-class CustomerServiceCompletionConfirmationScreen extends StatelessWidget {
-  const CustomerServiceCompletionConfirmationScreen({
-    super.key,
-    required this.jobId,
-  });
-  final String jobId;
-  @override
-  Widget build(BuildContext context) => const SizedBox();
-}
-
-class TechnicianAcceptedScreen extends StatelessWidget {
-  const TechnicianAcceptedScreen({super.key, required this.jobId});
-  final String jobId;
-  @override
-  Widget build(BuildContext context) => const SizedBox();
-}
-
-class TechnicianPriceInputScreen extends StatelessWidget {
-  const TechnicianPriceInputScreen({
-    super.key,
-    required this.orderId,
-    this.serviceName,
-  });
-  final String orderId;
-  final String? serviceName;
-  @override
-  Widget build(BuildContext context) => const SizedBox();
-}
-
-class TechnicianWaitingScreen extends StatelessWidget {
-  const TechnicianWaitingScreen({super.key, required this.jobId});
-  final String jobId;
-  @override
-  Widget build(BuildContext context) => const SizedBox();
-}
-
-class TechnicianInProgressScreen extends StatelessWidget {
-  const TechnicianInProgressScreen({super.key, required this.jobId});
-  final String jobId;
-  @override
-  Widget build(BuildContext context) => const SizedBox();
-}
-
-class TechnicianCompletedScreen extends StatelessWidget {
-  const TechnicianCompletedScreen({super.key, required this.jobId});
-  final String jobId;
-  @override
-  Widget build(BuildContext context) => const SizedBox();
-}
-
-class PreServicePhotoScreen extends StatelessWidget {
-  const PreServicePhotoScreen({super.key, required this.jobId});
-  final String jobId;
-  @override
-  Widget build(BuildContext context) => const SizedBox();
-}
-
-class PostServicePhotoScreen extends StatelessWidget {
-  const PostServicePhotoScreen({super.key, required this.jobId});
-  final String jobId;
-  @override
-  Widget build(BuildContext context) => const SizedBox();
-}
-
-class PriceConfirmationScreen extends StatelessWidget {
-  const PriceConfirmationScreen({super.key, required this.jobId});
-  final String jobId;
-  @override
-  Widget build(BuildContext context) => const SizedBox();
-}
-
-class TechnicianCompleteWorkScreen extends StatelessWidget {
-  const TechnicianCompleteWorkScreen({super.key, required this.jobId});
-  final String jobId;
-  @override
-  Widget build(BuildContext context) => const SizedBox();
-}
-
-class ChatScreen extends StatelessWidget {
-  const ChatScreen({
-    super.key,
-    required this.jobId,
-    required this.otherUserName,
-    required this.otherUserImage,
-  });
-  final String jobId, otherUserName, otherUserImage;
-  @override
-  Widget build(BuildContext context) => const SizedBox();
-}
-
-class CustomerPriceConfirmationDialog extends StatelessWidget {
-  const CustomerPriceConfirmationDialog({
-    super.key,
-    required this.price,
-    required this.technicianName,
-    required this.serviceName,
-  });
-  final dynamic price;
-  final String technicianName, serviceName;
-  @override
-  Widget build(BuildContext context) => const SizedBox();
-}
-
-class SearchingForTechnicianScreen extends StatelessWidget {
-  const SearchingForTechnicianScreen({
-    super.key,
-    required this.jobId,
-    required this.serviceName,
-    this.lat,
-    this.lng,
-  });
-  final String jobId, serviceName;
-  final double? lat, lng;
-  @override
-  Widget build(BuildContext context) => const SizedBox();
-}
-
-class CustomerServiceRequestScreen extends StatelessWidget {
-  const CustomerServiceRequestScreen({super.key});
-  @override
-  Widget build(BuildContext context) => const SizedBox();
 }

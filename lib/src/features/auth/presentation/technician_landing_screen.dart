@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/navigation/app_routes.dart';
 
 class TechnicianLandingScreen extends StatelessWidget {
   const TechnicianLandingScreen({super.key});
@@ -109,7 +110,7 @@ class TechnicianLandingScreen extends StatelessWidget {
                   width: double.infinity,
                   height: 50,
                   child: ElevatedButton(
-                    onPressed: () => context.push('/technician/register'),
+                    onPressed: () => context.push(AppRoutes.technicianRegister),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: primaryColor,
                       foregroundColor: Colors.black, // Slate-900 equivalent
@@ -132,7 +133,7 @@ class TechnicianLandingScreen extends StatelessWidget {
                   width: double.infinity,
                   height: 50,
                   child: TextButton(
-                    onPressed: () => context.push('/technician/login'),
+                    onPressed: () => context.push(AppRoutes.technicianLogin),
                     style: TextButton.styleFrom(
                       foregroundColor: primaryColor,
                       shape: RoundedRectangleBorder(

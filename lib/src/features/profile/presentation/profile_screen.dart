@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_scalify/flutter_scalify.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/navigation/app_routes.dart';
 import '../../auth/data/auth_repository.dart';
 import 'edit_profile_screen.dart';
 import 'account_security_screen.dart';
@@ -35,7 +36,7 @@ class ProfileScreen extends ConsumerWidget {
               icon: Icon(Icons.logout, size: 24.s, color: Colors.red),
               onPressed: () {
                 ref.read(authRepositoryProvider).signOut();
-                context.go('/login');
+                context.go(AppRoutes.login);
               },
             ),
         ],
@@ -58,7 +59,7 @@ class ProfileScreen extends ConsumerWidget {
                         ),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.1),
+                            color: Colors.black.withValues(alpha: 0.1),
                             blurRadius: 10.r,
                             offset: Offset(0, 5.h),
                           ),
@@ -134,10 +135,10 @@ class ProfileScreen extends ConsumerWidget {
                               iconColor: const Color(0xFF13b6ec),
                               iconBgColor: const Color(
                                 0xFF13b6ec,
-                              ).withOpacity(0.1),
+                              ).withValues(alpha: 0.1),
                               onTap: () {
                                 ref.read(authRepositoryProvider).signOut();
-                                context.go('/login');
+                                context.go(AppRoutes.login);
                               },
                             ),
                             SizedBox(height: 16.h),
@@ -147,12 +148,10 @@ class ProfileScreen extends ConsumerWidget {
                               subtitle: 'الرجوع لشاشة الترحيب',
                               icon: Icons.home_outlined,
                               iconColor: Colors.orange,
-                              iconBgColor: Colors.orange.withOpacity(0.1),
+                              iconBgColor: Colors.orange.withValues(alpha: 0.1),
                               onTap: () {
                                 ref.read(authRepositoryProvider).signOut();
-                                context.go(
-                                  '/',
-                                ); // Assuming '/' is welcome or splash
+                                context.go(AppRoutes.home);
                               },
                             ),
                           ] else ...[
@@ -164,7 +163,7 @@ class ProfileScreen extends ConsumerWidget {
                               iconColor: const Color(0xFF13b6ec),
                               iconBgColor: const Color(
                                 0xFF13b6ec,
-                              ).withOpacity(0.1),
+                              ).withValues(alpha: 0.1),
                               onTap: () => Navigator.push(
                                 context,
                                 MaterialPageRoute(
@@ -180,7 +179,7 @@ class ProfileScreen extends ConsumerWidget {
                               subtitle: 'تغيير كلمة المرور وتفعيل 2FA',
                               icon: Icons.security,
                               iconColor: Colors.green,
-                              iconBgColor: Colors.green.withOpacity(0.1),
+                              iconBgColor: Colors.green.withValues(alpha: 0.1),
                               onTap: () => Navigator.push(
                                 context,
                                 MaterialPageRoute(
@@ -196,8 +195,9 @@ class ProfileScreen extends ConsumerWidget {
                               subtitle: 'رصيدك الحالي: 350.00 ر.س',
                               icon: Icons.account_balance_wallet_outlined,
                               iconColor: Colors.blue,
-                              iconBgColor: Colors.blue.withOpacity(0.1),
-                              onTap: () => context.push('/customer-wallet'),
+                              iconBgColor: Colors.blue.withValues(alpha: 0.1),
+                              onTap: () =>
+                                  context.push(AppRoutes.customerWallet),
                             ),
                             SizedBox(height: 16.h),
                             _buildProfileOption(
@@ -206,7 +206,7 @@ class ProfileScreen extends ConsumerWidget {
                               subtitle: 'عرض الخدمات المحفوظة لديك',
                               icon: Icons.favorite_border,
                               iconColor: Colors.red,
-                              iconBgColor: Colors.red.withOpacity(0.1),
+                              iconBgColor: Colors.red.withValues(alpha: 0.1),
                               onTap: () => Navigator.push(
                                 context,
                                 MaterialPageRoute(

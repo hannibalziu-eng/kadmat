@@ -10,6 +10,7 @@ import '../../../core/utils/error_handler.dart';
 import '../../../core/widgets/shimmer_skeletons.dart';
 import '../data/job_repository.dart';
 import '../domain/job.dart';
+import '../domain/job_status.dart';
 
 class CustomerActiveJobScreen extends ConsumerStatefulWidget {
   final String jobId;
@@ -38,7 +39,8 @@ class _CustomerActiveJobScreenState
     _jobSubscription = jobRepo.watchJob(widget.jobId).listen((job) {
       if (mounted) {
         setState(() => _job = job);
-        if (job.status == 'completed' && job.customerRating == null) {
+        if (JobStatus.normalize(job.status) == JobStatus.completed &&
+            job.customerRating == null) {
           context.push(AppRoutes.buildCustomerRatePath(widget.jobId));
         }
       }
@@ -73,30 +75,28 @@ class _CustomerActiveJobScreenState
   }
 
   Widget _buildContent() {
-    final status = _job!.status;
+    final status = JobStatus.normalize(_job!.status);
 
     switch (status) {
-      case 'pending':
-      case 'searching':
+      case JobStatus.pending:
+      case JobStatus.searching:
         return _buildSearchingState();
-      case 'no_technician_found':
+      case JobStatus.noTechnicianFound:
         // If technician was assigned after no_technician_found, show found state
         if (_job!.technicianId != null) {
           return _buildTechnicianFoundState();
         }
         return _buildNoTechnicianFoundState();
-      case 'accepted':
-      case 'price_pending':
+      case JobStatus.accepted:
+      case JobStatus.pricePending:
         return _buildTechnicianFoundState();
-      case 'in_progress':
-      case 'customer_agreed':
+      case JobStatus.inProgress:
         return _buildInProgressState();
-      case 'payment_pending':
-      case 'pending_confirm':
+      case JobStatus.pendingConfirm:
         return _buildPaymentPendingState();
-      case 'completed':
+      case JobStatus.completed:
         return _buildCompletedState();
-      case 'cancelled':
+      case JobStatus.cancelled:
         return _buildCancelledState();
       default:
         // Fallback: if technician is assigned, show found state
@@ -108,6 +108,10 @@ class _CustomerActiveJobScreenState
   }
 
   Widget _buildSearchingState() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      context.go(AppRoutes.buildCustomerSearchingPath(widget.jobId));
+    });
     return Center(
       child: Padding(
         padding: EdgeInsets.all(24.w),
@@ -152,6 +156,9 @@ class _CustomerActiveJobScreenState
   }
 
   Widget _buildTechnicianFoundState() {
+    final status = JobStatus.normalize(_job!.status);
+    final hasLockedOfferPrice =
+        status == JobStatus.accepted && _job!.technicianPrice != null;
     return SingleChildScrollView(
       padding: EdgeInsets.all(24.w),
       child: Column(
@@ -160,16 +167,16 @@ class _CustomerActiveJobScreenState
           Container(
             padding: EdgeInsets.all(32.w),
             decoration: BoxDecoration(
-              color: _job!.status == 'price_pending'
+              color: status == JobStatus.pricePending
                   ? Colors.green.withValues(alpha: 0.2)
                   : Colors.orange.withValues(alpha: 0.2),
               shape: BoxShape.circle,
             ),
             child: Icon(
-              _job!.status == 'price_pending'
+              status == JobStatus.pricePending
                   ? Icons.receipt_long
                   : Icons.hourglass_empty,
-              color: _job!.status == 'price_pending'
+              color: status == JobStatus.pricePending
                   ? Colors.green
                   : Colors.orange,
               size: 60.s,
@@ -177,7 +184,11 @@ class _CustomerActiveJobScreenState
           ),
           SizedBox(height: 24.h),
           Text(
-            _job!.status == 'price_pending' ? 'عرض السعر' : 'تم قبول طلبك! ✨',
+            status == JobStatus.pricePending
+                ? 'عرض السعر'
+                : hasLockedOfferPrice
+                ? 'تم تثبيت السعر من العرض ✅'
+                : 'تم قبول طلبك! ✨',
             style: TextStyle(
               fontSize: 22.fz,
               fontWeight: FontWeight.bold,
@@ -186,25 +197,27 @@ class _CustomerActiveJobScreenState
           ),
           SizedBox(height: 12.h),
           Text(
-            _job!.status == 'price_pending'
+            status == JobStatus.pricePending
                 ? 'الفني قم بتحديد السعر للخدمة - هل تقبل بهذا السعر؟'
+                : hasLockedOfferPrice
+                ? 'تم قبول عرض الفني بالسعر المتفق عليه، يمكنك متابعة التنفيذ.'
                 : 'الفني يقوم بتحديد السعر...',
             style: TextStyle(fontSize: 14.fz, color: Colors.white60),
             textAlign: TextAlign.center,
           ),
           SizedBox(height: 32.h),
-          if (_job!.status == 'price_pending') ...[
+          if (status == JobStatus.pricePending) ...[
             _buildPriceCard(),
             SizedBox(height: 24.h),
           ],
           _buildTechnicianInfoCard(),
           SizedBox(height: 32.h),
-          if (_job!.status == 'accepted')
+          if (status == JobStatus.accepted && !hasLockedOfferPrice)
             Container(
               width: double.infinity,
               padding: EdgeInsets.symmetric(vertical: 16.h),
               decoration: BoxDecoration(
-                color: Colors.orange.withOpacity(0.1),
+                color: Colors.orange.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(12.r),
                 border: Border.all(color: Colors.orange, width: 1),
               ),
@@ -233,7 +246,20 @@ class _CustomerActiveJobScreenState
                 ],
               ),
             ),
-          if (_job!.status == 'price_pending') ...[_buildPriceActionButtons()],
+          if (hasLockedOfferPrice) ...[
+            SizedBox(height: 16.h),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () => context.go(
+                  AppRoutes.buildCustomerInProgressPath(widget.jobId),
+                ),
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                child: const Text('متابعة التنفيذ'),
+              ),
+            ),
+          ],
+          if (status == JobStatus.pricePending) ...[_buildPriceActionButtons()],
         ],
       ),
     );
@@ -423,7 +449,7 @@ class _CustomerActiveJobScreenState
                   child: ElevatedButton.icon(
                     onPressed: () {
                       context.push(
-                        '/jobs/${widget.jobId}/chat',
+                        AppRoutes.buildJobChatPath(widget.jobId),
                         extra: {
                           'otherUserId': _job!.technicianId,
                           'otherUserName': techName,
@@ -452,7 +478,9 @@ class _CustomerActiveJobScreenState
                   debugPrint(
                     '👨‍💼 View technician profile: ${_job!.technicianId}',
                   );
-                  context.push('/technician-profile/${_job!.technicianId}');
+                  final technicianId = _job!.technicianId;
+                  if (technicianId == null || technicianId.isEmpty) return;
+                  _openTechnicianProfile(technicianId);
                 },
                 icon: const Icon(Icons.person_outline),
                 label: const Text('البروفايل'),
@@ -472,6 +500,28 @@ class _CustomerActiveJobScreenState
     );
   }
 
+  void _openTechnicianProfile(String technicianId) {
+    final normalizedId = technicianId.trim();
+    if (normalizedId.isEmpty || normalizedId == 'null') {
+      KadmatToast.showWarning(
+        context,
+        title: 'تعذر فتح الملف',
+        message: 'معرّف الفني غير صالح',
+      );
+      return;
+    }
+
+    try {
+      context.push(AppRoutes.buildTechnicianProfilePath(normalizedId));
+    } catch (_) {
+      KadmatToast.showError(
+        context,
+        title: 'تعذر فتح الملف',
+        message: 'فشل الانتقال إلى ملف الفني. حاول مجددًا.',
+      );
+    }
+  }
+
   Widget _buildInProgressState() {
     return SingleChildScrollView(
       padding: EdgeInsets.all(24.w),
@@ -481,7 +531,7 @@ class _CustomerActiveJobScreenState
           Container(
             padding: EdgeInsets.all(32.w),
             decoration: BoxDecoration(
-              color: Colors.blue.withOpacity(0.2),
+              color: Colors.blue.withValues(alpha: 0.2),
               shape: BoxShape.circle,
             ),
             child: Icon(Icons.engineering, color: Colors.blue, size: 60.s),
@@ -506,7 +556,7 @@ class _CustomerActiveJobScreenState
           Container(
             padding: EdgeInsets.all(16.w),
             decoration: BoxDecoration(
-              color: Colors.green.withOpacity(0.2),
+              color: Colors.green.withValues(alpha: 0.2),
               borderRadius: BorderRadius.circular(12.r),
             ),
             child: Row(
@@ -532,7 +582,7 @@ class _CustomerActiveJobScreenState
             child: ElevatedButton.icon(
               onPressed: () {
                 context.push(
-                  '/tracking/${widget.jobId}',
+                  AppRoutes.buildTrackingPath(widget.jobId),
                   extra: {
                     'technicianId': _job!.technicianId,
                     'lat': _job!.lat,
@@ -569,7 +619,7 @@ class _CustomerActiveJobScreenState
             Container(
               padding: EdgeInsets.all(32.w),
               decoration: BoxDecoration(
-                color: Colors.teal.withOpacity(0.2),
+                color: Colors.teal.withValues(alpha: 0.2),
                 shape: BoxShape.circle,
               ),
               child: Icon(Icons.done_all, color: Colors.teal, size: 60.s),
@@ -639,7 +689,7 @@ class _CustomerActiveJobScreenState
             ),
             SizedBox(height: 32.h),
             ElevatedButton(
-              onPressed: () => context.go('/'),
+              onPressed: () => context.go(AppRoutes.home),
               child: const Text('العودة للرئيسية'),
             ),
           ],
@@ -658,7 +708,7 @@ class _CustomerActiveJobScreenState
             Container(
               padding: EdgeInsets.all(32.w),
               decoration: BoxDecoration(
-                color: Colors.orange.withOpacity(0.2),
+                color: Colors.orange.withValues(alpha: 0.2),
                 shape: BoxShape.circle,
               ),
               child: Icon(Icons.search_off, color: Colors.orange, size: 60.s),
@@ -711,7 +761,7 @@ class _CustomerActiveJobScreenState
           Container(
             padding: EdgeInsets.all(32.w),
             decoration: BoxDecoration(
-              color: Colors.purple.withOpacity(0.2),
+              color: Colors.purple.withValues(alpha: 0.2),
               shape: BoxShape.circle,
             ),
             child: Icon(Icons.payment, color: Colors.purple, size: 60.s),
@@ -736,7 +786,7 @@ class _CustomerActiveJobScreenState
           Container(
             padding: EdgeInsets.all(16.w),
             decoration: BoxDecoration(
-              color: Colors.green.withOpacity(0.2),
+              color: Colors.green.withValues(alpha: 0.2),
               borderRadius: BorderRadius.circular(12.r),
             ),
             child: Row(
@@ -762,7 +812,7 @@ class _CustomerActiveJobScreenState
             child: ElevatedButton(
               onPressed: () {
                 context.push(
-                  '/jobs/${widget.jobId}/customer/confirm-completion',
+                  AppRoutes.buildCustomerConfirmCompletionPath(widget.jobId),
                 );
               },
               style: ElevatedButton.styleFrom(
@@ -879,7 +929,7 @@ class _CustomerActiveJobScreenState
       try {
         await ref.read(jobRepositoryProvider).cancelJob(widget.jobId);
         if (mounted) {
-          context.go('/');
+          context.go(AppRoutes.home);
         }
       } catch (e) {
         if (mounted) {

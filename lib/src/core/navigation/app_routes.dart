@@ -16,6 +16,8 @@ class AppRoutes {
   static const technicianLogin = '/technician/login';
   static const technicianRegister = '/technician/register';
   static const technicianHome = '/technician/home';
+  static const technicianSettings = '/technician/settings';
+  static const technicianHelp = '/technician/help';
 
   // ==================== CUSTOMER HOME & TABS ====================
   static const home = '/';
@@ -63,6 +65,8 @@ class AppRoutes {
       '/jobs/:jobId/technician/price-confirmation';
   static const technicianCompleteWorkInput =
       '/jobs/:jobId/technician/complete-work-input';
+  static const technicianBidding = '/jobs/:jobId/technician/bidding';
+  static const waitlistOffer = '/technician/waitlist-offer/:waitlistId';
 
   // ==================== OTHER ====================
   static const activeJob = '/active-job/:jobId';
@@ -74,6 +78,7 @@ class AppRoutes {
 
   static String buildBookingPath(String serviceId) => '/booking/$serviceId';
   static String buildTrackingPath(String bookingId) => '/tracking/$bookingId';
+  static String buildActiveJobPath(String jobId) => '/active-job/$jobId';
 
   static String buildJobChatPath(String jobId) => '/jobs/$jobId/chat';
 
@@ -94,6 +99,8 @@ class AppRoutes {
       '/jobs/$jobId/customer/confirm-completion';
 
   // Technician Builders
+  static String buildTechnicianJobDetailPath(String jobId) =>
+      '/jobs/$jobId/technician/detail';
   static String buildTechnicianAcceptedPath(String jobId) =>
       '/jobs/$jobId/technician/accepted';
   static String buildTechnicianSetPricePath(String jobId) =>
@@ -112,7 +119,13 @@ class AppRoutes {
       '/jobs/$jobId/technician/price-confirmation';
   static String buildTechnicianCompleteWorkInputPath(String jobId) =>
       '/jobs/$jobId/technician/complete-work-input';
+  static String buildTechnicianBiddingPath(String jobId) =>
+      '/jobs/$jobId/technician/bidding';
+  static String buildWaitlistOfferPath(String waitlistId) =>
+      '/technician/waitlist-offer/$waitlistId';
 
   static String buildTechnicianProfilePath(String technicianId) =>
-      '/technician-profile/$technicianId';
+      technicianId.trim().isEmpty
+      ? home
+      : '/technician-profile/${Uri.encodeComponent(technicianId.trim())}';
 }

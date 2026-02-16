@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 part 'offline_service.g.dart';
 
@@ -39,7 +41,7 @@ class OfflineService {
         try {
           await action();
         } catch (e) {
-          print('Failed to sync action: $e');
+          debugPrint('Failed to sync action: $e');
         }
       }
       _pendingActions.clear();
@@ -48,12 +50,12 @@ class OfflineService {
 }
 
 @riverpod
-OfflineService offlineService(OfflineServiceRef ref) {
+OfflineService offlineService(Ref ref) {
   return OfflineService();
 }
 
 @riverpod
-Stream<bool> isOnline(IsOnlineRef ref) {
+Stream<bool> isOnline(Ref ref) {
   final service = ref.watch(offlineServiceProvider);
   return service.isOnline;
 }

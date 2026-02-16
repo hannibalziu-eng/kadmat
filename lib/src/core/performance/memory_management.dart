@@ -6,7 +6,7 @@ mixin AutoDisposeMixin<T extends StatefulWidget> on State<T> {
   final List<ChangeNotifier> _disposables = [];
 
   /// Registers a ChangeNotifier to be automatically disposed.
-  T register<T extends ChangeNotifier>(T disposable) {
+  N register<N extends ChangeNotifier>(N disposable) {
     _disposables.add(disposable);
     return disposable;
   }

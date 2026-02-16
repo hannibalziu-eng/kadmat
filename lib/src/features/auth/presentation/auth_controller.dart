@@ -1,4 +1,5 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../data/auth_repository.dart';
 import '../../notifications/data/push_notification_service.dart';
@@ -35,8 +36,12 @@ class AuthController extends _$AuthController {
       password,
       requiredUserType: requiredUserType,
     );
-    // Register FCM Token
-    await ref.read(pushNotificationServiceProvider).registerCurrentToken();
+    // Register push token if available (must not block login flow).
+    try {
+      await ref.read(pushNotificationServiceProvider).registerCurrentToken();
+    } catch (_) {
+      // Keep auth flow resilient when Firebase push is not configured.
+    }
   }
 
   Future<bool> register({
@@ -82,8 +87,12 @@ class AuthController extends _$AuthController {
       serviceId: serviceId,
       documentUrls: documentUrls,
     );
-    // Register FCM Token
-    await ref.read(pushNotificationServiceProvider).registerCurrentToken();
+    // Register push token if available (must not block signup flow).
+    try {
+      await ref.read(pushNotificationServiceProvider).registerCurrentToken();
+    } catch (_) {
+      // Keep auth flow resilient when Firebase push is not configured.
+    }
   }
 
   Future<bool> signInAsGuest() async {
@@ -99,7 +108,7 @@ class AuthController extends _$AuthController {
 }
 
 @riverpod
-Future<List<Map<String, dynamic>>> activeServices(ActiveServicesRef ref) async {
+Future<List<Map<String, dynamic>>> activeServices(Ref ref) async {
   try {
     final response = await Supabase.instance.client
         .from('services')

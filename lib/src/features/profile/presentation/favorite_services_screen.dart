@@ -44,7 +44,7 @@ class FavoriteServicesScreen extends StatelessWidget {
         borderRadius: BorderRadius.circular(16.r),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10.r,
             offset: Offset(0, 2.h),
           ),
@@ -59,7 +59,9 @@ class FavoriteServicesScreen extends StatelessWidget {
               color: Colors.grey[200],
               borderRadius: BorderRadius.circular(12.r),
               image: const DecorationImage(
-                image: NetworkImage('https://images.unsplash.com/photo-1581578731117-104f2a8d23e9?w=400'),
+                image: NetworkImage(
+                  'https://images.unsplash.com/photo-1581578731117-104f2a8d23e9?w=400',
+                ),
                 fit: BoxFit.cover,
               ),
             ),

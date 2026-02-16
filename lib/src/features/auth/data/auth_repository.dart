@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/api/endpoints.dart';
@@ -67,7 +68,8 @@ class AuthRepository {
       debugPrint('⚠️ Failed to fetch profile: $e');
     }
 
-    _currentUser = session.user.email ?? 'user';
+    // Keep `currentUser` as UUID to match DB relations (`technician_id/customer_id`).
+    _currentUser = session.user.id;
     _userType = userType;
     _authStateController.add(_currentUser);
   }
@@ -92,9 +94,13 @@ class AuthRepository {
     String? requiredUserType,
   }) async {
     try {
-      // Force clean session start to prevent "Invalid Refresh Token" issues
-      // caused by lingering sessions or race conditions.
-      await Supabase.instance.client.auth.signOut();
+      // Clear any existing session locally (without triggering auth listener redirect)
+      // This prevents "Invalid Refresh Token" issues from lingering sessions
+      try {
+        await Supabase.instance.client.auth.signOut(scope: SignOutScope.local);
+      } catch (_) {
+        // Ignore signOut errors - we're just cleaning up
+      }
 
       final response = await _client.post(
         Endpoints.login,
@@ -131,15 +137,15 @@ class AuthRepository {
       // _updateAuthState will be triggered by listener via onAuthStateChange,
       // but we can also manually update local state for immediate feedback/navigation if needed.
       // However, relying on the listener is safer for consistency.
-    } catch (e) {
-      if (e is DioException) {
-        final message = e.response?.data['message'] ?? 'فشل تسجيل الدخول';
-        final statusCode = e.response?.statusCode;
-        final rawData = e.response?.data;
-        throw Exception(
-          '$message (Status: $statusCode, Data: $rawData, Error: ${e.message})',
-        );
+    } on DioException catch (e) {
+      // Handle network errors specifically
+      if (e.type == DioExceptionType.connectionError ||
+          e.type == DioExceptionType.connectionTimeout) {
+        throw Exception('فشل الاتصال بالخادم. تأكد من اتصالك بالإنترنت.');
       }
+      final message = e.response?.data?['message'] ?? 'فشل تسجيل الدخول';
+      throw Exception(message);
+    } catch (e) {
       rethrow;
     }
   }
@@ -219,7 +225,7 @@ class AuthRepository {
 
     try {
       await Supabase.instance.client
-          .from('profiles')
+          .from('users')
           .update(updates)
           .eq('id', user.id);
 
@@ -231,6 +237,22 @@ class AuthRepository {
     }
   }
 
+  /// Update user password
+  Future<void> updatePassword({required String newPassword}) async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) throw Exception('المستخدم غير مسجل الدخول');
+
+    try {
+      await Supabase.instance.client.auth.updateUser(
+        UserAttributes(password: newPassword),
+      );
+    } on AuthException catch (e) {
+      throw Exception('فشل تغيير كلمة المرور: ${e.message}');
+    } catch (e) {
+      throw Exception('فشل تغيير كلمة المرور: $e');
+    }
+  }
+
   void dispose() {
     _authSubscription.cancel();
     _authStateController.close();
@@ -238,7 +260,7 @@ class AuthRepository {
 }
 
 @Riverpod(keepAlive: true)
-AuthRepository authRepository(AuthRepositoryRef ref) {
+AuthRepository authRepository(Ref ref) {
   final client = ref.watch(apiClientProvider);
   final repo = AuthRepository(client);
   ref.onDispose(() => repo.dispose());
@@ -246,7 +268,7 @@ AuthRepository authRepository(AuthRepositoryRef ref) {
 }
 
 @riverpod
-Stream<String?> authStateChanges(AuthStateChangesRef ref) {
+Stream<String?> authStateChanges(Ref ref) {
   final authRepository = ref.watch(authRepositoryProvider);
   return authRepository.authStateChanges();
 }

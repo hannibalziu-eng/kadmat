@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_scalify/flutter_scalify.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/app_theme.dart';
+import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/widgets/kadmat_toast.dart';
 import '../../data/job_repository.dart';
 import '../../domain/job.dart';
@@ -58,6 +59,7 @@ class _TechnicianCompleteWorkScreenState
         });
       }
     } catch (e) {
+      if (!mounted) return;
       KadmatToast.showError(
         context,
         title: 'خطأ',
@@ -106,9 +108,10 @@ class _TechnicianCompleteWorkScreenState
           message: 'تم إرسال طلب الإنهاء بنجاح',
         );
         // Navigate to dashboard or summary
-        context.go('/technician/home');
+        context.go(AppRoutes.technicianHome);
       }
     } catch (e) {
+      if (!mounted) return;
       KadmatToast.showError(
         context,
         title: 'خطأ',
@@ -260,7 +263,7 @@ class _TechnicianCompleteWorkScreenState
               onTap: () async {
                 // Navigate to post photos screen to add more
                 await context.push(
-                  '/jobs/${widget.jobId}/technician/post-photos',
+                  AppRoutes.buildTechnicianPostPhotosPath(widget.jobId),
                 );
                 _fetchJobData(); // Refresh photos after return
               },

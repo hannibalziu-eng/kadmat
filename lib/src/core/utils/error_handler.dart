@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+import '../api/api_error.dart';
 import '../widgets/kadmat_toast.dart';
 import '../widgets/error_dialog.dart';
 import 'error_messages.dart';
@@ -76,7 +78,7 @@ class ErrorHandler {
       case DioExceptionType.connectionError:
         return ErrorMessages.noInternetConnection;
       case DioExceptionType.badResponse:
-        return _handleStatusCode(error.response?.statusCode, error);
+        return _handleApiResponseError(error);
       case DioExceptionType.cancel:
         return ErrorMessages.operationCancelled;
       default:
@@ -84,29 +86,34 @@ class ErrorHandler {
     }
   }
 
-  /// Handle HTTP status codes
-  static String _handleStatusCode(int? statusCode, DioException error) {
-    // Try to extract message from response body
-    if (error.response?.data is Map) {
-      final data = error.response!.data as Map;
-      if (data['error'] is Map && data['error']['message'] != null) {
-        return data['error']['message'];
-      }
-      if (data['message'] != null) {
-        return data['message'];
-      }
+  /// Handle standardized backend API error contract.
+  static String _handleApiResponseError(DioException error) {
+    final apiError = ApiError.fromDioException(error);
+    if (apiError.code != null || apiError.message.isNotEmpty) {
+      return ErrorMessages.fromApiCode(
+        apiError.code,
+        fallback: apiError.message,
+      );
     }
 
-    // Fallback to status code-based messages
+    return _handleStatusCodeFallback(error.response?.statusCode);
+  }
+
+  /// HTTP status fallback when body is missing or malformed.
+  static String _handleStatusCodeFallback(int? statusCode) {
     switch (statusCode) {
       case 400:
-        return ErrorMessages.requestFailed;
+        return ErrorMessages.invalidInput;
       case 401:
         return ErrorMessages.unauthorized;
       case 403:
-        return ErrorMessages.unauthorized;
+        return ErrorMessages.forbidden;
       case 404:
         return ErrorMessages.jobNotFound;
+      case 409:
+        return ErrorMessages.requestFailed;
+      case 429:
+        return ErrorMessages.rateLimited;
       case 500:
       case 502:
       case 503:
@@ -118,6 +125,15 @@ class ErrorHandler {
 
   /// Log error for debugging and future analytics
   static void log(dynamic error, StackTrace? stackTrace) {
+    if (error is DioException) {
+      final apiError = ApiError.fromDioException(error);
+      if (apiError.requestId != null) {
+        debugPrint(
+          '📌 API requestId=${apiError.requestId} code=${apiError.code ?? 'UNKNOWN'} status=${apiError.statusCode ?? 'n/a'}',
+        );
+      }
+    }
+
     debugPrint('❌ ErrorHandler: $error');
     if (stackTrace != null) {
       debugPrint(
@@ -125,7 +141,17 @@ class ErrorHandler {
       );
     }
 
-    // TODO: Add analytics/crash reporting here (e.g., Firebase Crashlytics)
-    // Crashlytics.instance.recordError(error, stackTrace);
+    // Record to Firebase Crashlytics
+    try {
+      FirebaseCrashlytics.instance.recordError(
+        error,
+        stackTrace,
+        fatal: false,
+        reason: 'Caught by ErrorHandler',
+      );
+    } catch (e) {
+      // Crashlytics might not be initialized in some environments (web, tests)
+      debugPrint('⚠️ Failed to log to Crashlytics: $e');
+    }
   }
 }

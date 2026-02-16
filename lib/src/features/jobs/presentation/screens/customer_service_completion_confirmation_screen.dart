@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_scalify/flutter_scalify.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/app_theme.dart';
 import '../../../../core/widgets/kadmat_toast.dart';
 import '../../data/job_repository.dart';
@@ -51,13 +52,43 @@ class _CustomerServiceCompletionConfirmationScreenState
     }
   }
 
-  void _contactSupport() {
-    // TODO: Navigate to support screen or open whatsapp
-    KadmatToast.showInfo(
-      context,
-      title: 'الدعم الفني',
-      message: 'سيتم فتح شاشة المحادثة مع الدعم قريباً',
-    );
+  Future<void> _contactSupport() async {
+    // WhatsApp Support Number (Replace with actual support number)
+    const supportPhone = '966500000000'; // Example: Saudi number
+    final jobId = widget.jobId;
+    final message = Uri.encodeComponent('سلام, عندي مشكلة في الطلب رقم $jobId');
+
+    try {
+      // Try WhatsApp first
+      final whatsappUri = Uri.parse(
+        'whatsapp://send?phone=$supportPhone&text=$message',
+      );
+      if (await canLaunchUrl(whatsappUri)) {
+        await launchUrl(whatsappUri);
+      } else {
+        // Fallback to regular phone call
+        final telUri = Uri.parse('tel:$supportPhone');
+        if (await canLaunchUrl(telUri)) {
+          await launchUrl(telUri);
+        } else {
+          if (mounted) {
+            KadmatToast.showError(
+              context,
+              title: 'خطأ',
+              message: 'فشل فتح تطبيق الدعم',
+            );
+          }
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        KadmatToast.showError(
+          context,
+          title: 'خطأ',
+          message: 'حدث خطأ عند فتح الدعم',
+        );
+      }
+    }
   }
 
   @override

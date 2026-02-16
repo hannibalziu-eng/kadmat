@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../features/jobs/domain/job.dart';
 
@@ -47,28 +48,95 @@ class SupabaseRealtimeService {
   /// Stream valid job table changes only (INSERT, UPDATE)
   /// Used to trigger reactive refetches in repositories
   Stream<void> streamJobTableChanges() {
-    final channel = _client.channel('public:jobs:changes');
-
-    // Using a StreamController to manage the subscription lifecycle cleanly
     late StreamController<void> controller;
+    late void Function() scheduleReconnect;
+    RealtimeChannel? channel;
+    Timer? reconnectTimer;
+    var reconnectAttempts = 0;
+
+    Duration backoffFor(int attempt) {
+      final seconds = switch (attempt) {
+        <= 1 => 1,
+        2 => 2,
+        3 => 4,
+        4 => 8,
+        _ => 15,
+      };
+      return Duration(seconds: seconds);
+    }
+
+    Future<void> teardownChannel() async {
+      reconnectTimer?.cancel();
+      reconnectTimer = null;
+      if (channel != null) {
+        await _client.removeChannel(channel!);
+        channel = null;
+      }
+    }
+
+    Future<void> subscribe() async {
+      await teardownChannel();
+      if (controller.isClosed) return;
+
+      channel = _client.channel(
+        'public:jobs:changes:${DateTime.now().microsecondsSinceEpoch}',
+      );
+
+      channel!
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'jobs',
+            callback: (_) {
+              if (!controller.isClosed) {
+                controller.add(null);
+              }
+            },
+          )
+          .subscribe((status, [error]) {
+            if (controller.isClosed) return;
+
+            if (status == RealtimeSubscribeStatus.subscribed) {
+              reconnectAttempts = 0;
+              if (!controller.isClosed) {
+                // Prime consumers after successful handshake.
+                controller.add(null);
+              }
+              return;
+            }
+
+            if (status == RealtimeSubscribeStatus.timedOut ||
+                status == RealtimeSubscribeStatus.closed ||
+                status == RealtimeSubscribeStatus.channelError) {
+              if (error != null) {
+                // Keep error observability while avoiding raw UI surfacing.
+                // Downstream repositories already have polling fallback.
+                debugPrint(
+                  '⚠️ Realtime jobs channel degraded ($status): $error',
+                );
+              }
+              scheduleReconnect();
+            }
+          });
+    }
+
+    scheduleReconnect = () {
+      if (controller.isClosed || reconnectTimer?.isActive == true) return;
+      reconnectAttempts += 1;
+      final delay = backoffFor(reconnectAttempts);
+      reconnectTimer = Timer(delay, () {
+        if (!controller.isClosed) {
+          unawaited(subscribe());
+        }
+      });
+    };
 
     controller = StreamController<void>(
       onListen: () {
-        channel
-            .onPostgresChanges(
-              event: PostgresChangeEvent.all,
-              schema: 'public',
-              table: 'jobs',
-              callback: (payload) {
-                if (!controller.isClosed) {
-                  controller.add(null);
-                }
-              },
-            )
-            .subscribe();
+        unawaited(subscribe());
       },
-      onCancel: () {
-        _client.removeChannel(channel);
+      onCancel: () async {
+        await teardownChannel();
       },
     );
 

@@ -1,57 +1,89 @@
+import 'dart:async';
+
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'local_notifications.dart';
 import 'fcm_service.dart';
+import 'push/push_gateway.dart';
 import '../../features/auth/data/auth_repository.dart';
+
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import '../../core/navigation/app_routes.dart';
 
 part 'notification_service.g.dart';
 
 class NotificationService {
   final SupabaseClient _supabase;
   final LocalNotificationsService _localNotifications;
-  final FcmService _fcmService;
+  final PushGateway _pushGateway;
   final AuthRepository _authRepository;
+  bool _isInitialized = false;
+
+  StreamSubscription<String>? _tokenRefreshSubscription;
+  RealtimeChannel? _technicianJobsChannel;
+  RealtimeChannel? _customerJobsChannel;
+  RealtimeChannel? _messagesChannel;
+  RealtimeChannel? _newRequestsChannel;
+
+  String? _technicianJobsUserId;
+  String? _customerJobsUserId;
+  String? _messagesUserId;
 
   NotificationService(
     this._supabase,
     this._localNotifications,
-    this._fcmService,
+    this._pushGateway,
     this._authRepository,
   );
 
   /// Initialize and request permissions
   Future<void> initialize() async {
-    await _fcmService.initialize();
+    if (_isInitialized) return;
+    _isInitialized = true;
+
+    await _pushGateway.initialize();
 
     // Listen for FCM token refresh and update profile
-    _fcmService.onTokenRefresh.listen((token) {
-      _authRepository.updateProfile(fcmToken: token);
+    _tokenRefreshSubscription = _pushGateway.onTokenRefresh.listen((token) {
+      _authRepository.updateProfile(fcmToken: token).catchError((_) {});
     });
 
     // Also update token on initial launch if available
-    final token = _fcmService.fcmToken;
+    final token = _pushGateway.currentToken;
     if (token != null) {
-      // We don't await this to not block initialization
-      _authRepository.updateProfile(fcmToken: token).catchError((e) {
-        // Limit logging or ignore if user not logged in
-      });
+      unawaited(
+        _authRepository.updateProfile(fcmToken: token).catchError((_) {}),
+      );
     }
   }
 
   /// Subscribe to notifications for a specific job
   Future<void> subscribeToJob(String jobId) async {
-    await _fcmService.subscribeToTopic('job_$jobId');
+    await _pushGateway.subscribeToTopic('job_$jobId');
   }
 
   /// Unsubscribe from job notifications
   Future<void> unsubscribeFromJob(String jobId) async {
-    await _fcmService.unsubscribeFromTopic('job_$jobId');
+    await _pushGateway.unsubscribeFromTopic('job_$jobId');
   }
 
   /// Listen for job updates where the user is the Technician
   void listenForJobUpdates(String technicianId) {
-    _supabase
-        .channel('public:jobs:technician:$technicianId')
+    if (technicianId.isEmpty) return;
+    if (_technicianJobsUserId == technicianId &&
+        _technicianJobsChannel != null) {
+      return;
+    }
+
+    if (_technicianJobsChannel != null) {
+      unawaited(_supabase.removeChannel(_technicianJobsChannel!));
+      _technicianJobsChannel = null;
+    }
+
+    final channel = _supabase.channel('public:jobs:technician:$technicianId');
+    channel
         .onPostgresChanges(
           event: PostgresChangeEvent.all,
           schema: 'public',
@@ -66,12 +98,25 @@ class NotificationService {
           },
         )
         .subscribe();
+
+    _technicianJobsChannel = channel;
+    _technicianJobsUserId = technicianId;
   }
 
   /// Listen for job updates where the user is the Customer
   void listenForCustomerJobUpdates(String customerId) {
-    _supabase
-        .channel('public:jobs:customer:$customerId')
+    if (customerId.isEmpty) return;
+    if (_customerJobsUserId == customerId && _customerJobsChannel != null) {
+      return;
+    }
+
+    if (_customerJobsChannel != null) {
+      unawaited(_supabase.removeChannel(_customerJobsChannel!));
+      _customerJobsChannel = null;
+    }
+
+    final channel = _supabase.channel('public:jobs:customer:$customerId');
+    channel
         .onPostgresChanges(
           event: PostgresChangeEvent.all,
           schema: 'public',
@@ -86,12 +131,25 @@ class NotificationService {
           },
         )
         .subscribe();
+
+    _customerJobsChannel = channel;
+    _customerJobsUserId = customerId;
   }
 
   /// Listen for new messages for the user
   void listenForMessages(String userId) {
-    _supabase
-        .channel('public:messages:$userId')
+    if (userId.isEmpty) return;
+    if (_messagesUserId == userId && _messagesChannel != null) {
+      return;
+    }
+
+    if (_messagesChannel != null) {
+      unawaited(_supabase.removeChannel(_messagesChannel!));
+      _messagesChannel = null;
+    }
+
+    final channel = _supabase.channel('public:messages:$userId');
+    channel
         .onPostgresChanges(
           event: PostgresChangeEvent.insert,
           schema: 'public',
@@ -115,6 +173,9 @@ class NotificationService {
           },
         )
         .subscribe();
+
+    _messagesChannel = channel;
+    _messagesUserId = userId;
   }
 
   void listenForNewRequests(double latitude, double longitude) {
@@ -124,8 +185,10 @@ class NotificationService {
     // Here we listen to all inserts on jobs table where status is pending.
     // Ideally, we would filter by location, but that requires PostGIS support in Realtime which is limited.
 
-    _supabase
-        .channel('public:jobs:pending')
+    if (_newRequestsChannel != null) return;
+
+    final channel = _supabase.channel('public:jobs:pending');
+    channel
         .onPostgresChanges(
           event: PostgresChangeEvent.insert,
           schema: 'public',
@@ -136,16 +199,22 @@ class NotificationService {
             value: 'pending',
           ),
           callback: (payload) {
-            // Trigger a local notification for a new job request
-            // In a real app, we would check distance here before notifying
+            final jobId = payload.newRecord['id'] as String?;
+            if (jobId == null || jobId.isEmpty) return;
+
+            // Trigger a local notification for a new job request.
+            // Nearby filtering remains handled by dashboard RPC stream.
             _localNotifications.showNotification(
-              id: 1,
+              id: jobId.hashCode,
               title: 'طلب جديد',
               body: 'يوجد طلب خدمة جديد بالقرب منك',
+              payload: jobId,
             );
           },
         )
         .subscribe();
+
+    _newRequestsChannel = channel;
   }
 
   void _handleJobUpdate(
@@ -164,9 +233,17 @@ class NotificationService {
         // Technician Notifications
         if (isTechnician) {
           switch (newStatus) {
-            case 'customer_agreed':
+            case 'on_the_way':
               title = 'تم قبول السعر';
-              body = 'وافق العميل على عرض السعر. يمكنك البدء في العمل.';
+              body = 'وافق العميل على عرض السعر. تحرّك الآن إلى موقع العميل.';
+              break;
+            case 'arrived':
+              title = 'تم تسجيل الوصول';
+              body = 'تم تحديث الحالة إلى: وصلت إلى موقع العميل.';
+              break;
+            case 'in_progress':
+              title = 'تم بدء التنفيذ';
+              body = 'تم تحديث الحالة إلى: جاري تنفيذ الخدمة.';
               break;
             case 'completed': // Payment confirmed
               title = 'تم الدفع';
@@ -188,6 +265,14 @@ class NotificationService {
             case 'price_pending':
               title = 'عرض سعر جديد';
               body = 'أرسل الفني عرض سعر للخدمة. يرجى المراجعة.';
+              break;
+            case 'on_the_way':
+              title = 'الفني في الطريق';
+              body = 'وافقْت على السعر، والفني متجه إليك الآن.';
+              break;
+            case 'arrived':
+              title = 'الفني وصل';
+              body = 'الفني وصل إلى موقعك.';
               break;
             case 'in_progress':
               title = 'بدأ العمل';
@@ -215,14 +300,62 @@ class NotificationService {
       }
     }
   }
+
+  /// Handle notification tap (local or remote)
+  Future<void> handleNotificationTap(
+    Map<String, dynamic> data,
+    BuildContext context,
+  ) async {
+    final type = data['type'];
+
+    if (type == 'waitlist_offer') {
+      final waitlistId = data['waitlist_id'];
+      if (waitlistId != null) {
+        context.push(AppRoutes.buildWaitlistOfferPath(waitlistId));
+      }
+    }
+    // ... handle other types
+  }
+
+  Future<void> dispose() async {
+    await _tokenRefreshSubscription?.cancel();
+
+    if (_technicianJobsChannel != null) {
+      await _supabase.removeChannel(_technicianJobsChannel!);
+      _technicianJobsChannel = null;
+    }
+    if (_customerJobsChannel != null) {
+      await _supabase.removeChannel(_customerJobsChannel!);
+      _customerJobsChannel = null;
+    }
+    if (_messagesChannel != null) {
+      await _supabase.removeChannel(_messagesChannel!);
+      _messagesChannel = null;
+    }
+    if (_newRequestsChannel != null) {
+      await _supabase.removeChannel(_newRequestsChannel!);
+      _newRequestsChannel = null;
+    }
+
+    _technicianJobsUserId = null;
+    _customerJobsUserId = null;
+    _messagesUserId = null;
+    _isInitialized = false;
+  }
 }
 
 @riverpod
-NotificationService notificationService(NotificationServiceRef ref) {
-  return NotificationService(
+NotificationService notificationService(Ref ref) {
+  final service = NotificationService(
     Supabase.instance.client,
-    LocalNotificationsService(), // We should probably use a provider for this too
-    FcmService(),
+    ref.watch(localNotificationsProvider),
+    ref.watch(pushGatewayProvider),
     ref.watch(authRepositoryProvider),
   );
+
+  ref.onDispose(() {
+    unawaited(service.dispose());
+  });
+
+  return service;
 }

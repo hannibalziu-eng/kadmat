@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'chat_controller.dart';
 import 'widgets/chat_bubble.dart';
@@ -54,19 +55,18 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         .read(chatControllerProvider(widget.jobId).notifier)
         .sendMessage(content);
 
+    if (!mounted) return;
     setState(() => _isSending = false);
 
     if (success) {
       _scrollToBottom();
     } else {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('فشل إرسال الرسالة، حاول مرة أخرى'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('فشل إرسال الرسالة، حاول مرة أخرى'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
@@ -126,8 +126,56 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           // Phone call action
           IconButton(
             icon: const Icon(Icons.phone_outlined),
-            onPressed: () {
-              // TODO: Implement phone call
+            onPressed: () async {
+              final messenger = ScaffoldMessenger.of(context);
+
+              // Get phone number from job data
+              try {
+                final jobData = await Supabase.instance.client
+                    .from('jobs')
+                    .select(
+                      'customer:customer_id(phone), technician:technician_id(phone)',
+                    )
+                    .eq('id', widget.jobId)
+                    .single();
+
+                // Determine which phone to call based on current user
+                final currentUser = Supabase.instance.client.auth.currentUser;
+                String? phoneNumber;
+
+                if (currentUser != null) {
+                  // If customer, call technician; if technician, call customer
+                  final customer = jobData['customer'];
+                  final technician = jobData['technician'];
+
+                  // Check user type from the job data to determine phone
+                  if (customer != null && customer['phone'] != null) {
+                    phoneNumber = technician?['phone'] as String?;
+                  } else if (technician != null) {
+                    phoneNumber = customer?['phone'] as String?;
+                  }
+                }
+
+                if (phoneNumber != null) {
+                  final uri = Uri.parse('tel:$phoneNumber');
+                  if (await canLaunchUrl(uri)) {
+                    await launchUrl(uri);
+                  } else {
+                    if (!mounted) return;
+                    messenger.showSnackBar(
+                      const SnackBar(content: Text('فشل فتح تطبيق الهاتف')),
+                    );
+                  }
+                } else {
+                  if (!mounted) return;
+                  messenger.showSnackBar(
+                    const SnackBar(content: Text('رقم الهاتف غير متوفر')),
+                  );
+                }
+              } catch (e) {
+                if (!mounted) return;
+                messenger.showSnackBar(SnackBar(content: Text('حدث خطأ: $e')));
+              }
             },
           ),
         ],

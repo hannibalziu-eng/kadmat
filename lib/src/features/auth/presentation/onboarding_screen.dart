@@ -3,6 +3,7 @@ import 'package:flutter_scalify/flutter_scalify.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/app_theme.dart';
+import '../../../core/navigation/app_routes.dart';
 
 /// شاشة Onboarding لتعريف المستخدم الجديد بالتطبيق
 class OnboardingScreen extends StatefulWidget {
@@ -53,7 +54,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('onboarding_completed', true);
     if (mounted) {
-      context.go('/welcome');
+      context.go(AppRoutes.welcome);
     }
   }
 

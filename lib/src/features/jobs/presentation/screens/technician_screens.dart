@@ -7,11 +7,11 @@ import '../../../../core/app_theme.dart';
 import '../../../../core/widgets/kadmat_toast.dart';
 import '../../data/job_repository.dart';
 import '../../domain/job.dart';
+import '../../domain/job_status.dart';
 import '../widgets/job_widgets.dart';
 
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:supabase_flutter/supabase_flutter.dart'; // Add Supabase import
 import '../controllers/job_polling_controller.dart'; // import job polling controller
 import '../../../../core/navigation/app_routes.dart'; // Add import
 
@@ -175,7 +175,7 @@ class _TechnicianAcceptedScreenState
                     width: double.infinity,
                     child: ElevatedButton.icon(
                       onPressed: () => context.go(
-                        '/jobs/${widget.jobId}/technician/set-price',
+                        AppRoutes.buildTechnicianSetPricePath(widget.jobId),
                       ),
                       icon: const Icon(Icons.attach_money),
                       label: Text(
@@ -214,29 +214,68 @@ class TechnicianWaitingScreen extends ConsumerStatefulWidget {
 
 class _TechnicianWaitingScreenState
     extends ConsumerState<TechnicianWaitingScreen> {
-  @override
-  Widget build(BuildContext context) {
-    // Watch real-time job stream
-    final jobAsync = ref.watch(jobStreamProvider(widget.jobId));
+  ProviderSubscription<AsyncValue<Job?>>? _jobStatusSubscription;
 
-    // Listen for status changes to auto-navigate
-    ref.listen(jobStreamProvider(widget.jobId), (previous, next) {
-      final job = next.valueOrNull;
-      if (job != null) {
-        if (job.status == 'in_progress' || job.status == 'customer_agreed') {
+  @override
+  void initState() {
+    super.initState();
+    _setupJobStatusListener();
+  }
+
+  @override
+  void dispose() {
+    _jobStatusSubscription?.close();
+    super.dispose();
+  }
+
+  void _setupJobStatusListener() {
+    _jobStatusSubscription = ref.listenManual<AsyncValue<Job?>>(
+      jobStreamProvider(widget.jobId),
+      (_, next) {
+        final job = next.valueOrNull;
+        if (job == null || !mounted) return;
+
+        final normalized = JobStatus.normalize(job.status);
+        if (normalized == JobStatus.onTheWay ||
+            normalized == JobStatus.arrived ||
+            normalized == JobStatus.inProgress) {
           debugPrint('🚀 Job ${job.id} is ready, navigating to work screen...');
-          context.go('/jobs/${widget.jobId}/technician/in-progress');
-        } else if (job.status == 'cancelled') {
+          context.go(AppRoutes.buildTechnicianInProgressPath(widget.jobId));
+          return;
+        }
+
+        if (job.status == 'cancelled') {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('تم إلغاء الطلب من العميل'),
               backgroundColor: Colors.red,
             ),
           );
-          context.go('/');
+          context.go(AppRoutes.home);
         }
-      }
-    });
+      },
+      fireImmediately: true,
+    );
+  }
+
+  String _friendlyWaitingError(Object error) {
+    final normalized = error.toString().toLowerCase();
+    if (normalized.contains('socketexception') ||
+        normalized.contains('failed host lookup')) {
+      return 'لا يوجد اتصال بالإنترنت حالياً.';
+    }
+    if (normalized.contains('invalidjwttoken') ||
+        normalized.contains('jwt') ||
+        normalized.contains('expired')) {
+      return 'انتهت الجلسة. يرجى تسجيل الدخول مرة أخرى.';
+    }
+    return 'تعذر تحديث حالة الطلب الآن. حاول التحديث بعد لحظات.';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Watch real-time job stream
+    final jobAsync = ref.watch(jobStreamProvider(widget.jobId));
 
     return Scaffold(
       backgroundColor: AppTheme.backgroundDark,
@@ -246,7 +285,7 @@ class _TechnicianWaitingScreenState
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.go('/technician/home'),
+          onPressed: () => context.go(AppRoutes.technicianHome),
         ),
       ),
       body: jobAsync.when(
@@ -326,8 +365,9 @@ class _TechnicianWaitingScreenState
 
                 // Action Buttons
                 OutlinedButton.icon(
-                  onPressed: () =>
-                      context.go('/jobs/${widget.jobId}/technician/set-price'),
+                  onPressed: () => context.go(
+                    AppRoutes.buildTechnicianSetPricePath(widget.jobId),
+                  ),
                   icon: const Icon(Icons.edit),
                   label: const Text('تعديل السعر'),
                   style: OutlinedButton.styleFrom(
@@ -344,7 +384,16 @@ class _TechnicianWaitingScreenState
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, stack) => Center(child: Text('Error: $error')),
+        error: (error, stack) => Center(
+          child: Padding(
+            padding: EdgeInsets.all(20.w),
+            child: Text(
+              _friendlyWaitingError(error),
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 14.fz, color: Colors.white70),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -395,7 +444,8 @@ class _TechnicianInProgressScreenState
 
   void _startTimer() {
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (_job?.priceConfirmedAt != null && _job?.status == 'in_progress') {
+      if (_job?.priceConfirmedAt != null &&
+          JobStatus.normalize(_job?.status ?? '') == JobStatus.inProgress) {
         setState(() {
           _elapsed = DateTime.now().difference(_job!.priceConfirmedAt!);
         });
@@ -430,28 +480,43 @@ class _TechnicianInProgressScreenState
     }
   }
 
-  Future<void> _startWork() async {
+  Future<void> _updateProgress(
+    String progress, {
+    required String title,
+    required String message,
+  }) async {
     setState(() => _isLoading = true);
     try {
-      // Update status to in_progress
-      await Supabase.instance.client
-          .from('jobs')
-          .update({'status': 'in_progress'})
-          .eq('id', widget.jobId);
+      await ref
+          .read(jobRepositoryProvider)
+          .updateTechnicianProgress(widget.jobId, progress: progress);
 
-      // Refresh job
       await _fetchJob();
 
-      KadmatToast.showSuccess(
-        context,
-        title: 'بدء العمل',
-        message: 'تم بدء العمل بنجاح',
-      );
+      if (!mounted) return;
+      KadmatToast.showSuccess(context, title: title, message: message);
     } catch (e) {
-      KadmatToast.showError(context, title: 'خطأ', message: 'فشل بدء العمل');
+      if (!mounted) return;
+      KadmatToast.showError(context, title: 'خطأ', message: e.toString());
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  Future<void> _markArrived() {
+    return _updateProgress(
+      'arrived',
+      title: 'تم تحديث الحالة',
+      message: 'تم تسجيل وصولك إلى موقع العميل.',
+    );
+  }
+
+  Future<void> _startWork() {
+    return _updateProgress(
+      'start_work',
+      title: 'بدء العمل',
+      message: 'تم بدء تنفيذ الخدمة.',
+    );
   }
 
   Future<void> _fetchPhotos() async {
@@ -542,6 +607,8 @@ class _TechnicianInProgressScreenState
       );
     }
 
+    final normalizedStatus = JobStatus.normalize(_job!.status);
+
     return RefreshIndicator(
       onRefresh: () async {
         await _fetchJob();
@@ -556,8 +623,24 @@ class _TechnicianInProgressScreenState
             _buildJobMapHeader(),
             SizedBox(height: 16.h),
 
-            // Start Work Button (if not started)
-            if (_job?.status == 'customer_agreed')
+            if (normalizedStatus == JobStatus.onTheWay)
+              Padding(
+                padding: EdgeInsets.only(bottom: 16.h),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: _isLoading ? null : _markArrived,
+                    icon: const Icon(Icons.place),
+                    label: const Text('وصلت إلى موقع العميل'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.teal,
+                      padding: EdgeInsets.symmetric(vertical: 16.h),
+                    ),
+                  ),
+                ),
+              ),
+
+            if (normalizedStatus == JobStatus.arrived)
               Padding(
                 padding: EdgeInsets.only(bottom: 24.h),
                 child: SizedBox(
@@ -575,7 +658,7 @@ class _TechnicianInProgressScreenState
               ),
 
             // Timer Display
-            if (_job?.status == 'in_progress')
+            if (normalizedStatus == JobStatus.inProgress)
               Container(
                 width: double.infinity,
                 margin: EdgeInsets.only(bottom: 24.h),
@@ -619,7 +702,7 @@ class _TechnicianInProgressScreenState
                 photos: _prePhotos,
                 onAdd: () async {
                   await context.push(
-                    '/jobs/${widget.jobId}/technician/pre-photos',
+                    AppRoutes.buildTechnicianPrePhotosPath(widget.jobId),
                   );
                   _fetchPhotos();
                 },
@@ -665,7 +748,7 @@ class _TechnicianInProgressScreenState
                 photos: _postPhotos,
                 onAdd: () async {
                   await context.push(
-                    '/jobs/${widget.jobId}/technician/post-photos',
+                    AppRoutes.buildTechnicianPostPhotosPath(widget.jobId),
                   );
                   _fetchPhotos();
                 },
@@ -1244,7 +1327,7 @@ class _TechnicianCompletedScreenState
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton.icon(
-                      onPressed: () => context.go('/technician/jobs'),
+                      onPressed: () => context.go(AppRoutes.technicianHome),
                       icon: const Icon(Icons.work),
                       label: const Text('عرض المزيد من الطلبات'),
                       style: ElevatedButton.styleFrom(
@@ -1260,7 +1343,7 @@ class _TechnicianCompletedScreenState
                   SizedBox(height: 12.h),
 
                   OutlinedButton.icon(
-                    onPressed: () => context.go('/'),
+                    onPressed: () => context.go(AppRoutes.home),
                     icon: const Icon(Icons.home),
                     label: const Text('العودة للرئيسية'),
                     style: OutlinedButton.styleFrom(

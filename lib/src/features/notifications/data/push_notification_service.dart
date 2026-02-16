@@ -3,8 +3,10 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:kadmat/src/core/api/api_client.dart';
-import 'package:kadmat/src/core/router.dart';
+import 'package:kadmat/src/core/navigation/app_routes.dart';
+import 'package:kadmat/src/core/router_modular.dart';
 import 'package:flutter/foundation.dart';
+import 'package:kadmat/src/features/auth/data/auth_repository.dart';
 
 /// Provider for PushNotificationService
 final pushNotificationServiceProvider = Provider<PushNotificationService>((
@@ -15,76 +17,93 @@ final pushNotificationServiceProvider = Provider<PushNotificationService>((
 
 class PushNotificationService {
   final Ref _ref;
-  final FirebaseMessaging _fcm = FirebaseMessaging.instance;
+  FirebaseMessaging? _fcm;
   final FlutterLocalNotificationsPlugin _localNotifications =
       FlutterLocalNotificationsPlugin();
+  bool _isInitialized = false;
 
   PushNotificationService(this._ref);
 
   /// Initialize Firebase Messaging & Local Notifications
   Future<void> initialize() async {
-    // 1. Request Permission
-    final settings = await _fcm.requestPermission(
-      alert: true,
-      badge: true,
-      sound: true,
-      provisional: false,
-    );
-
-    if (settings.authorizationStatus == AuthorizationStatus.authorized) {
-      debugPrint('✅ User granted permission');
-    } else if (settings.authorizationStatus ==
-        AuthorizationStatus.provisional) {
-      debugPrint('⚠️ User granted provisional permission');
-    } else {
-      debugPrint('❌ User declined or has not accepted permission');
+    if (_isInitialized) return;
+    if (kIsWeb) {
+      debugPrint('ℹ️ PushNotificationService skipped on Web');
+      _isInitialized = true;
       return;
     }
 
-    // 2. Setup Local Notifications (for foreground)
-    const AndroidInitializationSettings initializationSettingsAndroid =
-        AndroidInitializationSettings('@mipmap/ic_launcher');
+    _fcm ??= FirebaseMessaging.instance;
+    final fcm = _fcm;
+    if (fcm == null) return;
 
-    // Note: Requesting permission on iOS is redundant here as requestPermission does it,
-    // but needed for older versions or explicit local notification setup.
-    const DarwinInitializationSettings initializationSettingsIOS =
-        DarwinInitializationSettings();
+    try {
+      // 1. Request Permission
+      final settings = await fcm.requestPermission(
+        alert: true,
+        badge: true,
+        sound: true,
+        provisional: false,
+      );
 
-    const InitializationSettings initializationSettings =
-        InitializationSettings(
-          android: initializationSettingsAndroid,
-          iOS: initializationSettingsIOS,
-        );
+      if (settings.authorizationStatus == AuthorizationStatus.authorized) {
+        debugPrint('✅ User granted permission');
+      } else if (settings.authorizationStatus ==
+          AuthorizationStatus.provisional) {
+        debugPrint('⚠️ User granted provisional permission');
+      } else {
+        debugPrint('❌ User declined or has not accepted permission');
+        return;
+      }
 
-    await _localNotifications.initialize(
-      initializationSettings,
-      onDidReceiveNotificationResponse: _onSelectNotification,
-    );
+      // 2. Setup Local Notifications (for foreground)
+      const AndroidInitializationSettings initializationSettingsAndroid =
+          AndroidInitializationSettings('@mipmap/ic_launcher');
 
-    // 3. Setup FCM Listeners
+      // Note: Requesting permission on iOS is redundant here as requestPermission does it,
+      // but needed for older versions or explicit local notification setup.
+      const DarwinInitializationSettings initializationSettingsIOS =
+          DarwinInitializationSettings();
 
-    // On Message (Foreground)
-    FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
+      const InitializationSettings initializationSettings =
+          InitializationSettings(
+            android: initializationSettingsAndroid,
+            iOS: initializationSettingsIOS,
+          );
 
-    // On Message Opened App (Background -> Foreground)
-    FirebaseMessaging.onMessageOpenedApp.listen(_handleMessageOpenedApp);
+      await _localNotifications.initialize(
+        initializationSettings,
+        onDidReceiveNotificationResponse: _onSelectNotification,
+      );
 
-    // Get Initial Message (Terminated -> Foreground)
-    final initialMessage = await _fcm.getInitialMessage();
-    if (initialMessage != null) {
-      _handleMessageOpenedApp(initialMessage);
+      // 3. Setup FCM Listeners
+
+      // On Message (Foreground)
+      FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
+
+      // On Message Opened App (Background -> Foreground)
+      FirebaseMessaging.onMessageOpenedApp.listen(_handleMessageOpenedApp);
+
+      // Get Initial Message (Terminated -> Foreground)
+      final initialMessage = await fcm.getInitialMessage();
+      if (initialMessage != null) {
+        _handleMessageOpenedApp(initialMessage);
+      }
+
+      // 4. Update Token
+      final token = await fcm.getToken();
+      if (token != null) {
+        debugPrint('📲 FCM Token: $token');
+        // We don't register here immediately.
+        // We register after login in LoginController or HomeScreen.
+      }
+
+      // Listen for regular token refresh
+      fcm.onTokenRefresh.listen(registerToken);
+      _isInitialized = true;
+    } catch (e) {
+      debugPrint('⚠️ PushNotificationService init skipped: $e');
     }
-
-    // 4. Update Token
-    final token = await _fcm.getToken();
-    if (token != null) {
-      debugPrint('📲 FCM Token: $token');
-      // We don't register here immediately.
-      // We register after login in LoginController or HomeScreen.
-    }
-
-    // Listen for regular token refresh
-    _fcm.onTokenRefresh.listen(registerToken);
   }
 
   /// Send token to Backend
@@ -103,9 +122,17 @@ class PushNotificationService {
 
   /// Get current token and register it
   Future<void> registerCurrentToken() async {
-    final token = await _fcm.getToken();
-    if (token != null) {
-      await registerToken(token);
+    if (kIsWeb) return;
+    await initialize();
+
+    try {
+      final fcm = _fcm ?? FirebaseMessaging.instance;
+      final token = await fcm.getToken();
+      if (token != null) {
+        await registerToken(token);
+      }
+    } catch (e) {
+      debugPrint('⚠️ registerCurrentToken skipped: $e');
     }
   }
 
@@ -161,11 +188,12 @@ class PushNotificationService {
   void _navigateBasedOnPayload(Map<String, dynamic> data) {
     final type = data['type'];
     final router = _ref.read(goRouterProvider);
+    final userType = _ref.read(authRepositoryProvider).userType;
 
     if (type == 'chat_message') {
       final jobId = data['job_id'];
       if (jobId != null) {
-        router.push('/jobs/$jobId/chat');
+        router.push(AppRoutes.buildJobChatPath(jobId));
       }
     } else if (type == 'new_job_offer' ||
         type == 'job_accepted' ||
@@ -173,11 +201,11 @@ class PushNotificationService {
         type == 'completion_request') {
       final jobId = data['job_id'];
       if (jobId != null) {
-        // Determine role and go to correct tracking/details page
-        // For simplicity, we can go to job details.
-        // Better logic might be needed depending on User Role, but job details handles both usually via conditional rendering or redirects.
-        // Assuming /jobs/:id works for details
-        router.push('/jobs/$jobId');
+        if (userType == 'technician') {
+          router.push(AppRoutes.buildTechnicianJobDetailPath(jobId));
+        } else {
+          router.push(AppRoutes.buildCustomerSearchingPath(jobId));
+        }
       }
     }
   }

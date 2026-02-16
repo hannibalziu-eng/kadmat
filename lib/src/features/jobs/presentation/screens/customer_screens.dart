@@ -3,12 +3,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_scalify/flutter_scalify.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import '../../../../core/app_theme.dart';
 import '../../../../core/navigation/app_routes.dart';
+import '../../../../core/navigation/job_flow_redirects.dart';
 import '../../../../core/widgets/kadmat_toast.dart';
 import '../../../../core/utils/error_handler.dart';
 import '../../data/job_repository.dart';
 import '../../domain/job.dart';
+import '../../domain/job_status.dart';
 import '../widgets/job_widgets.dart';
 
 /// Customer Searching Screen - Shows animated search while finding technician
@@ -26,30 +30,53 @@ class _CustomerSearchingScreenState
     extends ConsumerState<CustomerSearchingScreen>
     with TickerProviderStateMixin {
   late AnimationController _pulseController;
-  late AnimationController _rotateController;
   Timer? _pollTimer;
   Job? _job;
-  bool _isLoading = true;
+  StreamSubscription? _offersSubscription;
+  List<Map<String, dynamic>> _offers = const [];
+  String? _acceptingOfferId;
+  bool _isCancelling = false;
+
+  static final RegExp _uuidRegex = RegExp(
+    r'^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
+    caseSensitive: false,
+  );
+
+  bool _isValidUuid(String value) => _uuidRegex.hasMatch(value.trim());
 
   @override
   void initState() {
     super.initState();
     _pulseController = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 2),
-    )..repeat(reverse: true);
-
-    _rotateController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 3),
+      duration: const Duration(milliseconds: 1400),
     )..repeat();
 
     _startPolling();
+    _startOffersListening();
   }
 
   void _startPolling() {
     _fetchJob();
-    _pollTimer = Timer.periodic(const Duration(seconds: 3), (_) => _fetchJob());
+    _pollTimer = Timer.periodic(const Duration(seconds: 6), (_) => _fetchJob());
+  }
+
+  void _startOffersListening() {
+    _offersSubscription?.cancel();
+    _offersSubscription = ref
+        .read(jobRepositoryProvider)
+        .watchJobOffers(widget.jobId)
+        .listen((offers) {
+          if (!mounted) return;
+          offers.sort((a, b) {
+            final aPrice = (a['price'] as num?)?.toDouble() ?? 0;
+            final bPrice = (b['price'] as num?)?.toDouble() ?? 0;
+            return aPrice.compareTo(bPrice);
+          });
+          setState(() {
+            _offers = offers;
+          });
+        }, onError: (_) {});
   }
 
   Future<void> _fetchJob() async {
@@ -61,157 +88,494 @@ class _CustomerSearchingScreenState
 
       setState(() {
         _job = job;
-        _isLoading = false;
       });
 
-      // Auto-navigate when technician accepts or sets price
-      if (job != null &&
-          (job.status == 'accepted' || job.status == 'price_pending')) {
+      // Auto-navigate when the job leaves searching stage.
+      final route = job == null
+          ? null
+          : customerRouteForJobStatus(status: job.status, jobId: widget.jobId);
+      if (route != null) {
         _pollTimer?.cancel();
-        context.go(AppRoutes.buildCustomerTechnicianFoundPath(widget.jobId));
+        context.go(route);
+        return;
+      }
+
+      final normalizedStatus = job == null
+          ? ''
+          : JobStatus.normalize(job.status);
+      if (normalizedStatus == JobStatus.cancelled) {
+        _pollTimer?.cancel();
+        context.go(AppRoutes.home);
       }
     } catch (e) {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+      // Keep searching state visible; transient errors should not break flow.
     }
   }
 
   @override
   void dispose() {
     _pulseController.dispose();
-    _rotateController.dispose();
     _pollTimer?.cancel();
+    _offersSubscription?.cancel();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final job = _job;
+    if (job == null) {
+      return Scaffold(
+        backgroundColor: AppTheme.backgroundDark,
+        appBar: AppBar(
+          title: const Text('جاري البحث'),
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+        ),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    final lat = job.lat;
+    final lng = job.lng;
+    final searchRadius = (job.searchRadius ?? 3000).toDouble();
+    final serviceName =
+        (job.service?['name_ar'] ?? job.service?['name'] ?? 'خدمة').toString();
+    final rawExpectedPrice = job.initialPrice ?? job.customerOffer;
+    final expectedPrice = (rawExpectedPrice != null && rawExpectedPrice > 0)
+        ? rawExpectedPrice
+        : null;
+    final mediaCount = job.images?.length ?? 0;
+
     return Scaffold(
       backgroundColor: AppTheme.backgroundDark,
       appBar: AppBar(
-        title: const Text('جاري البحث'),
+        title: Text(serviceName),
         backgroundColor: Colors.transparent,
         elevation: 0,
+        centerTitle: true,
+        actions: [
+          Padding(
+            padding: EdgeInsetsDirectional.only(end: 14.w),
+            child: Center(
+              child: Container(
+                padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 6.h),
+                decoration: BoxDecoration(
+                  color: AppTheme.primaryColor.withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(16.r),
+                  border: Border.all(
+                    color: AppTheme.primaryColor.withValues(alpha: 0.55),
+                  ),
+                ),
+                child: Text(
+                  '${_offers.length} عرض',
+                  style: TextStyle(
+                    fontSize: 12.fz,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
-      body: Center(
-        child: Padding(
-          padding: EdgeInsets.all(24.w),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              // Animated Search Icon
-              AnimatedBuilder(
-                animation: Listenable.merge([
-                  _pulseController,
-                  _rotateController,
-                ]),
-                builder: (context, child) {
-                  return Transform.scale(
-                    scale: 1.0 + (_pulseController.value * 0.2),
-                    child: Transform.rotate(
-                      angle: _rotateController.value * 2 * 3.14159,
-                      child: Container(
-                        width: 120.w,
-                        height: 120.w,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: RadialGradient(
-                            colors: [
-                              AppTheme.primaryColor.withValues(alpha: 0.3),
-                              AppTheme.primaryColor.withValues(alpha: 0.1),
-                              Colors.transparent,
-                            ],
+      body: SafeArea(
+        top: false,
+        child: Column(
+          children: [
+            Expanded(
+              child: Stack(
+                children: [
+                  Padding(
+                    padding: EdgeInsetsDirectional.fromSTEB(14.w, 8.h, 14.w, 0),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(22.r),
+                      child: FlutterMap(
+                        options: MapOptions(
+                          initialCenter: LatLng(lat, lng),
+                          initialZoom: _zoomForRadius(searchRadius),
+                          interactionOptions: const InteractionOptions(
+                            flags:
+                                InteractiveFlag.drag |
+                                InteractiveFlag.pinchZoom,
                           ),
                         ),
-                        child: Icon(
-                          Icons.search,
-                          size: 60.s,
-                          color: AppTheme.primaryColor,
-                        ),
+                        children: [
+                          TileLayer(
+                            urlTemplate:
+                                'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+                            subdomains: const ['a', 'b', 'c', 'd'],
+                            retinaMode: true,
+                            userAgentPackageName: 'com.kadmat.app',
+                          ),
+                          CircleLayer(
+                            circles: [
+                              CircleMarker(
+                                point: LatLng(lat, lng),
+                                radius: searchRadius,
+                                useRadiusInMeter: true,
+                                color: AppTheme.primaryColor.withValues(
+                                  alpha: 0.12,
+                                ),
+                                borderColor: AppTheme.primaryColor.withValues(
+                                  alpha: 0.65,
+                                ),
+                                borderStrokeWidth: 2,
+                              ),
+                            ],
+                          ),
+                          MarkerLayer(
+                            markers: [
+                              Marker(
+                                point: LatLng(lat, lng),
+                                width: 60.w,
+                                height: 60.h,
+                                child: AnimatedBuilder(
+                                  animation: _pulseController,
+                                  builder: (context, child) {
+                                    final scale =
+                                        1 + (_pulseController.value * 0.15);
+                                    return Transform.scale(
+                                      scale: scale,
+                                      child: Container(
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          color: AppTheme.primaryColor
+                                              .withValues(alpha: 0.22),
+                                        ),
+                                        child: Icon(
+                                          Icons.home_repair_service,
+                                          color: Colors.white,
+                                          size: 30.s,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
                     ),
-                  );
-                },
+                  ),
+                  PositionedDirectional(
+                    top: 20.h,
+                    start: 28.w,
+                    child: Container(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 12.w,
+                        vertical: 8.h,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.65),
+                        borderRadius: BorderRadius.circular(16.r),
+                        border: Border.all(
+                          color: AppTheme.primaryColor.withValues(alpha: 0.55),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.radar,
+                            size: 16.s,
+                            color: AppTheme.primaryColor,
+                          ),
+                          SizedBox(width: 6.w),
+                          Text(
+                            'بحث ضمن ${(searchRadius / 1000).toStringAsFixed(0)} كم',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 12.fz,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  PositionedDirectional(
+                    start: 28.w,
+                    end: 28.w,
+                    bottom: 18.h,
+                    child: _buildSearchSummaryCard(
+                      address: job.addressText ?? 'الموقع الحالي',
+                      expectedPrice: expectedPrice,
+                      mediaCount: mediaCount,
+                    ),
+                  ),
+                ],
               ),
-
-              SizedBox(height: 40.h),
-
-              Text(
-                'جاري البحث عن فني...',
-                style: TextStyle(
-                  fontSize: 24.fz,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
-              ),
-
-              SizedBox(height: 12.h),
-
-              Text(
-                'سيتم إعلامك عند قبول فني للطلب',
-                style: TextStyle(fontSize: 14.fz, color: Colors.white60),
-                textAlign: TextAlign.center,
-              ),
-
-              SizedBox(height: 32.h),
-
-              // Job Details Card
-              if (_job != null) _buildJobDetails(),
-
-              SizedBox(height: 40.h),
-
-              // Cancel Button
-              TextButton.icon(
-                onPressed: _cancelJob,
-                icon: const Icon(Icons.close, color: Colors.red),
-                label: Text(
-                  'إلغاء الطلب',
-                  style: TextStyle(color: Colors.red, fontSize: 16.fz),
-                ),
-              ),
-            ],
-          ),
+            ),
+            _buildOffersPanel(),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildJobDetails() {
+  Widget _buildSearchSummaryCard({
+    required String address,
+    required double? expectedPrice,
+    required int mediaCount,
+  }) {
     return Container(
-      padding: EdgeInsets.all(16.w),
-      decoration: AppTheme.glassDecoration(radius: 16.r),
+      padding: EdgeInsets.all(12.w),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.72),
+        borderRadius: BorderRadius.circular(14.r),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.location_on, color: AppTheme.primaryColor, size: 18.s),
+          SizedBox(width: 6.w),
+          Expanded(
+            child: Text(
+              address,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: Colors.white, fontSize: 12.fz),
+            ),
+          ),
+          if (expectedPrice != null) ...[
+            SizedBox(width: 8.w),
+            _buildInfoChip('متوقع ${expectedPrice.toStringAsFixed(0)} ر.س'),
+          ],
+          if (mediaCount > 0) ...[
+            SizedBox(width: 8.w),
+            _buildInfoChip('مرفقات $mediaCount'),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoChip(String text) {
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 5.h),
+      decoration: BoxDecoration(
+        color: AppTheme.primaryColor.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(12.r),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: AppTheme.primaryColor,
+          fontSize: 11.fz,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildOffersPanel() {
+    return Container(
+      height: 300.h,
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceDark,
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(24.r),
+          topRight: Radius.circular(24.r),
+        ),
+        border: Border(
+          top: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
+        ),
+      ),
       child: Column(
+        children: [
+          Padding(
+            padding: EdgeInsetsDirectional.fromSTEB(16.w, 12.h, 16.w, 8.h),
+            child: Row(
+              children: [
+                Text(
+                  _offers.isEmpty ? 'جاري وصول العروض...' : 'عروض الفنيين',
+                  style: TextStyle(
+                    fontSize: 17.fz,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+                const Spacer(),
+                TextButton.icon(
+                  onPressed: _cancelJob,
+                  icon: const Icon(Icons.close, color: Colors.red),
+                  label: Text(
+                    'إلغاء الطلب',
+                    style: TextStyle(color: Colors.red, fontSize: 13.fz),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (_offers.isEmpty)
+            Expanded(
+              child: Center(
+                child: Text(
+                  'بانتظار عروض الفنيين القريبين',
+                  style: TextStyle(color: Colors.white60, fontSize: 14.fz),
+                ),
+              ),
+            )
+          else
+            Expanded(
+              child: ListView.separated(
+                padding: EdgeInsetsDirectional.fromSTEB(16.w, 0, 16.w, 16.h),
+                scrollDirection: Axis.horizontal,
+                itemCount: _offers.length,
+                separatorBuilder: (_, __) => SizedBox(width: 10.w),
+                itemBuilder: (context, index) =>
+                    _buildOfferCard(_offers[index], index),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOfferCard(Map<String, dynamic> offer, int index) {
+    final tech = (offer['technician'] as Map<String, dynamic>?) ?? const {};
+    final technicianId = ((offer['technician_id'] ?? tech['id']) ?? '')
+        .toString()
+        .trim();
+    final offerId = (offer['id'] ?? '').toString().trim();
+    final price = (offer['price'] as num?)?.toDouble() ?? 0;
+    final isBestPrice = index == 0;
+    final isLoading = _acceptingOfferId == offerId;
+    final isOfferIdValid = _isValidUuid(offerId);
+
+    return Container(
+      width: 320.w,
+      padding: EdgeInsets.all(14.w),
+      decoration: BoxDecoration(
+        color: AppTheme.backgroundDark,
+        borderRadius: BorderRadius.circular(16.r),
+        border: Border.all(
+          color: isBestPrice
+              ? AppTheme.primaryColor.withValues(alpha: 0.8)
+              : Colors.white.withValues(alpha: 0.16),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(
-                Icons.home_repair_service,
-                color: AppTheme.primaryColor,
-                size: 24.s,
+              CircleAvatar(
+                radius: 22.r,
+                backgroundColor: Colors.white10,
+                backgroundImage: tech['profile_image_url'] != null
+                    ? NetworkImage(tech['profile_image_url'].toString())
+                    : null,
+                child: tech['profile_image_url'] == null
+                    ? Icon(Icons.person, color: Colors.white, size: 20.s)
+                    : null,
               ),
-              SizedBox(width: 12.w),
-              Text(
-                _job?.service?['name'] ?? 'خدمة',
-                style: TextStyle(
-                  fontSize: 18.fz,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
+              SizedBox(width: 10.w),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      (tech['full_name'] ?? 'فني').toString(),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 15.fz,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                      ),
+                    ),
+                    SizedBox(height: 3.h),
+                    Row(
+                      children: [
+                        Icon(Icons.star, color: Colors.amber, size: 14.s),
+                        SizedBox(width: 4.w),
+                        Text(
+                          '${(tech['rating'] as num?)?.toDouble() ?? 5.0}',
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: 12.fz,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 6.h),
+                decoration: BoxDecoration(
+                  color: AppTheme.primaryColor.withValues(alpha: 0.16),
+                  borderRadius: BorderRadius.circular(12.r),
+                ),
+                child: Text(
+                  '${price.toStringAsFixed(0)} ر.س',
+                  style: TextStyle(
+                    color: AppTheme.primaryColor,
+                    fontSize: 15.fz,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
             ],
           ),
-          SizedBox(height: 12.h),
+          SizedBox(height: 10.h),
+          if (isBestPrice)
+            Container(
+              padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 5.h),
+              decoration: BoxDecoration(
+                color: Colors.green.withValues(alpha: 0.18),
+                borderRadius: BorderRadius.circular(10.r),
+              ),
+              child: Text(
+                'أفضل سعر حالياً',
+                style: TextStyle(
+                  color: Colors.greenAccent,
+                  fontSize: 11.fz,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          const Spacer(),
           Row(
             children: [
-              Icon(Icons.location_on, color: Colors.white54, size: 20.s),
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: (technicianId.isEmpty || technicianId == 'null')
+                      ? null
+                      : () => _openTechnicianProfile(technicianId),
+                  style: OutlinedButton.styleFrom(
+                    side: BorderSide(
+                      color: Colors.white.withValues(alpha: 0.28),
+                    ),
+                  ),
+                  child: const Text('ملف الفني'),
+                ),
+              ),
               SizedBox(width: 8.w),
               Expanded(
-                child: Text(
-                  _job?.addressText ?? '',
-                  style: TextStyle(fontSize: 14.fz, color: Colors.white70),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
+                child: ElevatedButton(
+                  onPressed: (isLoading || !isOfferIdValid)
+                      ? null
+                      : () => _acceptOffer(offerId),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.primaryColor,
+                    foregroundColor: Colors.white,
+                  ),
+                  child: isLoading
+                      ? SizedBox(
+                          width: 16.w,
+                          height: 16.w,
+                          child: const CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : Text(isOfferIdValid ? 'قبول العرض' : 'عرض غير صالح'),
                 ),
               ),
             ],
@@ -221,7 +585,31 @@ class _CustomerSearchingScreenState
     );
   }
 
+  void _openTechnicianProfile(String technicianId) {
+    final normalizedId = technicianId.trim();
+    if (normalizedId.isEmpty || normalizedId == 'null') {
+      KadmatToast.showWarning(
+        context,
+        title: 'تعذر فتح الملف',
+        message: 'معرّف الفني غير صالح',
+      );
+      return;
+    }
+
+    final path = AppRoutes.buildTechnicianProfilePath(normalizedId);
+    try {
+      context.push(path);
+    } catch (e) {
+      KadmatToast.showError(
+        context,
+        title: 'تعذر فتح الملف',
+        message: 'فشل الانتقال إلى ملف الفني. حاول مجددًا.',
+      );
+    }
+  }
+
   Future<void> _cancelJob() async {
+    if (_isCancelling) return;
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -246,6 +634,7 @@ class _CustomerSearchingScreenState
     );
 
     if (confirm == true) {
+      setState(() => _isCancelling = true);
       try {
         await ref.read(jobRepositoryProvider).cancelJob(widget.jobId);
         if (mounted) context.go(AppRoutes.home);
@@ -253,8 +642,54 @@ class _CustomerSearchingScreenState
         if (mounted) {
           ErrorHandler.handle(context, e);
         }
+      } finally {
+        if (mounted) setState(() => _isCancelling = false);
       }
     }
+  }
+
+  Future<void> _acceptOffer(String offerId) async {
+    final normalizedOfferId = offerId.trim();
+    if (_acceptingOfferId != null) return;
+    if (!_isValidUuid(normalizedOfferId)) {
+      KadmatToast.showWarning(
+        context,
+        title: 'تنبيه',
+        message: 'معرّف العرض غير صالح، حدّث الصفحة وحاول مجددًا',
+      );
+      return;
+    }
+
+    setState(() => _acceptingOfferId = normalizedOfferId);
+    try {
+      final updatedJob = await ref
+          .read(jobRepositoryProvider)
+          .acceptOffer(widget.jobId, normalizedOfferId);
+      if (!mounted) return;
+      KadmatToast.showSuccess(
+        context,
+        title: 'تم قبول العرض',
+        message: 'جاري الانتقال لمرحلة الفني المختار',
+      );
+      final route = customerRouteForJobStatus(
+        status: updatedJob.status,
+        jobId: widget.jobId,
+      );
+      context.go(route ?? AppRoutes.buildCustomerInProgressPath(widget.jobId));
+    } catch (e) {
+      if (mounted) {
+        ErrorHandler.handle(context, e);
+      }
+    } finally {
+      if (mounted) setState(() => _acceptingOfferId = null);
+    }
+  }
+
+  double _zoomForRadius(double radiusMeters) {
+    if (radiusMeters <= 2000) return 14.5;
+    if (radiusMeters <= 5000) return 13.0;
+    if (radiusMeters <= 10000) return 12.2;
+    return 11.5;
   }
 }
 
@@ -282,7 +717,7 @@ class _CustomerTechnicianFoundScreenState
 
   void _startPolling() {
     _fetchJob();
-    _pollTimer = Timer.periodic(const Duration(seconds: 5), (_) => _fetchJob());
+    _pollTimer = Timer.periodic(const Duration(seconds: 8), (_) => _fetchJob());
   }
 
   Future<void> _fetchJob() async {
@@ -512,6 +947,7 @@ class _CustomerPriceOfferScreenState
 
                   // Price comparison
                   if (_job!.initialPrice != null &&
+                      _job!.initialPrice! > 0 &&
                       _job!.technicianPrice != null)
                     Container(
                       padding: EdgeInsets.all(12.w),
@@ -535,8 +971,8 @@ class _CustomerPriceOfferScreenState
                           SizedBox(width: 8.w),
                           Text(
                             _job!.technicianPrice! <= _job!.initialPrice!
-                                ? 'السعر أقل أو يساوي تقديرك المبدئي!'
-                                : 'السعر أعلى من تقديرك المبدئي',
+                                ? 'السعر أقل أو يساوي السعر الابتدائي للخدمة'
+                                : 'السعر أعلى من السعر الابتدائي للخدمة',
                             style: TextStyle(
                               color:
                                   _job!.technicianPrice! <= _job!.initialPrice!
@@ -631,7 +1067,7 @@ class _CustomerInProgressScreenState
 
   void _startPolling() {
     _fetchJob();
-    _pollTimer = Timer.periodic(const Duration(seconds: 5), (_) => _fetchJob());
+    _pollTimer = Timer.periodic(const Duration(seconds: 8), (_) => _fetchJob());
   }
 
   Future<void> _fetchJob() async {
@@ -643,16 +1079,18 @@ class _CustomerInProgressScreenState
 
       setState(() => _job = job);
 
-      // Auto-navigate when completed
+      // Auto-navigate when job leaves in-progress stage.
       if (job != null) {
-        if (job.status == 'completed') {
+        final route = customerRouteForJobStatus(
+          status: job.status,
+          jobId: widget.jobId,
+        );
+        final inProgressRoute = AppRoutes.buildCustomerInProgressPath(
+          widget.jobId,
+        );
+        if (route != null && route != inProgressRoute) {
           _pollTimer?.cancel();
-          context.go(AppRoutes.buildCustomerRatePath(widget.jobId));
-        } else if (job.status == 'pending_confirmation') {
-          _pollTimer?.cancel();
-          context.go(
-            AppRoutes.buildCustomerConfirmCompletionPath(widget.jobId),
-          );
+          context.go(route);
         }
       }
     } catch (e) {
@@ -757,7 +1195,6 @@ class CustomerRateScreen extends ConsumerStatefulWidget {
 }
 
 class _CustomerRateScreenState extends ConsumerState<CustomerRateScreen> {
-  Job? _job;
   int _rating = 0;
   final _reviewController = TextEditingController();
   final List<String> _availableTags = [
@@ -784,23 +1221,6 @@ class _CustomerRateScreenState extends ConsumerState<CustomerRateScreen> {
     return review.isNotEmpty ? review : null;
   }
 
-  @override
-  void initState() {
-    super.initState();
-    _fetchJob();
-  }
-
-  Future<void> _fetchJob() async {
-    try {
-      final job = await ref
-          .read(jobRepositoryProvider)
-          .getJobById(widget.jobId);
-      if (mounted) setState(() => _job = job);
-    } catch (e) {
-      // Ignore
-    }
-  }
-
   Future<void> _submitRating() async {
     if (_rating == 0) {
       KadmatToast.showWarning(
@@ -822,7 +1242,7 @@ class _CustomerRateScreenState extends ConsumerState<CustomerRateScreen> {
           title: 'شكراً على تقييمك!',
           message: '⭐ تم إرسال التقييم بنجاح',
         );
-        context.go('/jobs/${widget.jobId}/customer/completed');
+        context.go(AppRoutes.buildCustomerCompletedPath(widget.jobId));
       }
     } catch (e) {
       if (mounted) {
@@ -977,7 +1397,7 @@ class _CustomerRateScreenState extends ConsumerState<CustomerRateScreen> {
             ),
             SizedBox(height: 16.h),
             TextButton(
-              onPressed: () => context.go('/'),
+              onPressed: () => context.go(AppRoutes.home),
               child: Text(
                 'تخطي',
                 style: TextStyle(color: Colors.white60, fontSize: 16.fz),
@@ -1120,7 +1540,7 @@ class _CustomerCompletedScreenState
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton.icon(
-                      onPressed: () => context.go('/'),
+                      onPressed: () => context.go(AppRoutes.home),
                       icon: const Icon(Icons.home),
                       label: const Text('العودة للرئيسية'),
                       style: ElevatedButton.styleFrom(

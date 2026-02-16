@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/api/api_client.dart';
 
@@ -108,13 +109,13 @@ class NotificationRepository {
 }
 
 @Riverpod(keepAlive: true)
-NotificationRepository notificationRepository(NotificationRepositoryRef ref) {
+NotificationRepository notificationRepository(Ref ref) {
   final client = ref.watch(apiClientProvider);
   return NotificationRepository(client);
 }
 
 @riverpod
-Stream<int> unreadNotificationCount(UnreadNotificationCountRef ref) async* {
+Stream<int> unreadNotificationCount(Ref ref) async* {
   final userId = Supabase.instance.client.auth.currentUser?.id;
   if (userId == null) {
     yield 0;
@@ -127,3 +128,24 @@ Stream<int> unreadNotificationCount(UnreadNotificationCountRef ref) async* {
       .eq('user_id', userId)
       .map((data) => data.where((n) => n['is_read'] == false).length);
 }
+
+/// Durable notifications stream for the currently authenticated user.
+final liveNotificationsProvider =
+    StreamProvider.autoDispose<List<NotificationItem>>((ref) {
+      final userId = Supabase.instance.client.auth.currentUser?.id;
+      if (userId == null) {
+        return Stream.value(const <NotificationItem>[]);
+      }
+
+      final repository = ref.watch(notificationRepositoryProvider);
+      return repository.watchNotifications(userId);
+    });
+
+/// Readable unread counter derived from the durable notifications stream.
+final liveUnreadNotificationsCountProvider = Provider<int>((ref) {
+  final notificationsAsync = ref.watch(liveNotificationsProvider);
+  return notificationsAsync.maybeWhen(
+    data: (items) => items.where((item) => !item.isRead).length,
+    orElse: () => 0,
+  );
+});

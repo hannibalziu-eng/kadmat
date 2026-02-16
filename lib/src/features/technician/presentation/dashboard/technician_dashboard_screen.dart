@@ -3,19 +3,34 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_scalify/flutter_scalify.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:geolocator/geolocator.dart' show Position;
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/app_theme.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/navigation/app_routes.dart';
-import '../../../../core/utils/global_error_handler.dart';
+import '../../../../core/utils/logger_service.dart';
 import '../../../../core/widgets/empty_state_widget.dart';
 import '../../../../core/widgets/shimmer_skeletons.dart';
 import '../../../../core/widgets/kadmat_toast.dart';
-import '../../../../core/exceptions/app_exceptions.dart';
+import '../../../../core/widgets/technician_appbar.dart';
+import 'technician_stats_grid.dart';
 import '../../../auth/data/auth_repository.dart';
-import '../../../jobs/presentation/job_controller.dart';
 import '../../../jobs/domain/job.dart';
-import '../../../../core/services/location_service.dart';
+import '../../../jobs/domain/job_status.dart';
+import '../../../jobs/presentation/job_controller.dart';
+import '../../../notifications/data/notification_repository.dart';
+import '../../../../core/services/location/location_service.dart';
+import '../../../../core/widgets/location_status_indicator.dart';
+import '../../../../core/services/presence/presence_service.dart';
+import '../providers/technician_dispatch_feed_provider.dart';
+import '../providers/technician_tab_provider.dart';
+import '../utils/technician_dispatch_queue.dart';
+
+enum _NearbySortMode { newest, closest }
+
+enum _NearbyCardMode { detailed, compact }
 
 class TechnicianDashboardScreen extends ConsumerStatefulWidget {
   const TechnicianDashboardScreen({super.key});
@@ -27,14 +42,221 @@ class TechnicianDashboardScreen extends ConsumerStatefulWidget {
 
 class _TechnicianDashboardScreenState
     extends ConsumerState<TechnicianDashboardScreen> {
-  bool _isOnline = true;
-
+  bool _isOnline = false;
   bool _isRetryingToken = false;
+  bool _didBootstrapRealtime = false;
+  DateTime? _lastTokenRecoveryAttempt;
+
+  ProviderSubscription<AsyncValue<TechnicianDispatchFeed>>?
+  _dispatchFeedSubscription;
+  bool _hasPrimedNearbyJobs = false;
+  int _lastVisibleNearbyJobsCount = 0;
+  List<Job> _cachedNearbyJobs = const <Job>[];
+  final Set<String> _telemetryLoggedJobs = <String>{};
+  _NearbySortMode _nearbySortMode = _NearbySortMode.newest;
+  _NearbyCardMode _nearbyCardMode = _NearbyCardMode.detailed;
+  bool _urgentOnly = false;
+  final List<int> _dispatchObservedWaitSeconds = <int>[];
+  int? _lastObservedWaitSeconds;
+
+  @override
+  void initState() {
+    super.initState();
+    _setupDispatchFeedSideEffects();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _bootstrapRealtimeServices();
+    });
+  }
+
+  @override
+  void dispose() {
+    _dispatchFeedSubscription?.close();
+    super.dispose();
+  }
+
+  void _setupDispatchFeedSideEffects() {
+    _dispatchFeedSubscription = ref
+        .listenManual<AsyncValue<TechnicianDispatchFeed>>(
+          technicianDispatchFeedProvider,
+          (_, next) {
+            next.whenOrNull(
+              error: (error, _) {
+                if (_isRecoverableRealtimeError(error)) {
+                  _handleTokenError();
+                }
+              },
+              data: (feed) {
+                final visibleJobs = feed.visibleJobs;
+                _trackDispatchTelemetry(visibleJobs);
+
+                if (_hasPrimedNearbyJobs &&
+                    _isOnline &&
+                    visibleJobs.length > _lastVisibleNearbyJobsCount &&
+                    mounted) {
+                  ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Row(
+                        children: [
+                          const Icon(
+                            Icons.notifications_active,
+                            color: Colors.white,
+                          ),
+                          SizedBox(width: 8.w),
+                          const Text('🔔 يوجد طلب جديد بالقرب منك!'),
+                        ],
+                      ),
+                      backgroundColor: Colors.green,
+                      behavior: SnackBarBehavior.floating,
+                      margin: EdgeInsets.all(16.w),
+                      duration: const Duration(seconds: 4),
+                    ),
+                  );
+                }
+
+                _hasPrimedNearbyJobs = true;
+                _lastVisibleNearbyJobsCount = visibleJobs.length;
+                _cachedNearbyJobs = visibleJobs;
+              },
+            );
+          },
+          fireImmediately: true,
+        );
+  }
+
+  bool _isRecoverableRealtimeError(Object error) {
+    final normalized = error.toString().toLowerCase();
+    return normalized.contains('invalidjwttoken') ||
+        normalized.contains('realtimesubscribeexception') ||
+        normalized.contains('timedout') ||
+        normalized.contains('expired') ||
+        normalized.contains('jwt');
+  }
+
+  void _trackDispatchTelemetry(List<Job> visibleJobs) {
+    final now = DateTime.now();
+
+    for (final job in visibleJobs) {
+      if (_telemetryLoggedJobs.contains(job.id)) continue;
+      _telemetryLoggedJobs.add(job.id);
+
+      final waitSeconds = now
+          .difference(job.createdAt)
+          .inSeconds
+          .clamp(0, 86400);
+      _dispatchObservedWaitSeconds.add(waitSeconds);
+      _lastObservedWaitSeconds = waitSeconds;
+      LoggerService.i(
+        'dispatch.telemetry nearby_job_visible '
+        'job_id=${job.id} '
+        'wait_seconds=$waitSeconds '
+        'status=${job.status}',
+      );
+    }
+
+    if (_telemetryLoggedJobs.length > 3000) {
+      _telemetryLoggedJobs.clear();
+    }
+    if (_dispatchObservedWaitSeconds.length > 3000) {
+      _dispatchObservedWaitSeconds.removeRange(
+        0,
+        _dispatchObservedWaitSeconds.length - 3000,
+      );
+    }
+  }
+
+  List<Job> _sortNearbyJobs(List<Job> jobs, Position? currentLocation) {
+    return TechnicianDispatchQueue.prepareJobs(
+      jobs: jobs,
+      sortMode: _nearbySortMode == _NearbySortMode.closest
+          ? TechnicianDispatchSortMode.closest
+          : TechnicianDispatchSortMode.newest,
+      urgentOnly: false,
+      technicianLocation: _toGeoPoint(currentLocation),
+    );
+  }
+
+  double _distanceMeters({
+    required Position currentLocation,
+    required double jobLat,
+    required double jobLng,
+  }) {
+    return TechnicianDispatchQueue.distanceBetweenPointsMeters(
+      from: _toGeoPoint(currentLocation)!,
+      to: TechnicianGeoPoint(lat: jobLat, lng: jobLng),
+    );
+  }
+
+  String _formatWaitingTime(DateTime createdAt) {
+    return TechnicianDispatchQueue.waitingLabel(createdAt);
+  }
+
+  bool _isUrgentJob(Job job) {
+    return TechnicianDispatchQueue.isUrgentJob(job);
+  }
+
+  List<Job> _applyJobFilters(List<Job> jobs) {
+    if (!_urgentOnly) return jobs;
+    return jobs.where(_isUrgentJob).toList();
+  }
+
+  Job? _pickPriorityJob(List<Job> jobs, Position? currentLocation) {
+    return TechnicianDispatchQueue.pickPriorityJob(
+      jobs: jobs,
+      technicianLocation: _toGeoPoint(currentLocation),
+    );
+  }
+
+  TechnicianGeoPoint? _toGeoPoint(Position? position) {
+    if (position == null) return null;
+    return TechnicianGeoPoint(lat: position.latitude, lng: position.longitude);
+  }
+
+  Future<void> _openBidding(String jobId) async {
+    if (!mounted) return;
+    await context.push(AppRoutes.buildTechnicianBiddingPath(jobId));
+  }
+
+  Future<void> _bootstrapRealtimeServices() async {
+    if (!mounted || _didBootstrapRealtime) return;
+
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    if (userId == null) return;
+
+    final profileIsOnline =
+        ref.read(authRepositoryProvider).userProfile?['is_online'] == true;
+    if (mounted && _isOnline != profileIsOnline) {
+      setState(() => _isOnline = profileIsOnline);
+    }
+
+    _didBootstrapRealtime = true;
+
+    try {
+      await ref.read(presenceServiceProvider).initialize(userId);
+
+      if (_isOnline) {
+        await LocationService().startTracking(userId);
+        await LocationService().setTrackingMode(LocationTrackingMode.idle);
+        await ref
+            .read(presenceServiceProvider)
+            .setStatus(UserPresenceStatus.online, userId);
+      } else {
+        await ref
+            .read(presenceServiceProvider)
+            .setStatus(UserPresenceStatus.offline, userId);
+      }
+    } catch (e) {
+      debugPrint('⚠️ Failed to bootstrap realtime services: $e');
+      if (mounted && _isOnline) {
+        setState(() => _isOnline = false);
+      }
+    }
+  }
 
   Future<void> _refreshJobs() async {
     // Attempt to refresh session first if we are here (manual retry)
     try {
-      if (mounted) {
+      if (context.mounted) {
         await Supabase.instance.client.auth.refreshSession();
       }
     } catch (e) {
@@ -42,26 +264,20 @@ class _TechnicianDashboardScreenState
     }
 
     if (!mounted) return;
-
-    // final userProfile = ref.read(authRepositoryProvider).userProfile;
-    // final serviceId = userProfile?['service_id'] as String?;
-
-    final location = ref.read(locationStreamProvider).valueOrNull;
-    final lat = location?.latitude ?? 32.08168824752129;
-    final lng = location?.longitude ?? 20.054815423923195;
-
-    ref.invalidate(
-      watchNearbyJobsStreamProvider(
-        lat: lat,
-        lng: lng,
-        // serviceId: serviceId, // Disable service filter for testing
-        serviceId: null,
-      ),
-    );
+    ref.invalidate(technicianDispatchFeedProvider);
+    ref.invalidate(watchNearbyJobsStreamProvider);
   }
 
   Future<void> _handleTokenError() async {
     if (_isRetryingToken) return;
+    final now = DateTime.now();
+    if (_lastTokenRecoveryAttempt != null &&
+        now.difference(_lastTokenRecoveryAttempt!) <
+            const Duration(seconds: 8)) {
+      return;
+    }
+
+    _lastTokenRecoveryAttempt = now;
     _isRetryingToken = true;
     debugPrint('🔄 Token expired, attempting to refresh session...');
 
@@ -69,25 +285,14 @@ class _TechnicianDashboardScreenState
       await Supabase.instance.client.auth.refreshSession();
       debugPrint('✅ Session refreshed successfully');
 
-      if (mounted) {
-        final location = ref.read(locationStreamProvider).valueOrNull;
-        final lat = location?.latitude ?? 32.08168824752129;
-        final lng = location?.longitude ?? 20.054815423923195;
-
-        // Invalidate to restart the stream
-        ref.invalidate(
-          watchNearbyJobsStreamProvider(
-            lat: lat,
-            lng: lng,
-            // serviceId: serviceId, // Disable service filter for testing
-            serviceId: null,
-          ),
-        );
+      if (context.mounted) {
+        ref.invalidate(technicianDispatchFeedProvider);
+        ref.invalidate(watchNearbyJobsStreamProvider);
       }
     } catch (e) {
       debugPrint('❌ Failed to refresh session: $e');
     } finally {
-      if (mounted) {
+      if (context.mounted) {
         setState(() => _isRetryingToken = false);
       }
     }
@@ -97,81 +302,77 @@ class _TechnicianDashboardScreenState
   Widget build(BuildContext context) {
     final userProfile = ref.watch(authRepositoryProvider).userProfile;
     final userName = userProfile?['full_name'] ?? 'الفني';
-    final serviceId = userProfile?['service_id'] as String?;
+    final unreadNotifications = ref.watch(liveUnreadNotificationsCountProvider);
+    final dispatchFeedAsync = ref.watch(technicianDispatchFeedProvider);
+    final location = dispatchFeedAsync.valueOrNull?.location;
 
-    // Watch current location
-    final locationAsync = ref.watch(locationStreamProvider);
-
-    // Default to Benghazi for testing (matches customer job)
-    final lat = locationAsync.valueOrNull?.latitude ?? 32.08168824752129;
-    final lng = locationAsync.valueOrNull?.longitude ?? 20.054815423923195;
-    debugPrint('📍 Technician Dashboard Search Location: $lat, $lng');
-
-    // Watch for real-time nearby jobs using the stream
-    final nearbyJobsStream = ref.watch(
-      watchNearbyJobsStreamProvider(lat: lat, lng: lng, serviceId: serviceId),
-    );
-
-    // Listen for new jobs to show notification
-    // Listen for new jobs to show notification
-    ref.listen(
-      watchNearbyJobsStreamProvider(lat: lat, lng: lng, serviceId: serviceId),
-      (previous, next) {
-        // Handle Error State (Token Expiry)
-        if (next is AsyncError) {
-          final error = next.error.toString();
-          if (error.contains('InvalidJWTToken') ||
-              error.contains('expired') ||
-              error.contains('RealtimeSubscribeException')) {
-            _handleTokenError();
-          }
-        }
-
-        if (next is AsyncData && next.value != null) {
-          final newJobs = next.value!;
-          final oldJobs = previous?.value ?? [];
-
-          // If we have more jobs than before, show notification
-          if (newJobs.length > oldJobs.length) {
-            // Only show if it's not the initial load (previous is not null or loading)
-            if (previous is AsyncData) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Row(
-                    children: [
-                      const Icon(
-                        Icons.notifications_active,
-                        color: Colors.white,
-                      ),
-                      SizedBox(width: 8.w),
-                      const Text('🔔 يوجد طلب جديد بالقرب منك!'),
-                    ],
-                  ),
-                  backgroundColor: Colors.green,
-                  behavior: SnackBarBehavior.floating,
-                  margin: EdgeInsets.all(16.w),
-                  duration: const Duration(seconds: 4),
-                ),
-              );
-            }
-          }
-        }
-      },
-    );
+    if (location != null) {
+      debugPrint(
+        '📍 Technician Dashboard Search Location: ${location.latitude}, ${location.longitude}',
+      );
+    } else {
+      debugPrint(
+        '⚠️ Technician location unavailable, nearby jobs stream paused',
+      );
+    }
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      appBar: AppBar(
-        title: const Text('لوحة التحكم'),
-        centerTitle: true,
-        actions: [
-          Switch(
-            value: _isOnline,
-            onChanged: (value) => setState(() => _isOnline = value),
-            activeThumbColor: Colors.green,
-          ),
-          SizedBox(width: 16.w),
-        ],
+      appBar: TechnicianAppBar(
+        isOnline: _isOnline,
+        onToggleOnline: () async {
+          final userId = Supabase.instance.client.auth.currentUser?.id;
+          if (userId == null) return;
+
+          setState(() => _isOnline = !_isOnline);
+
+          try {
+            await ref.read(presenceServiceProvider).initialize(userId);
+
+            if (_isOnline) {
+              await LocationService().startTracking(userId);
+              await LocationService().setTrackingMode(
+                LocationTrackingMode.idle,
+              );
+              // Set Presence Online
+              await ref
+                  .read(presenceServiceProvider)
+                  .setStatus(UserPresenceStatus.online, userId);
+
+              if (context.mounted) {
+                KadmatToast.showSuccess(
+                  context,
+                  title: 'أنت الآن متصل',
+                  message: 'تم تفعيل تتبع الموقع',
+                );
+              }
+            } else {
+              await LocationService().stopTracking();
+              // Set Presence Offline
+              await ref
+                  .read(presenceServiceProvider)
+                  .setStatus(UserPresenceStatus.offline, userId);
+
+              if (context.mounted) {
+                KadmatToast.showInfo(
+                  context,
+                  title: 'تم قطع الاتصال',
+                  message: 'توقف تتبع الموقع',
+                );
+              }
+            }
+          } catch (e) {
+            // Revert state if permission denied or error
+            setState(() => _isOnline = !_isOnline);
+            if (context.mounted) {
+              KadmatToast.showError(
+                context,
+                title: 'خطأ',
+                message: _friendlyLocationToggleError(e),
+              );
+            }
+          }
+        },
       ),
       body: RefreshIndicator(
         onRefresh: () async {
@@ -186,31 +387,7 @@ class _TechnicianDashboardScreenState
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Greeting with real name
-              Text(
-                'مرحباً، $userName 👋',
-                style: TextStyle(
-                  fontSize: 24.fz,
-                  fontWeight: FontWeight.bold,
-                  color: Theme.of(context).textTheme.bodyLarge?.color,
-                ),
-              ).animate().fadeIn().slideX(),
-              SizedBox(height: 8.h),
-              Text(
-                _isOnline ? 'أنت متصل الآن وتستقبل الطلبات' : 'أنت غير متصل',
-                style: TextStyle(
-                  fontSize: 14.fz,
-                  color: _isOnline ? Colors.green : Colors.grey,
-                ),
-              ).animate().fadeIn().slideX(delay: 100.ms),
-              SizedBox(height: 24.h),
-
-              // Stats Grid - Use real data from myJobs
-              _buildStatsSection(),
-
-              SizedBox(height: 24.h),
-
-              // New Requests Section
+              // New Requests Section (Top Priority)
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -223,44 +400,89 @@ class _TechnicianDashboardScreenState
                   ),
                   TextButton(
                     onPressed: () {
-                      // Navigate to requests tab
+                      ref.read(technicianTabIndexProvider.notifier).state = 1;
                     },
                     child: const Text('عرض الكل'),
                   ),
                 ],
               ).animate().fadeIn(delay: 300.ms),
+              if (unreadNotifications > 0) ...[
+                SizedBox(height: 8.h),
+                _buildRealtimeNoticeCard(
+                  message:
+                      'لديك $unreadNotifications إشعارات جديدة. افتح أيقونة الجرس للمراجعة.',
+                ),
+              ],
+              SizedBox(height: 8.h),
+              _buildSortControls(location),
+              SizedBox(height: 8.h),
+              _buildDispatchTelemetryCard(),
               SizedBox(height: 12.h),
 
               // Real-time jobs list
-              nearbyJobsStream.when(
-                data: (jobs) {
-                  if (jobs.isEmpty) {
-                    return const EmptyStateWidget(
-                      title: 'لا توجد طلبات قريبة',
-                      subtitle: 'سنقوم بإخطارك عند توفر طلبات جديدة في منطقتك',
-                      icon: Icons.search_off_rounded,
-                    );
-                  }
-                  return Column(
-                    children: jobs
-                        .take(3)
-                        .map(
-                          (job) => Padding(
-                            padding: EdgeInsets.only(bottom: 12.h),
-                            child: _buildJobCard(job),
-                          ),
-                        )
-                        .toList(),
+              dispatchFeedAsync.when(
+                data: (feed) {
+                  return _buildNearbyJobsListSection(
+                    sourceJobs: feed.visibleJobs,
+                    currentLocation: location,
                   );
                 },
-                loading: () => const ListSkeleton(
-                  itemCount: 2,
-                  itemHeight: 120,
-                  shrinkWrap: true,
-                  physics: NeverScrollableScrollPhysics(),
-                ),
-                error: (err, _) => _buildErrorCard(err.toString()),
+                loading: () {
+                  if (_cachedNearbyJobs.isNotEmpty) {
+                    return _buildNearbyJobsListSection(
+                      sourceJobs: _cachedNearbyJobs,
+                      currentLocation: location,
+                      noticeMessage: 'جاري تحديث البيانات الحية...',
+                    );
+                  }
+
+                  return const ListSkeleton(
+                    itemCount: 2,
+                    itemHeight: 120,
+                    shrinkWrap: true,
+                    physics: NeverScrollableScrollPhysics(),
+                  );
+                },
+                error: (err, _) {
+                  if (_cachedNearbyJobs.isNotEmpty) {
+                    return _buildNearbyJobsListSection(
+                      sourceJobs: _cachedNearbyJobs,
+                      currentLocation: location,
+                      noticeMessage:
+                          'تعذر التحديث اللحظي مؤقتاً. يتم عرض آخر بيانات متاحة.',
+                      noticeWarning: true,
+                    );
+                  }
+
+                  return _buildErrorCard(err.toString());
+                },
               ),
+
+              SizedBox(height: 24.h),
+
+              // Dashboard Data Under Requests
+              Text(
+                'مرحباً، $userName 👋',
+                style: TextStyle(
+                  fontSize: 22.fz,
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context).textTheme.bodyLarge?.color,
+                ),
+              ).animate().fadeIn().slideX(),
+              SizedBox(height: 6.h),
+              Text(
+                _isOnline ? 'أنت متصل الآن وتستقبل الطلبات' : 'أنت غير متصل',
+                style: TextStyle(
+                  fontSize: 14.fz,
+                  color: _isOnline ? Colors.green : Colors.grey,
+                ),
+              ).animate().fadeIn().slideX(delay: 100.ms),
+              SizedBox(height: 8.h),
+              LocationStatusIndicator(
+                isOnline: _isOnline,
+              ).animate().fadeIn(delay: 200.ms),
+              SizedBox(height: 16.h),
+              const TechnicianStatsGrid(),
             ],
           ),
         ),
@@ -268,78 +490,18 @@ class _TechnicianDashboardScreenState
     );
   }
 
-  Widget _buildStatsSection() {
-    final myJobsAsync = ref.watch(watchMyJobsRealtimeProvider);
-
-    return myJobsAsync.when(
-      data: (jobs) {
-        final todayJobs = jobs
-            .where(
-              (j) =>
-                  j.completedAt != null &&
-                  j.completedAt!.day == DateTime.now().day,
-            )
-            .toList();
-
-        final todayEarnings = todayJobs.fold<double>(
-          0,
-          (sum, job) => sum + (job.technicianPrice ?? job.initialPrice ?? 0),
-        );
-
-        return Row(
-          children: [
-            Expanded(
-              child: _buildStatCard(
-                'أرباح اليوم',
-                '${todayEarnings.toStringAsFixed(0)} ر.س',
-                Icons.account_balance_wallet,
-                Colors.green,
-              ),
-            ),
-            SizedBox(width: 16.w),
-            Expanded(
-              child: _buildStatCard(
-                'الطلبات المكتملة',
-                '${todayJobs.length}',
-                Icons.check_circle_outline,
-                Colors.blue,
-              ),
-            ),
-          ],
-        ).animate().fadeIn().slideY(begin: 0.2, delay: 200.ms);
-      },
-      loading: () => _buildStatsShimmer(),
-      error: (_, __) => _buildStatsShimmer(),
-    );
-  }
-
-  Widget _buildStatsShimmer() {
-    return Row(
-      children: [
-        Expanded(
-          child: SkeletonBase(
-            width: double.infinity,
-            height: 100.h,
-            borderRadius: 16.r,
-          ),
-        ),
-        SizedBox(width: 16.w),
-        Expanded(
-          child: SkeletonBase(
-            width: double.infinity,
-            height: 100.h,
-            borderRadius: 16.r,
-          ),
-        ),
-      ],
-    );
-  }
-
   Widget _buildErrorCard(String error) {
     String displayError = 'حدث خطأ في الاتصال';
-    if (error.contains('InvalidJWTToken') || error.contains('expired')) {
+    final normalized = error.toLowerCase();
+    if (normalized.contains('invalidjwttoken') ||
+        normalized.contains('expired') ||
+        normalized.contains('jwt')) {
       displayError = 'انتهت الجلسة، جاري إعادة الاتصال...';
-    } else if (error.contains('SocketException')) {
+    } else if (normalized.contains('realtimesubscribeexception') ||
+        normalized.contains('timedout')) {
+      displayError = 'تعذر الاتصال بالتحديث اللحظي، جاري إعادة المحاولة...';
+    } else if (normalized.contains('socketexception') ||
+        normalized.contains('failed host lookup')) {
       displayError = 'لا يوجد اتصال بالإنترنت';
     }
 
@@ -376,11 +538,442 @@ class _TechnicianDashboardScreenState
     );
   }
 
-  // Track jobs currently being accepted to prevent double-clicks
-  final Set<String> _processingJobs = {};
+  Widget _buildRealtimeNoticeCard({
+    required String message,
+    bool isWarning = false,
+  }) {
+    final color = isWarning ? Colors.orange : Colors.blue;
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(12.w),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12.r),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            isWarning ? Icons.wifi_tethering_off : Icons.sync,
+            color: color,
+            size: 18.s,
+          ),
+          SizedBox(width: 8.w),
+          Expanded(
+            child: Text(
+              message,
+              style: TextStyle(
+                fontSize: 12.fz,
+                color: color,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-  Widget _buildJobCard(Job job) {
-    final isProcessing = _processingJobs.contains(job.id);
+  Widget _buildNearbyJobsListSection({
+    required List<Job> sourceJobs,
+    required Position? currentLocation,
+    String? noticeMessage,
+    bool noticeWarning = false,
+  }) {
+    final sortedJobs = _sortNearbyJobs(sourceJobs, currentLocation);
+    final filteredJobs = _applyJobFilters(sortedJobs);
+    if (filteredJobs.isEmpty) {
+      if (_urgentOnly) {
+        return const EmptyStateWidget(
+          title: 'لا توجد طلبات عاجلة الآن',
+          subtitle: 'يمكنك إلغاء فلتر العاجل لرؤية كل الطلبات',
+          icon: Icons.alarm_off_rounded,
+        );
+      }
+      return const EmptyStateWidget(
+        title: 'لا توجد طلبات قريبة',
+        subtitle: 'سنقوم بإخطارك عند توفر طلبات جديدة في منطقتك',
+        icon: Icons.search_off_rounded,
+      );
+    }
+
+    final priorityJob = _pickPriorityJob(filteredJobs, currentLocation);
+    final listLimit = _nearbyCardMode == _NearbyCardMode.compact ? 4 : 3;
+    final listJobs = priorityJob == null
+        ? filteredJobs.take(listLimit).toList()
+        : filteredJobs
+              .where((job) => job.id != priorityJob.id)
+              .take(listLimit)
+              .toList();
+    final shownCount = listJobs.length + (priorityJob == null ? 0 : 1);
+    final hiddenCount = (filteredJobs.length - shownCount).clamp(0, 999);
+
+    return Column(
+      children: [
+        if (noticeMessage != null) ...[
+          _buildRealtimeNoticeCard(
+            message: noticeMessage,
+            isWarning: noticeWarning,
+          ),
+          SizedBox(height: 12.h),
+        ],
+        _buildQueueHealthStrip(filteredJobs),
+        SizedBox(height: 12.h),
+        if (priorityJob != null) ...[
+          _buildPriorityHeroCard(priorityJob, currentLocation: currentLocation),
+          SizedBox(height: 12.h),
+        ],
+        ...listJobs.map(
+          (job) => Padding(
+            padding: EdgeInsets.only(bottom: 12.h),
+            child: _buildJobCard(
+              job,
+              currentLocation: currentLocation,
+              compact: _nearbyCardMode == _NearbyCardMode.compact,
+            ),
+          ),
+        ),
+        if (hiddenCount > 0) _buildMoreJobsHint(hiddenCount),
+      ],
+    );
+  }
+
+  Widget _buildPriorityHeroCard(Job job, {Position? currentLocation}) {
+    final hasCoordinates = job.lat != 0 && job.lng != 0;
+    final serviceName = job.service?['name'] ?? 'خدمة';
+    final customerName = job.customer?['full_name'] ?? 'عميل';
+    final addressText = job.addressText ?? 'موقع غير محدد';
+    final waitLabel = _formatWaitingTime(job.createdAt);
+    final distanceText = currentLocation == null
+        ? null
+        : '${(_distanceMeters(currentLocation: currentLocation, jobLat: job.lat, jobLng: job.lng) / 1000).toStringAsFixed(1)} كم';
+
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(14.w),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topRight,
+          end: Alignment.bottomLeft,
+          colors: [
+            Colors.red.withValues(alpha: 0.14),
+            Theme.of(context).cardColor.withValues(alpha: 0.95),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(16.r),
+        border: Border.all(color: Colors.red.withValues(alpha: 0.45)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.priority_high_rounded, color: Colors.red, size: 20.s),
+              SizedBox(width: 6.w),
+              Text(
+                'أولوية قصوى',
+                style: TextStyle(
+                  fontSize: 13.fz,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.red,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                waitLabel,
+                style: TextStyle(
+                  fontSize: 12.fz,
+                  color: Colors.red,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 8.h),
+          Text(
+            serviceName,
+            style: TextStyle(fontSize: 16.fz, fontWeight: FontWeight.bold),
+          ),
+          SizedBox(height: 2.h),
+          Text(
+            customerName,
+            style: TextStyle(
+              fontSize: 13.fz,
+              color: Theme.of(context).textTheme.bodySmall?.color,
+            ),
+          ),
+          SizedBox(height: 8.h),
+          Row(
+            children: [
+              Icon(Icons.location_on_outlined, size: 16.s, color: Colors.blue),
+              SizedBox(width: 4.w),
+              Expanded(
+                child: Text(
+                  addressText,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 12.fz, color: Colors.blue[700]),
+                ),
+              ),
+              if (distanceText != null) ...[
+                SizedBox(width: 8.w),
+                Icon(Icons.route, size: 16.s, color: Colors.blue),
+                SizedBox(width: 4.w),
+                Text(
+                  distanceText,
+                  style: TextStyle(
+                    fontSize: 12.fz,
+                    color: Colors.blue,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ],
+          ),
+          SizedBox(height: 10.h),
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () => _openBidding(job.id),
+                  icon: const Icon(Icons.local_offer_outlined),
+                  label: const Text('تقديم عرض'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.primaryColor,
+                    foregroundColor: Colors.white,
+                    padding: EdgeInsets.symmetric(vertical: 10.h),
+                  ),
+                ),
+              ),
+              SizedBox(width: 8.w),
+              OutlinedButton.icon(
+                onPressed: hasCoordinates
+                    ? () => _openLocationInMaps(job.lat, job.lng, addressText)
+                    : null,
+                icon: Icon(Icons.map_outlined, size: 18.s),
+                label: const Text('الموقع'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMoreJobsHint(int hiddenCount) {
+    return Container(
+      width: double.infinity,
+      margin: EdgeInsets.only(top: 2.h),
+      padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h),
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor.withValues(alpha: 0.7),
+        borderRadius: BorderRadius.circular(12.r),
+        border: Border.all(
+          color: Theme.of(context).primaryColor.withValues(alpha: 0.2),
+        ),
+      ),
+      child: Text(
+        'يوجد $hiddenCount طلبات إضافية. افتح "عرض الكل" لإدارتها بسرعة.',
+        style: TextStyle(
+          fontSize: 12.fz,
+          color: Theme.of(context).textTheme.bodySmall?.color,
+          fontWeight: FontWeight.w600,
+        ),
+        textAlign: TextAlign.center,
+      ),
+    );
+  }
+
+  Widget _buildSortControls(Position? currentLocation) {
+    return Wrap(
+      spacing: 8.w,
+      runSpacing: 6.h,
+      children: [
+        ChoiceChip(
+          label: const Text('الأحدث'),
+          selected: _nearbySortMode == _NearbySortMode.newest,
+          onSelected: (_) {
+            setState(() {
+              _nearbySortMode = _NearbySortMode.newest;
+            });
+          },
+        ),
+        ChoiceChip(
+          label: const Text('الأقرب'),
+          selected: _nearbySortMode == _NearbySortMode.closest,
+          onSelected: currentLocation == null
+              ? null
+              : (_) {
+                  setState(() {
+                    _nearbySortMode = _NearbySortMode.closest;
+                  });
+                },
+        ),
+        FilterChip(
+          label: const Text('عاجل فقط'),
+          selected: _urgentOnly,
+          onSelected: (selected) {
+            setState(() {
+              _urgentOnly = selected;
+            });
+          },
+          selectedColor: Colors.red.withValues(alpha: 0.18),
+          checkmarkColor: Colors.red,
+        ),
+        FilterChip(
+          label: const Text('عرض مختصر'),
+          selected: _nearbyCardMode == _NearbyCardMode.compact,
+          onSelected: (selected) {
+            setState(() {
+              _nearbyCardMode = selected
+                  ? _NearbyCardMode.compact
+                  : _NearbyCardMode.detailed;
+            });
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDispatchTelemetryCard() {
+    if (_dispatchObservedWaitSeconds.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    final total = _dispatchObservedWaitSeconds.fold<int>(
+      0,
+      (sum, value) => sum + value,
+    );
+    final avgSeconds = (total / _dispatchObservedWaitSeconds.length).round();
+    final lastSeconds = _lastObservedWaitSeconds ?? avgSeconds;
+
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h),
+      decoration: BoxDecoration(
+        color: Colors.teal.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12.r),
+        border: Border.all(color: Colors.teal.withValues(alpha: 0.25)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.speed_rounded, size: 18.s, color: Colors.teal),
+          SizedBox(width: 8.w),
+          Expanded(
+            child: Text(
+              'أداء الوصول: متوسط ${avgSeconds}s | آخر طلب ${lastSeconds}s',
+              style: TextStyle(
+                fontSize: 12.fz,
+                color: Colors.teal,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQueueHealthStrip(List<Job> jobs) {
+    if (jobs.isEmpty) return const SizedBox.shrink();
+    final now = DateTime.now();
+    final agesInMinutes = jobs
+        .map((job) => now.difference(job.createdAt).inMinutes.clamp(0, 1440))
+        .toList();
+    final totalAge = agesInMinutes.fold<int>(0, (sum, age) => sum + age);
+    final avgAge = (totalAge / agesInMinutes.length).round();
+    final maxAge = agesInMinutes.fold<int>(
+      0,
+      (max, age) => age > max ? age : max,
+    );
+
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 10.h),
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor.withValues(alpha: 0.7),
+        borderRadius: BorderRadius.circular(12.r),
+        border: Border.all(
+          color: Theme.of(context).primaryColor.withValues(alpha: 0.18),
+        ),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: _buildQueueMetric(
+              title: 'متاح الآن',
+              value: '${jobs.length}',
+              icon: Icons.badge_outlined,
+            ),
+          ),
+          Expanded(
+            child: _buildQueueMetric(
+              title: 'متوسط الانتظار',
+              value: avgAge < 1 ? 'أقل من دقيقة' : '$avgAge د',
+              icon: Icons.timelapse,
+            ),
+          ),
+          Expanded(
+            child: _buildQueueMetric(
+              title: 'أطول انتظار',
+              value: maxAge < 1 ? 'أقل من دقيقة' : '$maxAge د',
+              icon: Icons.schedule,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQueueMetric({
+    required String title,
+    required String value,
+    required IconData icon,
+  }) {
+    return Column(
+      children: [
+        Icon(icon, size: 16.s, color: Theme.of(context).primaryColor),
+        SizedBox(height: 4.h),
+        Text(
+          title,
+          style: TextStyle(
+            fontSize: 11.fz,
+            color: Theme.of(context).textTheme.bodySmall?.color,
+          ),
+          textAlign: TextAlign.center,
+        ),
+        SizedBox(height: 2.h),
+        Text(
+          value,
+          style: TextStyle(fontSize: 12.fz, fontWeight: FontWeight.bold),
+          textAlign: TextAlign.center,
+        ),
+      ],
+    );
+  }
+
+  String _friendlyLocationToggleError(Object error) {
+    final normalized = error.toString().toLowerCase();
+    if (normalized.contains('permission')) {
+      return 'تعذر تشغيل الحالة المتصلة. يرجى السماح بالموقع من إعدادات الجهاز.';
+    }
+    if (normalized.contains('socketexception') ||
+        normalized.contains('failed host lookup')) {
+      return 'لا يوجد اتصال بالإنترنت حالياً.';
+    }
+    return 'تعذر تحديث الحالة الآن. حاول مرة أخرى.';
+  }
+
+  Widget _buildJobCard(
+    Job job, {
+    Position? currentLocation,
+    bool compact = false,
+  }) {
+    final normalizedStatus = JobStatus.normalize(job.status);
+    final isUrgent = _isUrgentJob(job);
+    final waitLabel = _formatWaitingTime(job.createdAt);
+    final distanceText = currentLocation == null
+        ? null
+        : '${(_distanceMeters(currentLocation: currentLocation, jobLat: job.lat, jobLng: job.lng) / 1000).toStringAsFixed(1)} كم';
 
     // Extract service name
     final serviceName = job.service?['name'] ?? 'خدمة';
@@ -391,9 +984,11 @@ class _TechnicianDashboardScreenState
     // Extract location info
     final addressText = job.addressText ?? 'موقع غير محدد';
     final hasCoordinates = job.lat != 0 && job.lng != 0;
+    final avatarSize = compact ? 40.w : 48.w;
+    final avatarRadius = compact ? 20.r : 24.r;
 
     return Container(
-      padding: EdgeInsets.all(16.w),
+      padding: EdgeInsets.all(compact ? 12.w : 16.w),
       decoration: BoxDecoration(
         color: Theme.of(context).cardColor,
         borderRadius: BorderRadius.circular(16.r),
@@ -414,10 +1009,39 @@ class _TechnicianDashboardScreenState
           // Header Row: Customer info + Status badge
           Row(
             children: [
-              CircleAvatar(
-                radius: 24.r,
-                backgroundColor: Theme.of(context).primaryColor,
-                child: Icon(Icons.person, color: Colors.white, size: 24.s),
+              // Customer Avatar with Caching
+              ClipRRect(
+                borderRadius: BorderRadius.circular(avatarRadius),
+                child: job.customer?['avatar_url'] != null
+                    ? CachedNetworkImage(
+                        imageUrl: job.customer!['avatar_url'],
+                        width: avatarSize,
+                        height: avatarSize,
+                        fit: BoxFit.cover,
+                        placeholder: (context, url) => Container(
+                          color: Colors.grey[200],
+                          child: const Center(
+                            child: CircularProgressIndicator(),
+                          ),
+                        ),
+                        errorWidget: (context, url, error) => Container(
+                          color: Theme.of(context).primaryColor,
+                          child: Icon(
+                            Icons.person,
+                            color: Colors.white,
+                            size: 24.s,
+                          ),
+                        ),
+                      )
+                    : CircleAvatar(
+                        radius: avatarRadius,
+                        backgroundColor: Theme.of(context).primaryColor,
+                        child: Icon(
+                          Icons.person,
+                          color: Colors.white,
+                          size: compact ? 20.s : 24.s,
+                        ),
+                      ),
               ),
               SizedBox(width: 12.w),
               Expanded(
@@ -427,7 +1051,7 @@ class _TechnicianDashboardScreenState
                     Text(
                       customerName,
                       style: TextStyle(
-                        fontSize: 16.fz,
+                        fontSize: compact ? 14.fz : 16.fz,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -445,7 +1069,7 @@ class _TechnicianDashboardScreenState
                           child: Text(
                             serviceName,
                             style: TextStyle(
-                              fontSize: 13.fz,
+                              fontSize: compact ? 12.fz : 13.fz,
                               color: Theme.of(context).primaryColor,
                               fontWeight: FontWeight.w600,
                             ),
@@ -460,15 +1084,23 @@ class _TechnicianDashboardScreenState
               Container(
                 padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 6.h),
                 decoration: BoxDecoration(
-                  color: Colors.orange.withValues(alpha: 0.1),
+                  color: isUrgent
+                      ? Colors.red.withValues(alpha: 0.12)
+                      : Colors.orange.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(20.r),
                 ),
                 child: Text(
-                  ['pending', 'no_technician_found'].contains(job.status)
+                  isUrgent
+                      ? 'عاجل'
+                      : <String>{
+                          JobStatus.pending,
+                          JobStatus.searching,
+                          JobStatus.noTechnicianFound,
+                        }.contains(normalizedStatus)
                       ? 'جديد'
                       : 'قيد التنفيذ',
                   style: TextStyle(
-                    color: Colors.orange,
+                    color: isUrgent ? Colors.red : Colors.orange,
                     fontSize: 12.fz,
                     fontWeight: FontWeight.bold,
                   ),
@@ -480,7 +1112,9 @@ class _TechnicianDashboardScreenState
           SizedBox(height: 12.h),
 
           // Description / Problem Summary
-          if (job.description != null && job.description!.isNotEmpty) ...[
+          if (!compact &&
+              job.description != null &&
+              job.description!.isNotEmpty) ...[
             Container(
               padding: EdgeInsets.all(12.w),
               decoration: BoxDecoration(
@@ -515,28 +1149,47 @@ class _TechnicianDashboardScreenState
           ],
 
           // Location Row
-          Container(
-            padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h),
-            decoration: BoxDecoration(
-              color: Colors.blue.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(10.r),
-              border: Border.all(color: Colors.blue.withValues(alpha: 0.2)),
-            ),
-            child: Row(
+          if (compact)
+            Row(
               children: [
-                Icon(Icons.location_on, size: 20.s, color: Colors.blue),
-                SizedBox(width: 8.w),
+                Icon(Icons.location_on, size: 18.s, color: Colors.blue),
+                SizedBox(width: 6.w),
                 Expanded(
                   child: Text(
                     addressText,
-                    style: TextStyle(fontSize: 13.fz, color: Colors.blue[700]),
-                    maxLines: 2,
+                    style: TextStyle(fontSize: 12.fz, color: Colors.blue[700]),
+                    maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],
+            )
+          else
+            Container(
+              padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h),
+              decoration: BoxDecoration(
+                color: Colors.blue.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(10.r),
+                border: Border.all(color: Colors.blue.withValues(alpha: 0.2)),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.location_on, size: 20.s, color: Colors.blue),
+                  SizedBox(width: 8.w),
+                  Expanded(
+                    child: Text(
+                      addressText,
+                      style: TextStyle(
+                        fontSize: 13.fz,
+                        color: Colors.blue[700],
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
 
           SizedBox(height: 12.h),
 
@@ -551,13 +1204,43 @@ class _TechnicianDashboardScreenState
               ),
               SizedBox(width: 4.w),
               Text(
-                '${job.initialPrice?.toStringAsFixed(0) ?? '0'} ر.س',
+                (job.initialPrice != null && job.initialPrice! > 0)
+                    ? '${job.initialPrice!.toStringAsFixed(0)} ر.س'
+                    : 'غير محدد',
                 style: TextStyle(
                   fontSize: 15.fz,
                   fontWeight: FontWeight.bold,
                   color: Colors.green,
                 ),
               ),
+            ],
+          ),
+          SizedBox(height: 8.h),
+          Row(
+            children: [
+              Icon(Icons.schedule, size: 16.s, color: Colors.orange),
+              SizedBox(width: 4.w),
+              Text(
+                waitLabel,
+                style: TextStyle(
+                  fontSize: 12.fz,
+                  color: Colors.orange,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const Spacer(),
+              if (distanceText != null) ...[
+                Icon(Icons.route, size: 16.s, color: Colors.blue),
+                SizedBox(width: 4.w),
+                Text(
+                  distanceText,
+                  style: TextStyle(
+                    fontSize: 12.fz,
+                    color: Colors.blue,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
             ],
           ),
 
@@ -570,119 +1253,15 @@ class _TechnicianDashboardScreenState
               Expanded(
                 flex: 2,
                 child: ElevatedButton.icon(
-                  onPressed: isProcessing
-                      ? null
-                      : () async {
-                          setState(() {
-                            _processingJobs.add(job.id);
-                          });
-
-                          try {
-                            debugPrint(
-                              '🟢 [TechnicianDashboard] Accepting job ${job.id}...',
-                            );
-
-                            // 1. Get Router instance first to capture context
-                            final goRouter = GoRouter.of(context);
-
-                            // 2. Perform acceptance
-                            await ref
-                                .read(jobControllerProvider.notifier)
-                                .acceptJob(job.id);
-
-                            debugPrint(
-                              '✅ [TechnicianDashboard] Job accepted. Navigating to Set Price...',
-                            );
-
-                            // 3. Navigate immediately without manual refresh
-                            // Real-time stream will handle list update automatically
-                            if (mounted) {
-                              goRouter.pushNamed(
-                                AppRoutes.technicianPriceInput,
-                                pathParameters: {'jobId': job.id},
-                                extra: {
-                                  'orderId': job.id,
-                                  'serviceName': serviceName,
-                                },
-                              );
-                            }
-                          } on JobAlreadyAcceptedException catch (e) {
-                            debugPrint('🔴 Job already accepted: ${e.message}');
-                            if (mounted) {
-                              KadmatToast.showError(
-                                context,
-                                title: 'تم قبول الطلب',
-                                message: e.message,
-                              );
-                            }
-                          } on TechnicianLockedException catch (e) {
-                            debugPrint('🔴 Technician locked: ${e.message}');
-                            if (mounted) {
-                              KadmatToast.showWarning(
-                                context,
-                                title: 'طلب قيد التنفيذ',
-                                message: e.message,
-                              );
-                            }
-                          } on InvalidStatusException catch (e) {
-                            debugPrint('🔴 Invalid status: ${e.message}');
-                            if (mounted) {
-                              KadmatToast.showError(
-                                context,
-                                title: 'حالة غير صحيحة',
-                                message: e.message,
-                              );
-                            }
-                          } on NetworkException catch (e) {
-                            debugPrint('🔴 Network error: ${e.message}');
-                            if (mounted) {
-                              KadmatToast.showError(
-                                context,
-                                title: 'خطأ في الاتصال',
-                                message: e.message,
-                              );
-                            }
-                          } on JobNotFoundException catch (e) {
-                            debugPrint('🔴 Job not found: ${e.message}');
-                            if (mounted) {
-                              KadmatToast.showError(
-                                context,
-                                title: 'الطلب غير موجود',
-                                message: e.message,
-                              );
-                            }
-                          } catch (e, stack) {
-                            debugPrint('🔴 EXCEPTION in acceptance button: $e');
-                            debugPrint('🔴 Stack trace: $stack');
-                            if (mounted) {
-                              GlobalErrorHandler.handle(context, e);
-                            }
-                          } finally {
-                            if (mounted) {
-                              setState(() {
-                                _processingJobs.remove(job.id);
-                              });
-                            }
-                          }
-                        },
-                  icon: isProcessing
-                      ? SizedBox(
-                          width: 20.w,
-                          height: 20.w,
-                          child: const CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : const Icon(Icons.check_circle_outline),
-                  label: Text(isProcessing ? 'جاري القبول...' : 'قبول الطلب'),
+                  onPressed: () => _openBidding(job.id),
+                  icon: const Icon(Icons.local_offer_outlined),
+                  label: Text(compact ? 'عرض' : 'تقديم عرض'),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
+                    backgroundColor: isUrgent ? Colors.red : Colors.green,
                     foregroundColor: Colors.white,
-                    disabledBackgroundColor: Colors.green.withValues(
-                      alpha: 0.6,
+                    padding: EdgeInsets.symmetric(
+                      vertical: compact ? 10.h : 12.h,
                     ),
-                    padding: EdgeInsets.symmetric(vertical: 12.h),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12.r),
                     ),
@@ -697,14 +1276,16 @@ class _TechnicianDashboardScreenState
                   onPressed: hasCoordinates
                       ? () => _openLocationInMaps(job.lat, job.lng, addressText)
                       : null,
-                  icon: Icon(Icons.map_outlined, size: 20.s),
-                  label: const Text('الموقع'),
+                  icon: Icon(Icons.map_outlined, size: compact ? 18.s : 20.s),
+                  label: Text(compact ? 'خريطة' : 'الموقع'),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: Colors.blue,
                     side: BorderSide(
                       color: hasCoordinates ? Colors.blue : Colors.grey,
                     ),
-                    padding: EdgeInsets.symmetric(vertical: 12.h),
+                    padding: EdgeInsets.symmetric(
+                      vertical: compact ? 10.h : 12.h,
+                    ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12.r),
                     ),
@@ -730,76 +1311,25 @@ class _TechnicianDashboardScreenState
         await launchUrl(uri, mode: LaunchMode.externalApplication);
       } else {
         // Fallback: show coordinates in a snackbar
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('الإحداثيات: $lat, $lng'),
-              action: SnackBarAction(
-                label: 'نسخ',
-                onPressed: () {
-                  // Could add clipboard copy here
-                },
-              ),
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('الإحداثيات: $lat, $lng'),
+            action: SnackBarAction(
+              label: 'نسخ',
+              onPressed: () {
+                // Could add clipboard copy here
+              },
             ),
-          );
-        }
+          ),
+        );
       }
     } catch (e) {
       debugPrint('Error opening maps: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('خطأ في فتح الخريطة: $e')));
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('تعذر فتح تطبيق الخرائط على هذا الجهاز')),
+      );
     }
-  }
-
-  Widget _buildStatCard(
-    String title,
-    String value,
-    IconData icon,
-    Color color,
-  ) {
-    return Container(
-      padding: EdgeInsets.all(16.w),
-      decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(16.r),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 10.r,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: EdgeInsets.all(8.w),
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.1),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icon, color: color, size: 24.s),
-          ),
-          SizedBox(height: 12.h),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 20.fz,
-              fontWeight: FontWeight.bold,
-              color: Theme.of(context).textTheme.bodyLarge?.color,
-            ),
-          ),
-          SizedBox(height: 4.h),
-          Text(
-            title,
-            style: TextStyle(fontSize: 12.fz, color: Colors.grey),
-          ),
-        ],
-      ),
-    );
   }
 }

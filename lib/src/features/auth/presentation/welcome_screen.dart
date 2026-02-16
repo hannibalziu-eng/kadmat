@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_scalify/flutter_scalify.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/navigation/app_routes.dart';
 import 'widgets/social_auth_button.dart';
 
 class WelcomeScreen extends StatefulWidget {
@@ -124,7 +125,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                       children: [
                         ElevatedButton(
                           onPressed: () {
-                            context.push('/register');
+                            context.push(AppRoutes.register);
                           },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF13b6ec),
@@ -167,7 +168,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                         ),
                         SizedBox(height: 12.h),
                         TextButton(
-                          onPressed: () => context.push('/login'),
+                          onPressed: () => context.push(AppRoutes.login),
                           child: Text(
                             'تسجيل الدخول',
                             style: TextStyle(
@@ -182,7 +183,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                         Center(
                           child: TextButton(
                             onPressed: () {
-                              context.push('/technician/landing');
+                              context.push(AppRoutes.technicianLanding);
                             },
                             style: TextButton.styleFrom(
                               foregroundColor: Colors.grey[600],

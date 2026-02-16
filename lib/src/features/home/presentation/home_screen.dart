@@ -326,7 +326,7 @@ class _HomeScreenContentState extends ConsumerState<HomeScreenContent> {
           side: BorderSide(
             color: isSelected
                 ? Colors.transparent
-                : Colors.grey.withOpacity(0.2),
+                : Colors.grey.withValues(alpha: 0.2),
           ),
         ),
         showCheckmark: false,

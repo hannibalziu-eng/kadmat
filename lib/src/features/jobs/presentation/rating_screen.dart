@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_scalify/flutter_scalify.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/app_theme.dart';
+import '../../../core/navigation/app_routes.dart';
 import '../../../core/widgets/kadmat_toast.dart';
 import '../data/job_repository.dart';
 
@@ -172,7 +173,7 @@ class _RatingScreenState extends ConsumerState<RatingScreen> {
 
             // Skip Button
             TextButton(
-              onPressed: () => context.go('/'),
+              onPressed: () => context.go(AppRoutes.home),
               child: Text(
                 'تخطي',
                 style: TextStyle(fontSize: 14.fz, color: Colors.white60),
@@ -219,7 +220,7 @@ class _RatingScreenState extends ConsumerState<RatingScreen> {
           title: 'شكراً لتقييمك!',
           message: '💙 تم إرسال التقييم بنجاح',
         );
-        context.go('/');
+        context.go(AppRoutes.home);
       }
     } catch (e) {
       if (mounted) {
