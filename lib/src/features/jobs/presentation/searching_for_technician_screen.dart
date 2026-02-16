@@ -37,6 +37,9 @@ class SearchingForTechnicianScreen extends ConsumerStatefulWidget {
 class _SearchingForTechnicianScreenState
     extends ConsumerState<SearchingForTechnicianScreen>
     with TickerProviderStateMixin {
+  static const String _statusUpdatedRedirectMessage =
+      'تم تحديث حالة الطلب، يتم نقلك للحالة الحالية';
+
   late AnimationController _pulseController;
   late AnimationController _rippleController;
 
@@ -251,7 +254,7 @@ class _SearchingForTechnicianScreenState
         jobId: widget.jobId,
       );
       if (hintedRoute != null) {
-        context.go(hintedRoute);
+        await _showStatusUpdatedAndGo(hintedRoute);
         return;
       }
 
@@ -265,7 +268,7 @@ class _SearchingForTechnicianScreenState
           jobId: widget.jobId,
         );
         if (route != null) {
-          context.go(route);
+          await _showStatusUpdatedAndGo(route);
           return;
         }
         if (JobStatus.normalize(latest.status) == JobStatus.cancelled) {
@@ -291,7 +294,7 @@ class _SearchingForTechnicianScreenState
           jobId: widget.jobId,
         );
         if (route != null) {
-          context.go(route);
+          await _showStatusUpdatedAndGo(route);
           return;
         }
         if (JobStatus.normalize(latest.status) == JobStatus.cancelled) {
@@ -301,8 +304,8 @@ class _SearchingForTechnicianScreenState
       } catch (_) {}
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('فشل قبول العرض: $e'),
+        const SnackBar(
+          content: Text('تعذر إكمال قبول العرض الآن. حاول مجددًا.'),
           backgroundColor: Colors.red,
         ),
       );
@@ -311,6 +314,20 @@ class _SearchingForTechnicianScreenState
         setState(() => _acceptingOfferId = null);
       }
     }
+  }
+
+  Future<void> _showStatusUpdatedAndGo(String route) async {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(_statusUpdatedRedirectMessage),
+        backgroundColor: Colors.blueGrey,
+        duration: Duration(milliseconds: 1200),
+      ),
+    );
+    await Future.delayed(const Duration(milliseconds: 280));
+    if (!mounted) return;
+    context.go(route);
   }
 
   Future<void> _cancelJobAndExit() async {

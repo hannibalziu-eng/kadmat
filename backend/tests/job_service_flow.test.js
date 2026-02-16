@@ -370,6 +370,58 @@ describe('JobService critical flow', () => {
     expect(notifications.some((n) => n.type == 'offer_accepted')).toBe(true);
   });
 
+  it('falls back to legacy accept flow when atomic RPC returns ACCEPT_FAILED', async () => {
+    const offer = await jobService.submitOffer('job-1', 'tech-2', 90);
+    supabaseAdminMock.rpc.mockResolvedValueOnce({
+      data: {
+        success: false,
+        code: 'ACCEPT_FAILED',
+        message:
+          'Failed to assign job: new row for relation "jobs" violates check constraint "jobs_status_check"',
+        sqlstate: '23514',
+      },
+      error: null,
+    });
+
+    const updatedJob = await jobService.acceptOffer(
+      'job-1',
+      'customer-1',
+      offer.id,
+    );
+
+    expect(updatedJob.status).toBe('on_the_way');
+    expect(updatedJob.technician_id).toBe('tech-2');
+    expect(updatedJob.accepted_bid_id).toBe(offer.id);
+    expect(supabaseAdminMock.rpc).toHaveBeenCalledWith('accept_job_offer_atomic', {
+      p_job_id: 'job-1',
+      p_customer_id: 'customer-1',
+      p_offer_id: offer.id,
+    });
+  });
+
+  it('does not fallback when atomic RPC returns ACTIVE_JOB_LOCKED', async () => {
+    const offer = await jobService.submitOffer('job-1', 'tech-2', 90);
+    supabaseAdminMock.rpc.mockResolvedValueOnce({
+      data: {
+        success: false,
+        code: 'ACTIVE_JOB_LOCKED',
+        message: 'Technician has an active job',
+        locked_job_id: 'job-locked-1',
+      },
+      error: null,
+    });
+
+    await expect(
+      jobService.acceptOffer('job-1', 'customer-1', offer.id),
+    ).rejects.toMatchObject({
+      code: 'ACTIVE_JOB_LOCKED',
+      lockedJobId: 'job-locked-1',
+    });
+
+    expect(mockJob.status).toBe('pending');
+    expect(mockJob.technician_id).toBeNull();
+  });
+
   it('accept-offer falls back to in_progress when on_the_way status is unavailable', async () => {
     onTheWayConstraintFailuresRemaining = 1;
 

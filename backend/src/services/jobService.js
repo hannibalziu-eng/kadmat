@@ -964,6 +964,18 @@ class JobService {
             }
 
             if (payload.success !== true) {
+                if (this._shouldFallbackFromAtomicFailure(payload)) {
+                    const rawPayload = JSON.stringify({
+                        code: payload.code,
+                        message: payload.message,
+                        sqlstate: payload.sqlstate
+                    });
+                    console.warn(
+                        `⚠️ [JobService.acceptOffer] Atomic RPC returned recoverable failure (${rawPayload}). Falling back to legacy path.`
+                    );
+                    return { handled: false };
+                }
+
                 const err = new Error(payload.message || 'Failed to accept offer');
                 err.code = payload.code || 'ACCEPT_FAILED';
                 if (payload.current_status) {
@@ -990,6 +1002,18 @@ class JobService {
             err.code = 'ACCEPT_FAILED';
             throw err;
         }
+    }
+
+    _shouldFallbackFromAtomicFailure(payload) {
+        const code = String(payload?.code || '').trim().toUpperCase();
+        if (code !== 'ACCEPT_FAILED') {
+            return false;
+        }
+
+        // Any ACCEPT_FAILED from atomic RPC is treated as contract/schema drift.
+        // Legacy flow has guarded retries for missing optional columns and
+        // legacy status constraints, so fallback is safer than surfacing 500.
+        return true;
     }
 
     async _notifyOfferAccepted(technicianId, jobId, offerPrice) {

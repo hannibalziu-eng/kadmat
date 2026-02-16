@@ -4,6 +4,7 @@
 - `flutter analyze` = PASS
 - `flutter test` = PASS
 - `npm test -- --runInBand` = PASS
+- optional one-shot gate: `bash scripts/run_predeploy_gate.sh`
 
 ## Gate B - Database Contract
 - Apply migrations in order:
@@ -40,6 +41,10 @@
 ## Gate E - Error Contract
 - No raw stack traces in user UI.
 - API error codes mapped to user-friendly Arabic messages.
+
+## Gate F - Evidence & Monitoring
+- `docs/RELEASE_EVIDENCE_TEMPLATE.md` filled for staging + production.
+- `docs/POST_DEPLOY_MONITORING_CHECKLIST.md` filled after 60-minute window.
 
 ## Blockers (Do Not Release If)
 - Any `accept-offer` returns `500` in smoke scenario.

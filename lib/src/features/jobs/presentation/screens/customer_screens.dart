@@ -30,6 +30,9 @@ class CustomerSearchingScreen extends ConsumerStatefulWidget {
 class _CustomerSearchingScreenState
     extends ConsumerState<CustomerSearchingScreen>
     with TickerProviderStateMixin {
+  static const String _statusUpdatedRedirectMessage =
+      'تم تحديث حالة الطلب، يتم نقلك للحالة الحالية';
+
   late AnimationController _pulseController;
   Timer? _pollTimer;
   Job? _job;
@@ -700,6 +703,7 @@ class _CustomerSearchingScreenState
         ? null
         : customerRouteForJobStatus(status: hintedStatus, jobId: widget.jobId);
     if (hintedRoute != null) {
+      _showStatusUpdatedNotice();
       context.go(hintedRoute);
       return true;
     }
@@ -715,6 +719,7 @@ class _CustomerSearchingScreenState
         jobId: widget.jobId,
       );
       if (latestRoute != null) {
+        _showStatusUpdatedNotice();
         context.go(latestRoute);
         return true;
       }
@@ -728,6 +733,15 @@ class _CustomerSearchingScreenState
     }
 
     return false;
+  }
+
+  void _showStatusUpdatedNotice() {
+    if (!mounted) return;
+    KadmatToast.showInfo(
+      context,
+      title: 'تحديث الحالة',
+      message: _statusUpdatedRedirectMessage,
+    );
   }
 
   double _zoomForRadius(double radiusMeters) {

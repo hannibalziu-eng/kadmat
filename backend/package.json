@@ -9,7 +9,8 @@
         "dev": "nodemon src/index.js",
         "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
         "audit:rpc": "node scripts/audit-nearby-jobs-rpc.js",
-        "audit:accept-offer-contract": "node scripts/audit-offer-acceptance-contract.js"
+        "audit:accept-offer-contract": "node scripts/audit-offer-acceptance-contract.js",
+        "audit:release-contracts": "bash scripts/run_release_contract_audits.sh"
     },
     "jest": {
         "transform": {},

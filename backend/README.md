@@ -90,6 +90,9 @@ npm run audit:rpc
 
 # Accept-offer + location RPC contract audit
 npm run audit:accept-offer-contract
+
+# One-shot release contract audits
+npm run audit:release-contracts
 ```
 
 ## 📊 API Endpoints

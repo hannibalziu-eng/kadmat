@@ -6,8 +6,11 @@ import '../../constants.dart';
 
 class LocationSyncService {
   static const String _boxName = 'location_queue';
+  static const Duration _missingRpcCooldown = Duration(minutes: 3);
   Box? _queueBox;
   bool _isInitializing = false;
+  DateTime? _missingRpcCooldownUntil;
+  bool _missingRpcWarningShown = false;
 
   // Singleton for within the isolate
   static final LocationSyncService _instance = LocationSyncService._internal();
@@ -68,6 +71,11 @@ class LocationSyncService {
     };
 
     if (isOnline) {
+      if (_isMissingRpcCooldownActive()) {
+        await _queueLatestForUser(payload);
+        return;
+      }
+
       try {
         await _sendToSupabase(lat, lng, userId);
 
@@ -76,11 +84,16 @@ class LocationSyncService {
           _flushQueue();
         }
       } catch (e) {
+        if (_isMissingUpdateLocationRpcError(e)) {
+          _activateMissingRpcCooldown();
+          await _queueLatestForUser(payload);
+          return;
+        }
         debugPrint('⚠️ Sync failed, queuing: $e');
-        _queue(payload);
+        await _queue(payload);
       }
     } else {
-      _queue(payload);
+      await _queue(payload);
     }
   }
 
@@ -99,9 +112,58 @@ class LocationSyncService {
     debugPrint('✅ Location synced: $lat, $lng');
   }
 
-  void _queue(Map<String, dynamic> data) {
-    _queueBox?.add(data);
+  Future<void> _queue(Map<String, dynamic> data) async {
+    await _queueBox?.add(data);
     debugPrint('📥 Location queued. Total: ${_queueBox?.length}');
+  }
+
+  Future<void> _queueLatestForUser(Map<String, dynamic> data) async {
+    final userId = data['user_id'];
+    if (userId == null || _queueBox == null) {
+      await _queue(data);
+      return;
+    }
+
+    dynamic existingKey;
+    final queueMap = _queueBox!.toMap();
+    for (final entry in queueMap.entries) {
+      final value = entry.value;
+      if (value is Map && value['user_id'] == userId) {
+        existingKey = entry.key;
+      }
+    }
+
+    if (existingKey != null) {
+      await _queueBox!.put(existingKey, data);
+    } else {
+      await _queueBox!.add(data);
+    }
+    debugPrint('📥 Location queued (latest-only). Total: ${_queueBox?.length}');
+  }
+
+  bool _isMissingUpdateLocationRpcError(Object error) {
+    final raw = error.toString();
+    return raw.contains('PGRST202') && raw.contains('update_user_location');
+  }
+
+  bool _isMissingRpcCooldownActive() {
+    final until = _missingRpcCooldownUntil;
+    if (until == null) return false;
+    final active = DateTime.now().isBefore(until);
+    if (!active) {
+      _missingRpcCooldownUntil = null;
+      _missingRpcWarningShown = false;
+    }
+    return active;
+  }
+
+  void _activateMissingRpcCooldown() {
+    _missingRpcCooldownUntil = DateTime.now().add(_missingRpcCooldown);
+    if (_missingRpcWarningShown) return;
+    _missingRpcWarningShown = true;
+    debugPrint(
+      '⚠️ update_user_location RPC غير متوفر. تم تفعيل تباطؤ مؤقت للمزامنة لمنع تضخم الطابور.',
+    );
   }
 
   Future<void> _flushQueue() async {

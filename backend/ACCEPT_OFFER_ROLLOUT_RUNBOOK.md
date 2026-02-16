@@ -30,6 +30,8 @@ From backend directory:
 ```bash
 npm run audit:accept-offer-contract
 npm run audit:rpc
+# or one-shot:
+npm run audit:release-contracts
 ```
 
 Expected:
@@ -62,3 +64,8 @@ If release must be rolled back:
 - Keep DB migrations (non-destructive, forward-compatible).
 - Roll back only backend app version.
 - Re-run `npm run audit:accept-offer-contract` after rollback to confirm DB contract still healthy.
+
+## 6) Evidence Recording
+Before sign-off, fill:
+- `docs/RELEASE_EVIDENCE_TEMPLATE.md`
+- `docs/POST_DEPLOY_MONITORING_CHECKLIST.md`
