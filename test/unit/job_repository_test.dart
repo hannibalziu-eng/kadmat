@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kadmat/src/features/jobs/data/job_repository.dart';
 import 'package:kadmat/src/features/jobs/domain/job.dart';
+import 'package:kadmat/src/core/exceptions/app_exceptions.dart';
 import 'package:kadmat/src/core/services/photo_upload_service.dart';
 import 'package:kadmat/src/core/realtime/supabase_realtime_service.dart';
 import 'package:dio/dio.dart';
@@ -19,6 +20,8 @@ import 'job_repository_test.mocks.dart';
 
 void main() {
   group('JobRepository Tests', () {
+    const testOfferId = '11111111-1111-4111-8111-111111111111';
+
     late JobRepository repository;
     late MockDio mockDio;
     late MockPhotoUploadService mockPhotoService;
@@ -121,5 +124,120 @@ void main() {
         mockDio.get(any, queryParameters: anyNamed('queryParameters')),
       ).called(1);
     });
+
+    test('acceptOffer should return updated job on success', () async {
+      final now = DateTime.now().toIso8601String();
+      when(mockDio.post(any, data: anyNamed('data'))).thenAnswer(
+        (_) async => Response(
+          data: {
+            'success': true,
+            'data': {
+              'id': 'job-123',
+              'customer_id': 'customer-1',
+              'service_id': 'service-1',
+              'status': 'on_the_way',
+              'lat': 24.7136,
+              'lng': 46.6753,
+              'created_at': now,
+            },
+          },
+          statusCode: 200,
+          requestOptions: RequestOptions(path: '/jobs/job-123/accept-offer'),
+        ),
+      );
+
+      final job = await repository.acceptOffer('job-123', testOfferId);
+
+      expect(job.id, 'job-123');
+      expect(job.status, 'on_the_way');
+      verify(mockDio.post(any, data: anyNamed('data'))).called(1);
+    });
+
+    test(
+      'acceptOffer should map conflict response to InvalidStatusException',
+      () async {
+        when(mockDio.post(any, data: anyNamed('data'))).thenThrow(
+          DioException(
+            requestOptions: RequestOptions(path: '/jobs/job-123/accept-offer'),
+            response: Response(
+              data: {
+                'success': false,
+                'error': {
+                  'code': 'INVALID_STATUS_TRANSITION',
+                  'message': 'Job is no longer available for accepting offers',
+                  'details': {'currentStatus': 'on_the_way'},
+                },
+              },
+              statusCode: 409,
+              requestOptions: RequestOptions(
+                path: '/jobs/job-123/accept-offer',
+              ),
+            ),
+            type: DioExceptionType.badResponse,
+          ),
+        );
+
+        expect(
+          () => repository.acceptOffer('job-123', testOfferId),
+          throwsA(isA<InvalidStatusException>()),
+        );
+      },
+    );
+
+    test(
+      'acceptOffer should fallback to latest job when conflict reports advanced status',
+      () async {
+        final now = DateTime.now().toIso8601String();
+
+        when(mockDio.post(any, data: anyNamed('data'))).thenThrow(
+          DioException(
+            requestOptions: RequestOptions(path: '/jobs/job-123/accept-offer'),
+            response: Response(
+              data: {
+                'success': false,
+                'error': {
+                  'code': 'INVALID_STATUS_TRANSITION',
+                  'message': 'Job is no longer available for accepting offers',
+                  'details': {'currentStatus': 'on_the_way'},
+                },
+              },
+              statusCode: 409,
+              requestOptions: RequestOptions(
+                path: '/jobs/job-123/accept-offer',
+              ),
+            ),
+            type: DioExceptionType.badResponse,
+          ),
+        );
+
+        when(mockDio.get('/jobs/job-123')).thenAnswer(
+          (_) async => Response(
+            data: {
+              'success': true,
+              'data': {
+                'id': 'job-123',
+                'customer_id': 'customer-1',
+                'service_id': 'service-1',
+                'status': 'on_the_way',
+                'technician_id': 'tech-1',
+                'lat': 24.7136,
+                'lng': 46.6753,
+                'created_at': now,
+              },
+            },
+            statusCode: 200,
+            requestOptions: RequestOptions(path: '/jobs/job-123'),
+          ),
+        );
+
+        final job = await repository.acceptOffer('job-123', testOfferId);
+
+        expect(job.id, 'job-123');
+        expect(job.status, 'on_the_way');
+        expect(job.technicianId, 'tech-1');
+        verify(mockDio.post(any, data: anyNamed('data'))).called(1);
+        verify(mockDio.get('/jobs/job-123')).called(1);
+      },
+    );
   });
 }

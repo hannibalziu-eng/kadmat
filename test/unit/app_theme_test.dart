@@ -14,8 +14,8 @@ void main() {
       final decoration = AppTheme.glassDecoration();
 
       expect(
-        decoration.color?.withOpacity(0.7),
-        const Color(0xFF1a2b32).withOpacity(0.7),
+        decoration.color?.withValues(alpha: 0.7),
+        const Color(0xFF1a2b32).withValues(alpha: 0.7),
       );
       expect(decoration.borderRadius, isA<BorderRadius>());
       expect(decoration.boxShadow, isNotEmpty);
@@ -29,8 +29,8 @@ void main() {
       );
 
       expect(
-        decoration.color?.withOpacity(0.5),
-        const Color(0xFF000000).withOpacity(0.5),
+        decoration.color?.withValues(alpha: 0.5),
+        const Color(0xFF000000).withValues(alpha: 0.5),
       );
       expect(decoration.borderRadius, BorderRadius.circular(20.0));
     });

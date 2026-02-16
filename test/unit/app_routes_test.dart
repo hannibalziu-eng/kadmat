@@ -14,14 +14,48 @@ void main() {
       const jobId = 'job123';
       final ratePath = AppRoutes.buildCustomerRatePath(jobId);
 
-      expect(ratePath, '/customer/job/$jobId/rate');
+      expect(ratePath, '/jobs/$jobId/customer/rate');
+    });
+
+    test('should build active job path correctly', () {
+      const jobId = 'job123';
+      final activePath = AppRoutes.buildActiveJobPath(jobId);
+
+      expect(activePath, '/active-job/$jobId');
     });
 
     test('should handle empty job ID in rate path', () {
       const jobId = '';
       final ratePath = AppRoutes.buildCustomerRatePath(jobId);
 
-      expect(ratePath, '/customer/job//rate');
+      expect(ratePath, '/jobs//customer/rate');
+    });
+
+    test('should build technician detail path correctly', () {
+      const jobId = 'job123';
+      final detailPath = AppRoutes.buildTechnicianJobDetailPath(jobId);
+
+      expect(detailPath, '/jobs/$jobId/technician/detail');
+    });
+
+    test('should build technician bidding path correctly', () {
+      const jobId = 'job123';
+      final biddingPath = AppRoutes.buildTechnicianBiddingPath(jobId);
+
+      expect(biddingPath, '/jobs/$jobId/technician/bidding');
+    });
+
+    test('should build technician profile path with encoded id', () {
+      const technicianId = 'user id/123';
+      final path = AppRoutes.buildTechnicianProfilePath(technicianId);
+
+      expect(path, '/technician-profile/user%20id%2F123');
+    });
+
+    test('should fallback to home for empty technician profile id', () {
+      final path = AppRoutes.buildTechnicianProfilePath('   ');
+
+      expect(path, AppRoutes.home);
     });
 
     test('should have technician routes defined', () {
@@ -31,8 +65,8 @@ void main() {
     });
 
     test('should have job flow routes defined', () {
-      expect(AppRoutes.activeJob, '/active-job');
-      expect(AppRoutes.customerWallet, '/customer/wallet');
+      expect(AppRoutes.activeJob, '/active-job/:jobId');
+      expect(AppRoutes.customerWallet, '/customer-wallet');
       expect(AppRoutes.wallet, '/wallet');
     });
   });
