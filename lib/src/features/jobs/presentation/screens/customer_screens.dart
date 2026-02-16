@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import '../../../../core/app_theme.dart';
+import '../../../../core/exceptions/app_exceptions.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/navigation/job_flow_redirects.dart';
 import '../../../../core/widgets/kadmat_toast.dart';
@@ -676,13 +677,57 @@ class _CustomerSearchingScreenState
         jobId: widget.jobId,
       );
       context.go(route ?? AppRoutes.buildCustomerInProgressPath(widget.jobId));
+    } on InvalidStatusException catch (e) {
+      if (!mounted) return;
+      final redirected = await _redirectToLatestCustomerJobState(
+        hintedStatus: e.currentStatus,
+      );
+      if (redirected || !mounted) return;
+      ErrorHandler.handle(context, e);
     } catch (e) {
       if (mounted) {
+        final redirected = await _redirectToLatestCustomerJobState();
+        if (redirected || !mounted) return;
         ErrorHandler.handle(context, e);
       }
     } finally {
       if (mounted) setState(() => _acceptingOfferId = null);
     }
+  }
+
+  Future<bool> _redirectToLatestCustomerJobState({String? hintedStatus}) async {
+    final hintedRoute = hintedStatus == null
+        ? null
+        : customerRouteForJobStatus(status: hintedStatus, jobId: widget.jobId);
+    if (hintedRoute != null) {
+      context.go(hintedRoute);
+      return true;
+    }
+
+    try {
+      final latestJob = await ref
+          .read(jobRepositoryProvider)
+          .getJobById(widget.jobId);
+      if (!mounted || latestJob == null) return false;
+
+      final latestRoute = customerRouteForJobStatus(
+        status: latestJob.status,
+        jobId: widget.jobId,
+      );
+      if (latestRoute != null) {
+        context.go(latestRoute);
+        return true;
+      }
+
+      if (JobStatus.normalize(latestJob.status) == JobStatus.cancelled) {
+        context.go(AppRoutes.home);
+        return true;
+      }
+    } catch (_) {
+      return false;
+    }
+
+    return false;
   }
 
   double _zoomForRadius(double radiusMeters) {

@@ -7,8 +7,8 @@
 - Reason: منع تضارب المسارات بين ملفات راوتر قديمة.
 
 ### D-002 Official Post-Accept Flow
-- Decision: after customer accepts offer, canonical status target is `in_progress`.
-- Reason: offer acceptance equals price agreement in current bidding flow.
+- Decision: after customer accepts offer, canonical status target is `on_the_way`, then `arrived`, then `in_progress`.
+- Reason: تحسين وضوح الرحلة للمستخدم وإتاحة تتبع "في الطريق" و"وصل" قبل بدء التنفيذ.
 
 ### D-003 Accept Offer API Compatibility
 - Decision: backend accepts `offerId` + legacy keys (`offer_id`, `bidId`, `bid_id`).

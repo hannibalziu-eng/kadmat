@@ -246,25 +246,34 @@ class _SearchingForTechnicianScreenState
       // Logic handled by job stream listener (status -> accepted)
     } on InvalidStatusException catch (e) {
       if (!mounted) return;
-      final current = JobStatus.normalize(e.currentStatus ?? '');
-      const acceptedOrRunning = <String>{
-        JobStatus.accepted,
-        JobStatus.pricePending,
-        JobStatus.inProgress,
-        JobStatus.pendingConfirm,
-        JobStatus.completed,
-        JobStatus.rated,
-      };
+      final hintedRoute = customerRouteForJobStatus(
+        status: e.currentStatus ?? '',
+        jobId: widget.jobId,
+      );
+      if (hintedRoute != null) {
+        context.go(hintedRoute);
+        return;
+      }
 
-      if (acceptedOrRunning.contains(current)) {
+      try {
+        final latest = await ref
+            .read(jobRepositoryProvider)
+            .getJobById(widget.jobId);
+        if (!mounted || latest == null) return;
         final route = customerRouteForJobStatus(
-          status: current,
+          status: latest.status,
           jobId: widget.jobId,
         );
-        context.go(
-          route ?? AppRoutes.buildCustomerInProgressPath(widget.jobId),
-        );
-        return;
+        if (route != null) {
+          context.go(route);
+          return;
+        }
+        if (JobStatus.normalize(latest.status) == JobStatus.cancelled) {
+          context.go(AppRoutes.home);
+          return;
+        }
+      } catch (_) {
+        // Fall through to warning message below.
       }
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -276,17 +285,17 @@ class _SearchingForTechnicianScreenState
         final latest = await ref
             .read(jobRepositoryProvider)
             .getJobById(widget.jobId);
-        if (!mounted) return;
-        if (latest != null &&
-            latest.technicianId != null &&
-            latest.technicianId!.isNotEmpty) {
-          final route = customerRouteForJobStatus(
-            status: latest.status,
-            jobId: widget.jobId,
-          );
-          context.go(
-            route ?? AppRoutes.buildCustomerInProgressPath(widget.jobId),
-          );
+        if (!mounted || latest == null) return;
+        final route = customerRouteForJobStatus(
+          status: latest.status,
+          jobId: widget.jobId,
+        );
+        if (route != null) {
+          context.go(route);
+          return;
+        }
+        if (JobStatus.normalize(latest.status) == JobStatus.cancelled) {
+          context.go(AppRoutes.home);
           return;
         }
       } catch (_) {}

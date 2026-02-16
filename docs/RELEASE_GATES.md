@@ -11,17 +11,25 @@
   - `19`
   - `20`
   - `22` (accepted bid reference)
+  - `23` (update_user_location RPC)
+  - `24` (atomic accept-offer RPC)
+  - `25` (on_the_way/arrived + active locks)
 - Run RPC audit:
   - `backend/sql/rpc/check_get_nearby_jobs_contract.sql`
+- Run acceptance contract audit:
+  - `cd backend && npm run audit:accept-offer-contract`
 - Expected:
   - `audit_report.ok = true`
+  - accept-offer audit = PASS
 
 ## Gate C - Functional Smoke (Manual)
 1. Customer creates new job.
 2. Technician sees job in new requests.
 3. Technician submits offer.
 4. Customer accepts offer.
-5. Job moves to `in_progress` without error page/toast.
+5. Job moves to `on_the_way` (or legacy `in_progress`) without error page/toast.
+6. Technician marks `arrived`.
+7. Technician marks `start_work` -> status `in_progress`.
 
 ## Gate D - Cancel Consistency
 1. Customer cancels open job.

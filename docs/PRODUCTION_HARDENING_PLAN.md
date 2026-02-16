@@ -10,7 +10,7 @@ Ship a release-safe build with protected job lifecycle flow, clear failure handl
 ## 2) Priorities
 
 P0:
-- Protect critical flow state transitions (`pending -> accepted -> price_pending -> in_progress -> pending_confirm -> completed -> rated`).
+- Protect critical flow state transitions (`pending/searching -> on_the_way -> arrived -> in_progress -> pending_confirm -> completed -> rated`).
 - Guarantee consistent backend error codes and frontend mapping for all job-flow endpoints.
 - Block release unless static analysis and tests pass.
 

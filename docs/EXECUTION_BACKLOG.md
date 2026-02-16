@@ -8,25 +8,28 @@
 
 ## P0 - Must Fix Before Release
 
-- [ ] `IN_PROGRESS` Fix Accept Offer server-side assignment stability
+- [x] `DONE` Fix Accept Offer server-side assignment stability
   - Files:
     - `backend/src/services/jobService.js`
     - `backend/src/controllers/jobController.js`
   - Target:
     - no `Failed to assign job` for valid offer acceptance.
 
-- [ ] `TODO` Apply DB migration for accepted offer lock column
+- [ ] `TODO` Apply DB migration stack for accept-offer and locks (prod)
   - File:
     - `backend/migrations/22_add_jobs_accepted_bid_id.sql`
+    - `backend/migrations/23_create_update_user_location_rpc.sql`
+    - `backend/migrations/24_accept_job_offer_atomic_rpc.sql`
+    - `backend/migrations/25_offer_acceptance_on_the_way_and_locks.sql`
   - Owner: Production DB execution
   - Evidence required:
-    - SQL success output + column existence check.
+    - SQL success output + `npm run audit:accept-offer-contract`.
 
-- [ ] `TODO` Fix missing RPC/function for location updates
+- [x] `DONE` Fix missing RPC/function for location updates (code + migration ready)
   - Symptom:
     - `PGRST202` missing `public.update_user_location(p_lat, p_lng, p_user_id)`
   - Target:
-    - no location queue growth due to missing function.
+    - no location queue growth due to missing function after prod migration apply.
 
 - [ ] `TODO` Reduce aggressive polling duplication
   - Symptom:
