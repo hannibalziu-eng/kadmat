@@ -1,0 +1,95 @@
+name: Firebase Test Lab
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Set up Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+      
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          flutter-version: '3.22.2'
+      
+      - name: Install dependencies
+        run: flutter pub get
+      
+      - name: Run unit tests
+        run: flutter test test/unit --coverage
+        continue-on-error: true
+      
+      - name: Analyze code
+        run: flutter analyze
+        continue-on-error: true
+      
+      - name: Build App APK
+        run: |
+          cd android
+          ./gradlew :app:assembleDebug
+      
+      - name: Build Test APK
+        run: |
+          cd android
+          ./gradlew :app:assembleDebugAndroidTest
+        continue-on-error: true
+      
+      - name: Upload App APK
+        uses: actions/upload-artifact@v3
+        with:
+          name: app-debug
+          path: build/app/outputs/apk/debug/app-debug.apk
+      
+      - name: Upload Test APK
+        uses: actions/upload-artifact@v3
+        if: success()
+        with:
+          name: app-debug-androidTest
+          path: build/app/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+      
+      - name: Authenticate to Google Cloud
+        if: github.ref == 'refs/heads/main' && secrets.GCP_SA_KEY != ''
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: \${{ secrets.GCP_SA_KEY }}
+      
+      - name: Set up Cloud SDK
+        if: github.ref == 'refs/heads/main' && secrets.GCP_SA_KEY != ''
+        uses: google-github-actions/setup-gcloud@v1
+      
+      - name: Run Firebase Test Lab
+        if: github.ref == 'refs/heads/main' && secrets.GCP_SA_KEY != ''
+        run: |
+          gcloud firebase test android run \\
+            --type instrumentation \\
+            --app build/app/outputs/apk/debug/app-debug.apk \\
+            --test build/app/outputs/apk/androidTest/debug/app-debug-androidTest.apk \\
+            --device model=Pixel5,version=30,locale=en,orientation=portrait \\
+            --device model=MediumPhone.arm,version=34,locale=en,orientation=portrait \\
+            --timeout 15m \\
+            --project=\${{ secrets.GCP_PROJECT_ID || 'lykadmat' }} \\
+            --results-bucket=gs://test-lab-kadmat \\
+            --results-dir=test-results-\${{ github.run_id }}
+        continue-on-error: true
+      
+      - name: Upload coverage
+        uses: codecov/codecov-action@v3
+        if: always()
+        with:
+          files: coverage/lcov.info
+          fail_ci_if_error: false
