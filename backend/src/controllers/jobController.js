@@ -139,10 +139,29 @@ export const submitOffer = async (req, res) => {
     } catch (error) {
         console.error('Submit Offer Error:', error);
         const isInvalidState = error.message?.includes('no longer available');
-        const { response, statusCode } = responseFormatter.error(
-            isInvalidState ? ERROR_CODES.INVALID_STATUS_TRANSITION : ERROR_CODES.INVALID_INPUT,
+        const details = {};
+        let code = isInvalidState ? ERROR_CODES.INVALID_STATUS_TRANSITION : ERROR_CODES.INVALID_INPUT;
+        let statusCode = isInvalidState ? HTTP_STATUS.CONFLICT : HTTP_STATUS.BAD_REQUEST;
+
+        if (error.code === 'ACTIVE_JOB_LOCKED') {
+            code = ERROR_CODES.ACTIVE_JOB_LOCKED;
+            statusCode = HTTP_STATUS.CONFLICT;
+            if (error.currentStatus) details.currentStatus = error.currentStatus;
+            if (error.lockedJobId) details.lockedJobId = error.lockedJobId;
+        } else if (error.code === 'TECHNICIAN_WALLET_DEBT_LOCKED') {
+            code = ERROR_CODES.TECHNICIAN_WALLET_DEBT_LOCKED;
+            statusCode = HTTP_STATUS.CONFLICT;
+            if (error.debtAmount != null) details.debtAmount = error.debtAmount;
+            if (error.currency) details.currency = error.currency;
+            if (error.walletId) details.walletId = error.walletId;
+        }
+
+        const { response } = responseFormatter.error(
+            code,
             error.message || 'Failed to submit offer',
-            isInvalidState ? HTTP_STATUS.CONFLICT : HTTP_STATUS.BAD_REQUEST
+            Object.keys(details).length > 0
+                ? { statusCode, details }
+                : statusCode
         );
         return res.status(statusCode).json(response);
     }
@@ -217,6 +236,9 @@ export const acceptOffer = async (req, res) => {
         } else if (error.code === 'ACTIVE_JOB_LOCKED') {
             code = ERROR_CODES.ACTIVE_JOB_LOCKED;
             statusCode = HTTP_STATUS.CONFLICT;
+        } else if (error.code === 'TECHNICIAN_WALLET_DEBT_LOCKED') {
+            code = ERROR_CODES.TECHNICIAN_WALLET_DEBT_LOCKED;
+            statusCode = HTTP_STATUS.CONFLICT;
         } else if (error.code === 'ACCEPT_FAILED') {
             code = ERROR_CODES.SERVER_ERROR;
             statusCode = HTTP_STATUS.INTERNAL_SERVER_ERROR;
@@ -227,6 +249,15 @@ export const acceptOffer = async (req, res) => {
         }
         if (error.lockedJobId) {
             details.lockedJobId = error.lockedJobId;
+        }
+        if (error.debtAmount != null) {
+            details.debtAmount = error.debtAmount;
+        }
+        if (error.currency) {
+            details.currency = error.currency;
+        }
+        if (error.walletId) {
+            details.walletId = error.walletId;
         }
 
         const formatted = responseFormatter.error(
@@ -304,11 +335,21 @@ export const completeJob = async (req, res) => {
         });
         return res.json(responseFormatter.success(job, 'Job completion requested'));
     } catch (error) {
-        const { response, statusCode } = responseFormatter.error(
-            ERROR_CODES.INVALID_STATUS_TRANSITION,
-            error.message
+        let code = ERROR_CODES.INVALID_STATUS_TRANSITION;
+        let statusCode = HTTP_STATUS.BAD_REQUEST;
+
+        if (error.code === 'POST_SERVICE_PHOTOS_REQUIRED') {
+            code = ERROR_CODES.POST_SERVICE_PHOTOS_REQUIRED;
+        } else if (error.code === 'INVALID_STATUS_TRANSITION') {
+            statusCode = HTTP_STATUS.CONFLICT;
+        }
+
+        const { response, statusCode: finalStatus } = responseFormatter.error(
+            code,
+            error.message,
+            statusCode
         );
-        return res.status(statusCode).json(response);
+        return res.status(finalStatus).json(response);
     }
 };
 
@@ -384,6 +425,8 @@ export const updateTechnicianProgress = async (req, res) => {
         } else if (error.code === 'DATABASE_ERROR') {
             code = ERROR_CODES.DATABASE_ERROR;
             statusCode = HTTP_STATUS.INTERNAL_SERVER_ERROR;
+        } else if (error.code === 'PRE_SERVICE_PHOTOS_REQUIRED') {
+            code = ERROR_CODES.PRE_SERVICE_PHOTOS_REQUIRED;
         }
 
         if (error.currentStatus) {
@@ -426,11 +469,22 @@ export const cancelJob = async (req, res) => {
 
         return res.json(responseFormatter.success(job, 'Job cancelled'));
     } catch (error) {
-        const { response, statusCode } = responseFormatter.error(
-            ERROR_CODES.INVALID_STATUS_TRANSITION,
-            error.message
+        let code = ERROR_CODES.INVALID_STATUS_TRANSITION;
+        let statusCode = HTTP_STATUS.BAD_REQUEST;
+
+        if (error.code === 'CANCELLATION_RESTRICTED') {
+            code = ERROR_CODES.CANCELLATION_RESTRICTED;
+            statusCode = HTTP_STATUS.FORBIDDEN;
+        } else if (error.code === 'INVALID_STATUS_TRANSITION') {
+            statusCode = HTTP_STATUS.CONFLICT;
+        }
+
+        const { response, statusCode: finalStatus } = responseFormatter.error(
+            code,
+            error.message,
+            statusCode
         );
-        return res.status(statusCode).json(response);
+        return res.status(finalStatus).json(response);
     }
 };
 

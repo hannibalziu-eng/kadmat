@@ -3,6 +3,8 @@ import { jest, describe, it, expect, beforeEach } from '@jest/globals';
 let mockJob;
 let notifications;
 let offers;
+let photos;
+let walletsByUserId;
 let onTheWayConstraintFailuresRemaining;
 
 const fcmMocks = {
@@ -22,6 +24,25 @@ function applyJobUpdate(payload, { allowedStatuses, requireNullTechnician }) {
 
   mockJob = { ...mockJob, ...payload };
   return mockJob;
+}
+
+function buildJobPhotosQuery() {
+  let jobIdFilter = null;
+  let photoTypeFilter = null;
+
+  const query = {
+    select: jest.fn(() => query),
+    eq: jest.fn((column, value) => {
+      if (column === 'job_id') jobIdFilter = value;
+      if (column === 'photo_type') photoTypeFilter = value;
+      return query;
+    }),
+    limit: jest.fn(async (count) => {
+      const filtered = photos.filter(p => p.job_id === jobIdFilter && p.photo_type === photoTypeFilter);
+      return { data: filtered.slice(0, count), error: null };
+    }),
+  };
+  return query;
 }
 
 function buildJobsQuery() {
@@ -214,10 +235,34 @@ function buildJobOffersQuery() {
   return query;
 }
 
+function buildWalletsQuery() {
+  let userIdFilter = null;
+
+  const query = {
+    select: jest.fn(() => query),
+    eq: jest.fn((column, value) => {
+      if (column === 'user_id') {
+        userIdFilter = value;
+      }
+      return query;
+    }),
+    maybeSingle: jest.fn(async () => ({
+      data: userIdFilter ? walletsByUserId[userIdFilter] || null : null,
+      error: null,
+    })),
+  };
+
+  return query;
+}
+
 const supabaseAdminMock = {
   from: jest.fn((table) => {
     if (table === 'jobs') {
       return buildJobsQuery();
+    }
+
+    if (table === 'wallets') {
+      return buildWalletsQuery();
     }
 
     if (table === 'notifications') {
@@ -226,6 +271,10 @@ const supabaseAdminMock = {
 
     if (table === 'job_offers') {
       return buildJobOffersQuery();
+    }
+
+    if (table === 'job_photos') {
+      return buildJobPhotosQuery();
     }
 
     return {
@@ -259,6 +308,23 @@ describe('JobService critical flow', () => {
     };
     notifications = [];
     offers = [];
+    photos = [];
+    walletsByUserId = {
+      'tech-1': {
+        id: 'wallet-tech-1',
+        user_id: 'tech-1',
+        balance: 200,
+        currency: 'SAR',
+        is_frozen: false,
+      },
+      'tech-2': {
+        id: 'wallet-tech-2',
+        user_id: 'tech-2',
+        balance: 150,
+        currency: 'SAR',
+        is_frozen: false,
+      },
+    };
     onTheWayConstraintFailuresRemaining = 0;
     supabaseAdminMock.from.mockClear();
     supabaseAdminMock.rpc.mockClear();
@@ -292,6 +358,9 @@ describe('JobService critical flow', () => {
       'arrived',
     );
     expect(arrived.status).toBe('arrived');
+
+    // Mandatory photos for start_work
+    photos.push({ job_id: 'job-1', photo_type: 'pre', url: 'pre-1.jpg' });
 
     const inProgress = await jobService.updateTechnicianProgress(
       'job-1',
@@ -345,6 +414,20 @@ describe('JobService critical flow', () => {
 
     await expect(jobService.accept('job-1', 'tech-1')).rejects.toMatchObject({
       code: 'JOB_ALREADY_ACCEPTED',
+    });
+  });
+
+  it('rejects taking new work when technician wallet has debt', async () => {
+    walletsByUserId['tech-1'] = {
+      ...walletsByUserId['tech-1'],
+      balance: -45.75,
+      is_frozen: true,
+    };
+
+    await expect(jobService.accept('job-1', 'tech-1')).rejects.toMatchObject({
+      code: 'TECHNICIAN_WALLET_DEBT_LOCKED',
+      debtAmount: 45.75,
+      currency: 'SAR',
     });
   });
 
@@ -469,5 +552,35 @@ describe('JobService critical flow', () => {
     expect(cancelled.metadata.cancellation_reason).toBe('customer_cancelled');
     expect(cancelled.metadata.cancelled_by).toBe('customer-1');
     expect(cancelled.metadata.existing).toBe(true);
+  });
+
+  it('rejects cancellation after arrived status', async () => {
+    mockJob = { ...mockJob, status: 'arrived' };
+
+    await expect(
+      jobService.cancel('job-1', 'customer-1', 'cancel'),
+    ).rejects.toMatchObject({
+      code: 'CANCELLATION_RESTRICTED',
+    });
+  });
+
+  it('rejects start_work without pre-service photos', async () => {
+    mockJob = { ...mockJob, status: 'arrived', technician_id: 'tech-1' };
+
+    await expect(
+      jobService.updateTechnicianProgress('job-1', 'tech-1', 'start_work'),
+    ).rejects.toMatchObject({
+      code: 'PRE_SERVICE_PHOTOS_REQUIRED',
+    });
+  });
+
+  it('rejects requestCompletion without post-service photos', async () => {
+    mockJob = { ...mockJob, status: 'in_progress', technician_id: 'tech-1' };
+
+    await expect(
+      jobService.requestCompletion('job-1', 'tech-1', { finalPrice: 100 }),
+    ).rejects.toMatchObject({
+      code: 'POST_SERVICE_PHOTOS_REQUIRED',
+    });
   });
 });

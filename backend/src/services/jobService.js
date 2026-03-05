@@ -642,6 +642,24 @@ class JobService {
                 return job;
             }
 
+            // Enforce mandatory pre-service photos
+            const { data: photos, error: photosError } = await supabaseAdmin
+                .from('job_photos')
+                .select('id')
+                .eq('job_id', jobId)
+                .eq('photo_type', 'pre')
+                .limit(1);
+
+            if (photosError) {
+                throw new Error(`Failed to verify photos: ${photosError.message}`);
+            }
+
+            if (!photos || photos.length === 0) {
+                const err = new Error('يجب رفع صور ما قبل الخدمة قبل بدء العمل.');
+                err.code = 'PRE_SERVICE_PHOTOS_REQUIRED';
+                throw err;
+            }
+
             if (job.status !== JOB_STATES.ARRIVED && job.status !== JOB_STATES.ON_THE_WAY) {
                 const err = new Error(
                     `Cannot start work while job is '${job.status}'. Expected 'arrived' or 'on_the_way'.`
@@ -729,6 +747,27 @@ class JobService {
 
         if (job.technician_id !== technicianId) {
             throw new Error('Unauthorized');
+        }
+
+        // Enforce mandatory post-service photos
+        const { data: photos, error: photosError } = await supabaseAdmin
+            .from('job_photos')
+            .select('id')
+            .eq('job_id', jobId)
+            .eq('photo_type', 'post')
+            .limit(1);
+
+        if (photosError) {
+            throw new Error(`Failed to verify photos: ${photosError.message}`);
+        }
+
+        const hasUploadedPhotos = photos && photos.length > 0;
+        const hasPassedPhotos = afterPhotos && Array.isArray(afterPhotos) && afterPhotos.length > 0;
+
+        if (!hasUploadedPhotos && !hasPassedPhotos) {
+            const err = new Error('يجب رفع صور ما بعد الخدمة قبل طلب إنهاء العمل.');
+            err.code = 'POST_SERVICE_PHOTOS_REQUIRED';
+            throw err;
         }
 
         validateTransition(job.status, JOB_STATES.PENDING_CONFIRM);
@@ -889,6 +928,13 @@ class JobService {
 
         if (job.customer_id !== userId && job.technician_id !== userId) {
             throw new Error('Unauthorized');
+        }
+
+        const restrictedStatuses = [JOB_STATES.ARRIVED, JOB_STATES.IN_PROGRESS, JOB_STATES.PENDING_CONFIRM];
+        if (restrictedStatuses.includes(job.status)) {
+            const err = new Error(`لا يمكن إلغاء الطلب بعد وصول الفني أو بدء العمل. الحالة الحالية: ${job.status}`);
+            err.code = 'CANCELLATION_RESTRICTED';
+            throw err;
         }
 
         validateTransition(job.status, JOB_STATES.CANCELLED);
@@ -1074,6 +1120,8 @@ class JobService {
     }
 
     async _ensureTechnicianCanTakeNewWork(technicianId, { currentJobId = null } = {}) {
+        await this._ensureTechnicianWalletHasNoDebt(technicianId);
+
         let query = supabaseAdmin
             .from('jobs')
             .select('id, status')
@@ -1100,6 +1148,42 @@ class JobService {
             err.lockedJobId = lockedJob.id;
             throw err;
         }
+    }
+
+    async _ensureTechnicianWalletHasNoDebt(technicianId) {
+        const { data: wallet, error } = await supabaseAdmin
+            .from('wallets')
+            .select('id, balance, currency, is_frozen')
+            .eq('user_id', technicianId)
+            .maybeSingle();
+
+        if (error) {
+            const err = new Error(`Failed to validate technician wallet: ${error.message}`);
+            err.code = 'DATABASE_ERROR';
+            throw err;
+        }
+
+        if (!wallet) {
+            // Keep backward compatibility in environments where wallet bootstrap
+            // is temporarily inconsistent. Active-job locking will still apply.
+            return;
+        }
+
+        const balance = Number(wallet.balance ?? 0);
+        if (!Number.isFinite(balance) || balance >= 0) {
+            return;
+        }
+
+        const debtAmount = Math.abs(balance);
+        const currency = wallet.currency || 'SAR';
+        const err = new Error(
+            `لا يمكنك استقبال طلبات جديدة حتى سداد المديونية المستحقة (${debtAmount.toFixed(2)} ${currency}).`
+        );
+        err.code = 'TECHNICIAN_WALLET_DEBT_LOCKED';
+        err.debtAmount = debtAmount;
+        err.currency = currency;
+        err.walletId = wallet.id;
+        throw err;
     }
 
     async _cancelOpenSearchJobsForCustomer(customerId) {

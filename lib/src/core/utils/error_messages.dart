@@ -100,6 +100,16 @@ class ErrorMessages {
             : invalidInput;
       case 'RATE_LIMITED':
         return rateLimited;
+      case 'TECHNICIAN_WALLET_DEBT_LOCKED':
+        return (fallback != null && fallback.isNotEmpty)
+            ? fallback
+            : 'يجب سداد المديونية المستحقة قبل قبول طلبات جديدة';
+      case 'PRE_SERVICE_PHOTOS_REQUIRED':
+        return 'يجب رفع صور ما قبل الخدمة قبل بدء العمل';
+      case 'POST_SERVICE_PHOTOS_REQUIRED':
+        return 'يجب رفع صور ما بعد الخدمة قبل طلب إنهاء العمل';
+      case 'CANCELLATION_RESTRICTED':
+        return 'لا يمكن إلغاء الطلب بعد وصول الفني أو بدء العمل';
       case 'DATABASE_ERROR':
       case 'SERVER_ERROR':
         if (fallback != null && fallback.isNotEmpty) {
