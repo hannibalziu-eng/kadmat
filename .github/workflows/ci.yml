@@ -14,16 +14,15 @@ jobs:
                 working-directory: ./backend
 
         steps:
-            - uses: actions/checkout@v3
+            - uses: actions/checkout@v4
             - name: Use Node.js 18.x
-              uses: actions/setup-node@v3
+              uses: actions/setup-node@v4
               with:
                   node-version: 18.x
                   cache: "npm"
                   cache-dependency-path: backend/package-lock.json
             - run: npm ci
             - run: npm run test --if-present -- --runInBand
-              # npm run lint (if script exists)
 
     mobile-test:
         runs-on: ubuntu-latest
@@ -32,7 +31,7 @@ jobs:
                 working-directory: ./
 
         steps:
-            - uses: actions/checkout@v3
+            - uses: actions/checkout@v4
             - uses: subosito/flutter-action@v2
               with:
                   flutter-version: "3.24.0"
