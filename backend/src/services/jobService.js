@@ -651,7 +651,9 @@ class JobService {
                 .limit(1);
 
             if (photosError) {
-                throw new Error(`Failed to verify photos: ${photosError.message}`);
+                const err = new Error(`Failed to verify photos: ${photosError.message}`);
+                err.code = 'DATABASE_ERROR';
+                throw err;
             }
 
             if (!photos || photos.length === 0) {
@@ -758,7 +760,9 @@ class JobService {
             .limit(1);
 
         if (photosError) {
-            throw new Error(`Failed to verify photos: ${photosError.message}`);
+            const err = new Error(`Failed to verify photos: ${photosError.message}`);
+            err.code = 'DATABASE_ERROR';
+            throw err;
         }
 
         const hasUploadedPhotos = photos && photos.length > 0;
