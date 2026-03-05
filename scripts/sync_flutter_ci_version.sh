@@ -3,7 +3,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-TARGET_FLUTTER_VERSION="${1:-3.30.0}"
+TARGET_FLUTTER_VERSION="${1:-3.24.0}"
 
 if [[ ! -f "$ROOT_DIR/pubspec.yaml" ]]; then
   echo "ERROR: pubspec.yaml not found at repo root: $ROOT_DIR"
@@ -26,6 +26,15 @@ if [[ -z "$required_dart_sdk" ]]; then
   exit 1
 fi
 
+version_ge() {
+  local left="$1"
+  local right="$2"
+  [[ "$(printf '%s\n%s\n' "$left" "$right" | sort -V | head -n 1)" == "$right" ]]
+}
+
+required_dart_base="$(echo "$required_dart_sdk" | sed -E 's/[^0-9]*([0-9]+\.[0-9]+\.[0-9]+).*/\1/')"
+target_flutter_base="$(echo "$TARGET_FLUTTER_VERSION" | sed -E 's/[^0-9]*([0-9]+\.[0-9]+\.[0-9]+).*/\1/')"
+
 workflow_files=()
 while IFS= read -r workflow_file; do
   workflow_files+=("$workflow_file")
@@ -38,6 +47,18 @@ fi
 
 echo "Detected Dart SDK constraint: $required_dart_sdk"
 echo "Target Flutter version: $TARGET_FLUTTER_VERSION"
+if command -v flutter >/dev/null 2>&1; then
+  flutter_runtime_line="$(flutter --version 2>/dev/null | head -n 1)"
+  echo "Local Flutter runtime: ${flutter_runtime_line:-unavailable}"
+else
+  echo "Local Flutter runtime: flutter command not found"
+fi
+if [[ -n "$required_dart_base" && -n "$target_flutter_base" ]] \
+  && version_ge "$required_dart_base" "3.10.0" \
+  && ! version_ge "$target_flutter_base" "3.30.0"; then
+  echo "WARNING: Dart constraint $required_dart_sdk usually needs Flutter 3.30.0+."
+  echo "WARNING: Current target ($TARGET_FLUTTER_VERSION) may fail dependency resolution."
+fi
 echo
 
 updated_count=0

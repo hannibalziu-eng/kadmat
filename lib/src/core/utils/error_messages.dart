@@ -29,6 +29,8 @@ class ErrorMessages {
   static const String lockCheckFailed = 'فشل التحقق من حالة القفل';
   static const String activeJobLocked =
       'لديك طلب نشط حالياً. أكمل الطلب الحالي أولاً';
+  static const String walletDebtLocked =
+      'لا يمكنك قبول طلبات جديدة حتى سداد المديونية';
 
   // Payment Errors
   static const String priceRequired = 'يجب إدخال السعر';
@@ -49,6 +51,12 @@ class ErrorMessages {
   static const String jobCompleteFailed = 'فشل إتمام الطلب';
   static const String jobUpdateFailed = 'فشل تحديث الطلب';
   static const String invalidJobStatus = 'حالة الطلب غير صحيحة';
+  static const String preServicePhotosRequired =
+      'يجب رفع صور ما قبل الخدمة قبل بدء العمل';
+  static const String postServicePhotosRequired =
+      'يجب رفع صور ما بعد الخدمة قبل طلب الإنهاء';
+  static const String cancellationRestricted =
+      'لا يمكن إلغاء الطلب بعد وصول الفني أو بدء العمل';
 
   // Network Errors
   static const String noInternetConnection = 'لا يوجد اتصال بالإنترنت';
@@ -91,6 +99,14 @@ class ErrorMessages {
         return forbidden;
       case 'ACTIVE_JOB_LOCKED':
         return activeJobLocked;
+      case 'TECHNICIAN_WALLET_DEBT_LOCKED':
+        return walletDebtLocked;
+      case 'PRE_SERVICE_PHOTOS_REQUIRED':
+        return preServicePhotosRequired;
+      case 'POST_SERVICE_PHOTOS_REQUIRED':
+        return postServicePhotosRequired;
+      case 'CANCELLATION_RESTRICTED':
+        return cancellationRestricted;
       case 'CONFLICT':
         return (fallback != null && fallback.isNotEmpty) ? fallback : activeJobLocked;
       case 'VALIDATION_FAILED':

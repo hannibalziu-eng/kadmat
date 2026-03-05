@@ -36,7 +36,7 @@ BEGIN
     END IF;
 
     -- 3. Calculate commission and resulting debt/lock state
-    commission_amount := amount * service_commission_rate;
+    commission_amount := COALESCE(amount, 0) * service_commission_rate;
     resulting_balance := current_balance - commission_amount;
     debt_amount := GREATEST(0, ABS(LEAST(resulting_balance, 0)));
 

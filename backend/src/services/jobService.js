@@ -609,7 +609,7 @@ class JobService {
     /**
      * Transition: on_the_way -> arrived -> in_progress
      */
-    async updateTechnicianProgress(jobId, technicianId, progress) {
+    async updateTechnicianProgress(jobId, technicianId, progress, { prePhotos } = {}) {
         const normalizedProgress = String(progress || '').trim().toLowerCase();
         const allowedProgress = new Set(['arrived', 'start_work']);
 
@@ -650,9 +650,24 @@ class JobService {
                 err.currentStatus = job.status;
                 throw err;
             }
+
+            const hasPreServicePhotos = await this._hasRequiredPhotos({
+                job,
+                photoType: 'pre',
+                incomingPhotos: prePhotos,
+                legacyPhotos: job?.metadata?.pre_service_photos
+            });
+
+            if (!hasPreServicePhotos) {
+                const err = new Error('لا يمكن بدء العمل قبل رفع صور ما قبل الخدمة.');
+                err.code = 'PRE_SERVICE_PHOTOS_REQUIRED';
+                err.currentStatus = job.status;
+                throw err;
+            }
         }
 
         const nowIso = new Date().toISOString();
+        const normalizedPrePhotos = this._sanitizePhotoUrls(prePhotos);
         const updatePayload = {
             status: nextStatus,
             updated_at: nowIso
@@ -660,6 +675,13 @@ class JobService {
 
         if (nextStatus === JOB_STATES.IN_PROGRESS && !job.accepted_at) {
             updatePayload.accepted_at = nowIso;
+        }
+
+        if (nextStatus === JOB_STATES.IN_PROGRESS && normalizedPrePhotos.length > 0) {
+            updatePayload.metadata = {
+                ...job.metadata,
+                pre_service_photos: normalizedPrePhotos
+            };
         }
 
         const { data: updatedJob, error } = await supabaseAdmin
@@ -733,6 +755,21 @@ class JobService {
 
         validateTransition(job.status, JOB_STATES.PENDING_CONFIRM);
 
+        const normalizedAfterPhotos = this._sanitizePhotoUrls(afterPhotos);
+        const hasPostServicePhotos = await this._hasRequiredPhotos({
+            job,
+            photoType: 'post',
+            incomingPhotos: normalizedAfterPhotos,
+            legacyPhotos: job.after_photos
+        });
+
+        if (!hasPostServicePhotos) {
+            const err = new Error('لا يمكن إرسال طلب الإنهاء بدون صور ما بعد الخدمة.');
+            err.code = 'POST_SERVICE_PHOTOS_REQUIRED';
+            err.currentStatus = job.status;
+            throw err;
+        }
+
         const updates = {
             status: JOB_STATES.PENDING_CONFIRM,
             updated_at: new Date().toISOString()
@@ -740,14 +777,52 @@ class JobService {
 
         if (finalPrice) updates.final_price = finalPrice;
         if (notes) updates.work_notes = notes;
-        if (afterPhotos && Array.isArray(afterPhotos)) updates.after_photos = afterPhotos;
+        if (normalizedAfterPhotos.length > 0) {
+            updates.after_photos = normalizedAfterPhotos;
+        }
 
-        const { data: updatedJob, error } = await supabaseAdmin
-            .from('jobs')
-            .update(updates)
-            .eq('id', jobId)
-            .select()
-            .single();
+        const optionalUpdateColumns = ['work_notes', 'after_photos'];
+
+        const runCompletionUpdate = async (payload) => {
+            return await supabaseAdmin
+                .from('jobs')
+                .update(payload)
+                .eq('id', jobId)
+                .select()
+                .single();
+        };
+
+        let completionPayload = { ...updates };
+        let { data: updatedJob, error } = await runCompletionUpdate(completionPayload);
+
+        while (error) {
+            const rawCompletionError = [
+                error.message,
+                error.details,
+                error.hint,
+                error.code ? `code=${error.code}` : null
+            ]
+                .filter(Boolean)
+                .join(' | ');
+
+            const removableColumns = optionalUpdateColumns.filter((columnName) =>
+                Object.prototype.hasOwnProperty.call(completionPayload, columnName) &&
+                new RegExp(`\\b${columnName}\\b`, 'i').test(rawCompletionError)
+            );
+
+            if (removableColumns.length === 0) {
+                break;
+            }
+
+            for (const columnName of removableColumns) {
+                delete completionPayload[columnName];
+            }
+
+            console.warn(
+                `⚠️ [JobService.requestCompletion] Retrying without optional columns: ${removableColumns.join(', ')}`
+            );
+            ({ data: updatedJob, error } = await runCompletionUpdate(completionPayload));
+        }
 
         if (error) throw new Error('Failed to request completion');
 
@@ -889,6 +964,13 @@ class JobService {
 
         if (job.customer_id !== userId && job.technician_id !== userId) {
             throw new Error('Unauthorized');
+        }
+
+        if ([JOB_STATES.ARRIVED, JOB_STATES.IN_PROGRESS].includes(job.status)) {
+            const err = new Error('لا يمكن إلغاء الطلب بعد وصول الفني أو بدء تنفيذ العمل.');
+            err.code = 'CANCELLATION_RESTRICTED';
+            err.currentStatus = job.status;
+            throw err;
         }
 
         validateTransition(job.status, JOB_STATES.CANCELLED);
@@ -1138,6 +1220,74 @@ class JobService {
         err.currency = currency;
         err.walletId = wallet.id;
         throw err;
+    }
+
+    _sanitizePhotoUrls(photoList) {
+        if (!Array.isArray(photoList)) {
+            return [];
+        }
+
+        const normalized = photoList
+            .map((item) => (typeof item === 'string' ? item.trim() : ''))
+            .filter(Boolean);
+
+        return [...new Set(normalized)];
+    }
+
+    async _hasRequiredPhotos({ job, photoType, incomingPhotos, legacyPhotos }) {
+        const normalizedIncoming = this._sanitizePhotoUrls(incomingPhotos);
+        const normalizedLegacy = this._sanitizePhotoUrls(legacyPhotos);
+
+        const hasIncoming = normalizedIncoming.length > 0;
+        const hasLegacy = normalizedLegacy.length > 0;
+        if (hasIncoming || hasLegacy) {
+            return true;
+        }
+
+        const hasTablePhotos = await this._hasJobPhotosTableRecords(job.id, photoType);
+        if (hasTablePhotos === null) {
+            // Table does not exist in some environments yet; rely on payload/legacy fallback.
+            return false;
+        }
+
+        return hasTablePhotos;
+    }
+
+    async _hasJobPhotosTableRecords(jobId, photoType) {
+        const { data, error } = await supabaseAdmin
+            .from('job_photos')
+            .select('id')
+            .eq('job_id', jobId)
+            .eq('photo_type', photoType)
+            .limit(1);
+
+        if (!error) {
+            return Array.isArray(data) && data.length > 0;
+        }
+
+        if (this._isMissingRelationError(error, 'job_photos')) {
+            return null;
+        }
+
+        const err = new Error(`Failed to validate ${photoType} service photos: ${error.message}`);
+        err.code = 'DATABASE_ERROR';
+        throw err;
+    }
+
+    _isMissingRelationError(error, relationName) {
+        if (!error) return false;
+
+        const code = String(error.code || '').toUpperCase();
+        if (code === '42P01' || code === 'PGRST205' || code === 'PGRST204') {
+            return true;
+        }
+
+        const raw = [error.message, error.details, error.hint]
+            .filter(Boolean)
+            .join(' ')
+            .toLowerCase();
+
+        return raw.includes(String(relationName).toLowerCase()) && raw.includes('does not exist');
     }
 
     async _cancelOpenSearchJobsForCustomer(customerId) {

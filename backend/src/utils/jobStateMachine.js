@@ -43,12 +43,10 @@ export const VALID_TRANSITIONS = {
         JOB_STATES.CANCELLED
     ],
     [JOB_STATES.ARRIVED]: [
-        JOB_STATES.IN_PROGRESS,
-        JOB_STATES.CANCELLED
+        JOB_STATES.IN_PROGRESS
     ],
     [JOB_STATES.IN_PROGRESS]: [
-        JOB_STATES.PENDING_CONFIRM, // Must go to confirmation first
-        JOB_STATES.CANCELLED
+        JOB_STATES.PENDING_CONFIRM // Must go to confirmation first
     ],
     [JOB_STATES.PENDING_CONFIRM]: [
         JOB_STATES.COMPLETED

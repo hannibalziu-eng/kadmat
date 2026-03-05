@@ -335,11 +335,37 @@ export const completeJob = async (req, res) => {
         });
         return res.json(responseFormatter.success(job, 'Job completion requested'));
     } catch (error) {
-        const { response, statusCode } = responseFormatter.error(
-            ERROR_CODES.INVALID_STATUS_TRANSITION,
-            error.message
+        const message = error.message || 'Failed to request completion';
+        let code = ERROR_CODES.INVALID_STATUS_TRANSITION;
+        let statusCode = HTTP_STATUS.CONFLICT;
+        const details = {};
+
+        if (error.code === 'UNAUTHORIZED') {
+            code = ERROR_CODES.UNAUTHORIZED;
+            statusCode = HTTP_STATUS.FORBIDDEN;
+        } else if (error.code === 'JOB_NOT_FOUND') {
+            code = ERROR_CODES.NOT_FOUND;
+            statusCode = HTTP_STATUS.NOT_FOUND;
+        } else if (error.code === 'POST_SERVICE_PHOTOS_REQUIRED') {
+            code = ERROR_CODES.POST_SERVICE_PHOTOS_REQUIRED;
+            statusCode = HTTP_STATUS.CONFLICT;
+        } else if (error.code === 'DATABASE_ERROR') {
+            code = ERROR_CODES.DATABASE_ERROR;
+            statusCode = HTTP_STATUS.INTERNAL_SERVER_ERROR;
+        }
+
+        if (error.currentStatus) {
+            details.currentStatus = error.currentStatus;
+        }
+
+        const formatted = responseFormatter.error(
+            code,
+            message,
+            Object.keys(details).length > 0
+                ? { statusCode, details }
+                : statusCode
         );
-        return res.status(statusCode).json(response);
+        return res.status(formatted.statusCode).json(formatted.response);
     }
 };
 
@@ -394,7 +420,10 @@ export const updateTechnicianProgress = async (req, res) => {
         const job = await jobService.updateTechnicianProgress(
             req.params.id,
             req.user.id,
-            progress
+            progress,
+            {
+                prePhotos: req.body?.pre_photos
+            }
         );
         return res.json(responseFormatter.success(job, 'Technician progress updated'));
     } catch (error) {
@@ -411,6 +440,9 @@ export const updateTechnicianProgress = async (req, res) => {
             statusCode = HTTP_STATUS.NOT_FOUND;
         } else if (error.code === 'INVALID_STATUS_TRANSITION') {
             code = ERROR_CODES.INVALID_STATUS_TRANSITION;
+            statusCode = HTTP_STATUS.CONFLICT;
+        } else if (error.code === 'PRE_SERVICE_PHOTOS_REQUIRED') {
+            code = ERROR_CODES.PRE_SERVICE_PHOTOS_REQUIRED;
             statusCode = HTTP_STATUS.CONFLICT;
         } else if (error.code === 'DATABASE_ERROR') {
             code = ERROR_CODES.DATABASE_ERROR;
@@ -457,11 +489,34 @@ export const cancelJob = async (req, res) => {
 
         return res.json(responseFormatter.success(job, 'Job cancelled'));
     } catch (error) {
-        const { response, statusCode } = responseFormatter.error(
-            ERROR_CODES.INVALID_STATUS_TRANSITION,
-            error.message
+        const message = error.message || 'Failed to cancel job';
+        let code = ERROR_CODES.INVALID_STATUS_TRANSITION;
+        let statusCode = HTTP_STATUS.CONFLICT;
+        const details = {};
+
+        if (error.code === 'UNAUTHORIZED') {
+            code = ERROR_CODES.UNAUTHORIZED;
+            statusCode = HTTP_STATUS.FORBIDDEN;
+        } else if (error.code === 'JOB_NOT_FOUND') {
+            code = ERROR_CODES.NOT_FOUND;
+            statusCode = HTTP_STATUS.NOT_FOUND;
+        } else if (error.code === 'CANCELLATION_RESTRICTED') {
+            code = ERROR_CODES.CANCELLATION_RESTRICTED;
+            statusCode = HTTP_STATUS.CONFLICT;
+        }
+
+        if (error.currentStatus) {
+            details.currentStatus = error.currentStatus;
+        }
+
+        const formatted = responseFormatter.error(
+            code,
+            message,
+            Object.keys(details).length > 0
+                ? { statusCode, details }
+                : statusCode
         );
-        return res.status(statusCode).json(response);
+        return res.status(formatted.statusCode).json(formatted.response);
     }
 };
 
@@ -532,7 +587,7 @@ export const getJobById = async (req, res) => {
                 canComplete: job.status === 'in_progress' && job.technician_id === req.user.id,
                 canConfirmCompletion: job.status === 'pending_confirm' && job.customer_id === req.user.id, // New permission
                 canRate: job.status === 'completed' && job.customer_id === req.user.id && !job.customer_rating,
-                canCancel: !['completed', 'rated', 'cancelled', 'pending_confirm'].includes(job.status) &&
+                canCancel: !['arrived', 'in_progress', 'pending_confirm', 'completed', 'rated', 'cancelled'].includes(job.status) &&
                     (job.customer_id === req.user.id || job.technician_id === req.user.id)
             },
             // Metadata

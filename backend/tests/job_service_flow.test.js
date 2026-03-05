@@ -4,6 +4,7 @@ let mockJob;
 let notifications;
 let offers;
 let walletsByUserId;
+let jobPhotosByJobId;
 let onTheWayConstraintFailuresRemaining;
 
 const fcmMocks = {
@@ -235,6 +236,39 @@ function buildWalletsQuery() {
   return query;
 }
 
+function buildJobPhotosQuery() {
+  let jobIdFilter = null;
+  let photoTypeFilter = null;
+
+  const query = {
+    select: jest.fn(() => query),
+    eq: jest.fn((column, value) => {
+      if (column === 'job_id') {
+        jobIdFilter = value;
+      }
+      if (column === 'photo_type') {
+        photoTypeFilter = value;
+      }
+      return query;
+    }),
+    limit: jest.fn(async (count) => {
+      const records = (jobPhotosByJobId[jobIdFilter] || []).filter((record) => {
+        if (photoTypeFilter && record.photo_type !== photoTypeFilter) {
+          return false;
+        }
+        return true;
+      });
+
+      return {
+        data: records.slice(0, count),
+        error: null,
+      };
+    }),
+  };
+
+  return query;
+}
+
 const supabaseAdminMock = {
   from: jest.fn((table) => {
     if (table === 'jobs') {
@@ -243,6 +277,10 @@ const supabaseAdminMock = {
 
     if (table === 'wallets') {
       return buildWalletsQuery();
+    }
+
+    if (table === 'job_photos') {
+      return buildJobPhotosQuery();
     }
 
     if (table === 'notifications') {
@@ -300,6 +338,9 @@ describe('JobService critical flow', () => {
         is_frozen: false,
       },
     };
+    jobPhotosByJobId = {
+      'job-1': [],
+    };
     onTheWayConstraintFailuresRemaining = 0;
     supabaseAdminMock.from.mockClear();
     supabaseAdminMock.rpc.mockClear();
@@ -334,6 +375,13 @@ describe('JobService critical flow', () => {
     );
     expect(arrived.status).toBe('arrived');
 
+    jobPhotosByJobId['job-1'].push({
+      id: 'photo-pre-1',
+      job_id: 'job-1',
+      photo_type: 'pre',
+      photo_url: 'https://img/pre-1.jpg',
+    });
+
     const inProgress = await jobService.updateTechnicianProgress(
       'job-1',
       'tech-1',
@@ -367,6 +415,81 @@ describe('JobService critical flow', () => {
       amount: 130,
     });
     expect(notifications.length).toBeGreaterThanOrEqual(4);
+  });
+
+  it('rejects starting work without pre-service photos', async () => {
+    mockJob = {
+      ...mockJob,
+      status: 'arrived',
+      technician_id: 'tech-1',
+    };
+
+    await expect(
+      jobService.updateTechnicianProgress('job-1', 'tech-1', 'start_work'),
+    ).rejects.toMatchObject({
+      code: 'PRE_SERVICE_PHOTOS_REQUIRED',
+      currentStatus: 'arrived',
+    });
+  });
+
+  it('allows starting work when pre-service photos exist in job_photos', async () => {
+    mockJob = {
+      ...mockJob,
+      status: 'arrived',
+      technician_id: 'tech-1',
+      metadata: {},
+    };
+    jobPhotosByJobId['job-1'].push({
+      id: 'photo-pre-1',
+      job_id: 'job-1',
+      photo_type: 'pre',
+      photo_url: 'https://img/pre-1.jpg',
+    });
+
+    const result = await jobService.updateTechnicianProgress(
+      'job-1',
+      'tech-1',
+      'start_work',
+    );
+    expect(result.status).toBe('in_progress');
+  });
+
+  it('rejects completion request without post-service photos', async () => {
+    mockJob = {
+      ...mockJob,
+      status: 'in_progress',
+      technician_id: 'tech-1',
+    };
+
+    await expect(
+      jobService.requestCompletion('job-1', 'tech-1', {
+        finalPrice: 130,
+        notes: 'done',
+      }),
+    ).rejects.toMatchObject({
+      code: 'POST_SERVICE_PHOTOS_REQUIRED',
+      currentStatus: 'in_progress',
+    });
+  });
+
+  it('allows completion request when post-service photos exist in job_photos', async () => {
+    mockJob = {
+      ...mockJob,
+      status: 'in_progress',
+      technician_id: 'tech-1',
+    };
+    jobPhotosByJobId['job-1'].push({
+      id: 'photo-post-1',
+      job_id: 'job-1',
+      photo_type: 'post',
+      photo_url: 'https://img/post-1.jpg',
+    });
+
+    const updated = await jobService.requestCompletion('job-1', 'tech-1', {
+      finalPrice: 130,
+      notes: 'done',
+    });
+    expect(updated.status).toBe('pending_confirm');
   });
 
   it('rejects accepting job from invalid state', async () => {
@@ -524,5 +647,20 @@ describe('JobService critical flow', () => {
     expect(cancelled.metadata.cancellation_reason).toBe('customer_cancelled');
     expect(cancelled.metadata.cancelled_by).toBe('customer-1');
     expect(cancelled.metadata.existing).toBe(true);
+  });
+
+  it('rejects cancel after technician arrived', async () => {
+    mockJob = {
+      ...mockJob,
+      status: 'arrived',
+      technician_id: 'tech-1',
+    };
+
+    await expect(
+      jobService.cancel('job-1', 'customer-1', 'changed_mind'),
+    ).rejects.toMatchObject({
+      code: 'CANCELLATION_RESTRICTED',
+      currentStatus: 'arrived',
+    });
   });
 });
