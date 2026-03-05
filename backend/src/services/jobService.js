@@ -1074,6 +1074,8 @@ class JobService {
     }
 
     async _ensureTechnicianCanTakeNewWork(technicianId, { currentJobId = null } = {}) {
+        await this._ensureTechnicianWalletHasNoDebt(technicianId);
+
         let query = supabaseAdmin
             .from('jobs')
             .select('id, status')
@@ -1100,6 +1102,42 @@ class JobService {
             err.lockedJobId = lockedJob.id;
             throw err;
         }
+    }
+
+    async _ensureTechnicianWalletHasNoDebt(technicianId) {
+        const { data: wallet, error } = await supabaseAdmin
+            .from('wallets')
+            .select('id, balance, currency, is_frozen')
+            .eq('user_id', technicianId)
+            .maybeSingle();
+
+        if (error) {
+            const err = new Error(`Failed to validate technician wallet: ${error.message}`);
+            err.code = 'DATABASE_ERROR';
+            throw err;
+        }
+
+        if (!wallet) {
+            // Keep backward compatibility in environments where wallet bootstrap
+            // is temporarily inconsistent. Active-job locking will still apply.
+            return;
+        }
+
+        const balance = Number(wallet.balance ?? 0);
+        if (!Number.isFinite(balance) || balance >= 0) {
+            return;
+        }
+
+        const debtAmount = Math.abs(balance);
+        const currency = wallet.currency || 'SAR';
+        const err = new Error(
+            `لا يمكنك استقبال طلبات جديدة حتى سداد المديونية المستحقة (${debtAmount.toFixed(2)} ${currency}).`
+        );
+        err.code = 'TECHNICIAN_WALLET_DEBT_LOCKED';
+        err.debtAmount = debtAmount;
+        err.currency = currency;
+        err.walletId = wallet.id;
+        throw err;
     }
 
     async _cancelOpenSearchJobsForCustomer(customerId) {

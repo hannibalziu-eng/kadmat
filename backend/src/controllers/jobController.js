@@ -139,10 +139,29 @@ export const submitOffer = async (req, res) => {
     } catch (error) {
         console.error('Submit Offer Error:', error);
         const isInvalidState = error.message?.includes('no longer available');
-        const { response, statusCode } = responseFormatter.error(
-            isInvalidState ? ERROR_CODES.INVALID_STATUS_TRANSITION : ERROR_CODES.INVALID_INPUT,
+        const details = {};
+        let code = isInvalidState ? ERROR_CODES.INVALID_STATUS_TRANSITION : ERROR_CODES.INVALID_INPUT;
+        let statusCode = isInvalidState ? HTTP_STATUS.CONFLICT : HTTP_STATUS.BAD_REQUEST;
+
+        if (error.code === 'ACTIVE_JOB_LOCKED') {
+            code = ERROR_CODES.ACTIVE_JOB_LOCKED;
+            statusCode = HTTP_STATUS.CONFLICT;
+            if (error.currentStatus) details.currentStatus = error.currentStatus;
+            if (error.lockedJobId) details.lockedJobId = error.lockedJobId;
+        } else if (error.code === 'TECHNICIAN_WALLET_DEBT_LOCKED') {
+            code = ERROR_CODES.TECHNICIAN_WALLET_DEBT_LOCKED;
+            statusCode = HTTP_STATUS.CONFLICT;
+            if (error.debtAmount != null) details.debtAmount = error.debtAmount;
+            if (error.currency) details.currency = error.currency;
+            if (error.walletId) details.walletId = error.walletId;
+        }
+
+        const { response } = responseFormatter.error(
+            code,
             error.message || 'Failed to submit offer',
-            isInvalidState ? HTTP_STATUS.CONFLICT : HTTP_STATUS.BAD_REQUEST
+            Object.keys(details).length > 0
+                ? { statusCode, details }
+                : statusCode
         );
         return res.status(statusCode).json(response);
     }
@@ -217,6 +236,9 @@ export const acceptOffer = async (req, res) => {
         } else if (error.code === 'ACTIVE_JOB_LOCKED') {
             code = ERROR_CODES.ACTIVE_JOB_LOCKED;
             statusCode = HTTP_STATUS.CONFLICT;
+        } else if (error.code === 'TECHNICIAN_WALLET_DEBT_LOCKED') {
+            code = ERROR_CODES.TECHNICIAN_WALLET_DEBT_LOCKED;
+            statusCode = HTTP_STATUS.CONFLICT;
         } else if (error.code === 'ACCEPT_FAILED') {
             code = ERROR_CODES.SERVER_ERROR;
             statusCode = HTTP_STATUS.INTERNAL_SERVER_ERROR;
@@ -227,6 +249,15 @@ export const acceptOffer = async (req, res) => {
         }
         if (error.lockedJobId) {
             details.lockedJobId = error.lockedJobId;
+        }
+        if (error.debtAmount != null) {
+            details.debtAmount = error.debtAmount;
+        }
+        if (error.currency) {
+            details.currency = error.currency;
+        }
+        if (error.walletId) {
+            details.walletId = error.walletId;
         }
 
         const formatted = responseFormatter.error(

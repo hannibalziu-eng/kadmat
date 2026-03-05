@@ -3,6 +3,7 @@ import { jest, describe, it, expect, beforeEach } from '@jest/globals';
 let mockJob;
 let notifications;
 let offers;
+let walletsByUserId;
 let onTheWayConstraintFailuresRemaining;
 
 const fcmMocks = {
@@ -214,10 +215,34 @@ function buildJobOffersQuery() {
   return query;
 }
 
+function buildWalletsQuery() {
+  let userIdFilter = null;
+
+  const query = {
+    select: jest.fn(() => query),
+    eq: jest.fn((column, value) => {
+      if (column === 'user_id') {
+        userIdFilter = value;
+      }
+      return query;
+    }),
+    maybeSingle: jest.fn(async () => ({
+      data: userIdFilter ? walletsByUserId[userIdFilter] || null : null,
+      error: null,
+    })),
+  };
+
+  return query;
+}
+
 const supabaseAdminMock = {
   from: jest.fn((table) => {
     if (table === 'jobs') {
       return buildJobsQuery();
+    }
+
+    if (table === 'wallets') {
+      return buildWalletsQuery();
     }
 
     if (table === 'notifications') {
@@ -259,6 +284,22 @@ describe('JobService critical flow', () => {
     };
     notifications = [];
     offers = [];
+    walletsByUserId = {
+      'tech-1': {
+        id: 'wallet-tech-1',
+        user_id: 'tech-1',
+        balance: 200,
+        currency: 'SAR',
+        is_frozen: false,
+      },
+      'tech-2': {
+        id: 'wallet-tech-2',
+        user_id: 'tech-2',
+        balance: 150,
+        currency: 'SAR',
+        is_frozen: false,
+      },
+    };
     onTheWayConstraintFailuresRemaining = 0;
     supabaseAdminMock.from.mockClear();
     supabaseAdminMock.rpc.mockClear();
@@ -345,6 +386,20 @@ describe('JobService critical flow', () => {
 
     await expect(jobService.accept('job-1', 'tech-1')).rejects.toMatchObject({
       code: 'JOB_ALREADY_ACCEPTED',
+    });
+  });
+
+  it('rejects taking new work when technician wallet has debt', async () => {
+    walletsByUserId['tech-1'] = {
+      ...walletsByUserId['tech-1'],
+      balance: -45.75,
+      is_frozen: true,
+    };
+
+    await expect(jobService.accept('job-1', 'tech-1')).rejects.toMatchObject({
+      code: 'TECHNICIAN_WALLET_DEBT_LOCKED',
+      debtAmount: 45.75,
+      currency: 'SAR',
     });
   });
 
