@@ -80,6 +80,8 @@ export const getNearbyJobs = async (req, res) => {
 
         const twelveHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString();
 
+        const openStatuses = ['pending', 'searching', 'no_technician_found'];
+
         const { data: jobs, error, count } = await supabase
             .from('jobs')
             .select(`
@@ -87,7 +89,7 @@ export const getNearbyJobs = async (req, res) => {
                 service:services(id, name, icon_url, base_price),
                 customer:users!customer_id(id, full_name, phone, profile_image_url, rating)
             `, { count: 'exact' })
-            .eq('status', 'pending')
+            .in('status', openStatuses)
             .gt('created_at', twelveHoursAgo)
             .order('created_at', { ascending: false })
             .range(offset, offset + limitNum - 1);
