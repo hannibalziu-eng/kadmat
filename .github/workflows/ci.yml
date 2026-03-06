@@ -42,6 +42,8 @@ jobs:
                   flutter-version: "3.41.4"
                   channel: "stable"
             - run: flutter pub get
+            - name: Create CI .env placeholder
+              run: touch .env
             - name: Generate code
               run: dart run build_runner build --delete-conflicting-outputs
             - run: flutter analyze

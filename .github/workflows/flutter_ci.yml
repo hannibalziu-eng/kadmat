@@ -28,6 +28,9 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Create CI .env placeholder
+        run: touch .env
+
       - name: Generate code
         run: dart run build_runner build --delete-conflicting-outputs
 
