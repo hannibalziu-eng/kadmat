@@ -98,25 +98,7 @@ GoRouter goRouter(Ref ref) {
       debugPrint('✅ No Redirect');
       return null;
     },
-    routes: [
-      // Main routes with nested sub-routes
-      ...RouteModules.getMainRoutes(),
-
-      // Auth routes
-      ...RouteModules.getAuthRoutes(),
-
-      // Technician routes
-      ...RouteModules.getTechnicianRoutes(),
-
-      // Job flow routes
-      ...RouteModules.getJobFlowRoutes(),
-
-      // Admin routes
-      ...RouteModules.getAdminRoutes(),
-
-      // Utility routes
-      ...RouteModules.getUtilityRoutes(),
-    ],
+    routes: RouteModules.buildAppRoutes(),
     errorBuilder: (context, state) {
       final isTechnician =
           ref.read(authRepositoryProvider).userType == 'technician';

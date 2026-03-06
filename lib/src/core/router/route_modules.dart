@@ -51,36 +51,53 @@ import '../navigation/app_routes.dart';
 
 /// Modular route definitions for better organization and maintainability
 class RouteModules {
+  static List<GoRoute> buildAppRoutes() {
+    final routes = <GoRoute>[
+      ...getMainRoutes(),
+      ...getAuthRoutes(),
+      ...getTechnicianRoutes(),
+      ...getJobFlowRoutes(),
+      ...getAdminRoutes(),
+      ...getUtilityRoutes(),
+    ];
+
+    _assertUniqueAbsolutePaths(routes);
+    return routes;
+  }
+
   // Get all route definitions organized by feature
   static List<GoRoute> getAuthRoutes() {
     return [
       GoRoute(
-        path: '/onboarding',
+        path: AppRoutes.onboarding,
         builder: (context, state) => const OnboardingScreen(),
       ),
       GoRoute(
-        path: '/welcome',
+        path: AppRoutes.welcome,
         builder: (context, state) => const WelcomeScreen(),
       ),
-      GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
       GoRoute(
-        path: '/register',
+        path: AppRoutes.login,
+        builder: (context, state) => const LoginScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.register,
         builder: (context, state) => const RegisterScreen(),
       ),
       GoRoute(
-        path: '/forgot-password',
+        path: AppRoutes.forgotPassword,
         builder: (context, state) => const ForgotPasswordScreen(),
       ),
       GoRoute(
-        path: '/technician/landing',
+        path: AppRoutes.technicianLanding,
         builder: (context, state) => const TechnicianLandingScreen(),
       ),
       GoRoute(
-        path: '/technician/login',
+        path: AppRoutes.technicianLogin,
         builder: (context, state) => const TechnicianLoginScreen(),
       ),
       GoRoute(
-        path: '/technician/register',
+        path: AppRoutes.technicianRegister,
         builder: (context, state) => const TechnicianRegisterScreen(),
       ),
     ];
@@ -89,7 +106,7 @@ class RouteModules {
   static List<GoRoute> getMainRoutes() {
     return [
       GoRoute(
-        path: '/',
+        path: AppRoutes.home,
         builder: (context, state) => const MainScreen(),
         routes: [
           GoRoute(
@@ -121,15 +138,15 @@ class RouteModules {
             },
           ),
           GoRoute(
-            path: 'wallet',
+            path: AppRoutes.asChild(AppRoutes.wallet),
             builder: (context, state) => const WalletScreen(),
           ),
           GoRoute(
-            path: 'customer-wallet',
+            path: AppRoutes.asChild(AppRoutes.customerWallet),
             builder: (context, state) => const WalletScreen(),
           ),
           GoRoute(
-            path: 'notifications',
+            path: AppRoutes.asChild(AppRoutes.notifications),
             builder: (context, state) => const NotificationsScreen(),
           ),
         ],
@@ -346,11 +363,11 @@ class RouteModules {
   static List<GoRoute> getAdminRoutes() {
     return [
       GoRoute(
-        path: '/admin',
+        path: AppRoutes.admin,
         builder: (context, state) => const AdminDashboardScreen(),
       ),
       GoRoute(
-        path: '/admin/dashboard',
+        path: AppRoutes.adminDashboard,
         builder: (context, state) => const AdminDashboardScreen(),
       ),
     ];
@@ -392,5 +409,57 @@ class RouteModules {
         },
       ),
     ];
+  }
+
+  static void _assertUniqueAbsolutePaths(List<GoRoute> routes) {
+    assert(() {
+      final seen = <String>{};
+      final duplicates = <String>{};
+
+      void walk(List<RouteBase> nodes, String parentPath) {
+        for (final node in nodes) {
+          if (node is! GoRoute) continue;
+
+          final absolutePath = _resolveAbsolutePath(parentPath, node.path);
+          if (!seen.add(absolutePath)) {
+            duplicates.add(absolutePath);
+          }
+
+          if (node.routes.isNotEmpty) {
+            walk(node.routes, absolutePath);
+          }
+        }
+      }
+
+      walk(routes, '');
+
+      if (duplicates.isNotEmpty) {
+        throw StateError(
+          'Duplicate GoRoute paths detected: ${duplicates.join(', ')}',
+        );
+      }
+
+      return true;
+    }());
+  }
+
+  static String _resolveAbsolutePath(String parentPath, String currentPath) {
+    if (currentPath.startsWith('/')) {
+      return _normalizePath(currentPath);
+    }
+
+    if (parentPath.isEmpty || parentPath == '/') {
+      return _normalizePath('/$currentPath');
+    }
+
+    return _normalizePath('$parentPath/$currentPath');
+  }
+
+  static String _normalizePath(String path) {
+    final normalized = path.replaceAll(RegExp(r'/+'), '/');
+    if (normalized.length > 1 && normalized.endsWith('/')) {
+      return normalized.substring(0, normalized.length - 1);
+    }
+    return normalized;
   }
 }

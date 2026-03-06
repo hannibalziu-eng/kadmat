@@ -14,6 +14,18 @@ const Set<String> kKnownTechnicianJobFlowSteps = {
   'bidding',
 };
 
+const Set<String> kKnownCustomerJobFlowSteps = {
+  'searching',
+  'technician-found',
+  'price-offer',
+  'in-progress',
+  'payment-processing',
+  'payment-approval',
+  'confirm-completion',
+  'rate',
+  'completed',
+};
+
 String? resolveUnknownTechnicianJobPath(String location) {
   final match = RegExp(
     r'^/jobs/([^/]+)/technician/([^/]+)$',
@@ -34,10 +46,34 @@ String? resolveUnknownTechnicianJobPath(String location) {
   return AppRoutes.buildTechnicianJobDetailPath(jobId);
 }
 
+String? resolveUnknownCustomerJobPath(String location) {
+  final match = RegExp(
+    r'^/jobs/([^/]+)/customer/([^/]+)$',
+  ).firstMatch(location);
+  if (match == null) return null;
+
+  final jobId = match.group(1);
+  final step = match.group(2);
+  if (jobId == null || jobId.isEmpty || step == null || step.isEmpty) {
+    return null;
+  }
+
+  if (kKnownCustomerJobFlowSteps.contains(step)) {
+    return null;
+  }
+
+  return AppRoutes.buildCustomerSearchingPath(jobId);
+}
+
 String resolveUnknownRouteFallback({
   required String location,
   required bool isTechnicianUser,
 }) {
+  final customerFlowFallback = resolveUnknownCustomerJobPath(location);
+  if (customerFlowFallback != null) {
+    return customerFlowFallback;
+  }
+
   if (!isTechnicianUser) {
     return AppRoutes.home;
   }

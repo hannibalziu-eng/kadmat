@@ -17,6 +17,17 @@ void main() {
       expect(ratePath, '/jobs/$jobId/customer/rate');
     });
 
+    test('should build customer payment paths correctly', () {
+      const jobId = 'job123';
+      final approvalPath = AppRoutes.buildCustomerPaymentApprovalPath(jobId);
+      final processingPath = AppRoutes.buildCustomerPaymentProcessingPath(
+        jobId,
+      );
+
+      expect(approvalPath, '/jobs/$jobId/customer/payment-approval');
+      expect(processingPath, '/jobs/$jobId/customer/payment-processing');
+    });
+
     test('should build active job path correctly', () {
       const jobId = 'job123';
       final activePath = AppRoutes.buildActiveJobPath(jobId);
@@ -43,6 +54,11 @@ void main() {
       final biddingPath = AppRoutes.buildTechnicianBiddingPath(jobId);
 
       expect(biddingPath, '/jobs/$jobId/technician/bidding');
+    });
+
+    test('should convert absolute path to child route path', () {
+      expect(AppRoutes.asChild('/wallet'), 'wallet');
+      expect(AppRoutes.asChild('messages'), 'messages');
     });
 
     test('should build technician profile path with encoded id', () {

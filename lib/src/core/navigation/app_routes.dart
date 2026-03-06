@@ -29,6 +29,8 @@ class AppRoutes {
   static const wallet = '/wallet';
   static const customerCreateRequest = '/customer/create-request';
   static const notifications = '/notifications';
+  static const admin = '/admin';
+  static const adminDashboard = '/admin/dashboard';
 
   // ==================== SHARED JOB SCREENS ====================
   static const searchingForTechnician = '/searching-for-technician';
@@ -97,6 +99,10 @@ class AppRoutes {
       '/jobs/$jobId/customer/completed';
   static String buildCustomerConfirmCompletionPath(String jobId) =>
       '/jobs/$jobId/customer/confirm-completion';
+  static String buildCustomerPaymentApprovalPath(String jobId) =>
+      '/jobs/$jobId/customer/payment-approval';
+  static String buildCustomerPaymentProcessingPath(String jobId) =>
+      '/jobs/$jobId/customer/payment-processing';
 
   // Technician Builders
   static String buildTechnicianJobDetailPath(String jobId) =>
@@ -128,4 +134,9 @@ class AppRoutes {
       technicianId.trim().isEmpty
       ? home
       : '/technician-profile/${Uri.encodeComponent(technicianId.trim())}';
+
+  /// Converts an absolute route to a child route path for nested GoRoute blocks.
+  /// Example: `/wallet` -> `wallet`.
+  static String asChild(String absolutePath) =>
+      absolutePath.startsWith('/') ? absolutePath.substring(1) : absolutePath;
 }

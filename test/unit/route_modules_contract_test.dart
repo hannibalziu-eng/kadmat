@@ -3,6 +3,19 @@ import 'package:kadmat/src/core/navigation/app_routes.dart';
 import 'package:kadmat/src/core/router/route_modules.dart';
 
 void main() {
+  group('RouteModules app routes', () {
+    test('builds composed route list with unique top-level paths', () {
+      final routes = RouteModules.buildAppRoutes();
+      final topLevelPaths = routes.map((r) => r.path).toList();
+      final uniqueTopLevelPaths = topLevelPaths.toSet();
+
+      expect(topLevelPaths.length, uniqueTopLevelPaths.length);
+      expect(uniqueTopLevelPaths, contains(AppRoutes.home));
+      expect(uniqueTopLevelPaths, contains(AppRoutes.welcome));
+      expect(uniqueTopLevelPaths, contains(AppRoutes.technicianHome));
+    });
+  });
+
   group('RouteModules Job Flow Contract', () {
     test('includes key technician flow routes in active modular router', () {
       final paths = RouteModules.getJobFlowRoutes().map((r) => r.path).toSet();

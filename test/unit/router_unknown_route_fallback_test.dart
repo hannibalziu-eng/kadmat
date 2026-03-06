@@ -30,5 +30,23 @@ void main() {
 
       expect(resolved, AppRoutes.technicianHome);
     });
+
+    test('maps unknown customer step to customer searching', () {
+      const jobId = '452c1928-727b-49e8-944e-1485eb488402';
+      final resolved = resolveUnknownCustomerJobPath(
+        '/jobs/$jobId/customer/legacy-step',
+      );
+
+      expect(resolved, AppRoutes.buildCustomerSearchingPath(jobId));
+    });
+
+    test('does not fallback for known customer step', () {
+      const jobId = '452c1928-727b-49e8-944e-1485eb488402';
+      final resolved = resolveUnknownCustomerJobPath(
+        '/jobs/$jobId/customer/payment-approval',
+      );
+
+      expect(resolved, isNull);
+    });
   });
 }
