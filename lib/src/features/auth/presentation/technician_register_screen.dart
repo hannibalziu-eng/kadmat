@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'dart:io';
@@ -8,6 +9,7 @@ import '../../../core/providers/photo_upload_provider.dart';
 import '../../../core/widgets/kadmat_components.dart';
 import 'widgets/social_auth_button.dart';
 import 'auth_controller.dart';
+import '../data/auth_repository.dart';
 
 class TechnicianRegisterScreen extends ConsumerStatefulWidget {
   const TechnicianRegisterScreen({super.key});
@@ -32,6 +34,7 @@ class _TechnicianRegisterScreenState
   final List<XFile> _selectedDocuments = [];
   bool _isUploading = false;
   String _uploadStatus = '';
+  String? _submitError;
 
   void _simulateSocialLogin() {
     setState(() {
@@ -87,6 +90,7 @@ class _TechnicianRegisterScreenState
   }
 
   Future<void> _submit() async {
+    if (_isUploading) return;
     if (!_formKey.currentState!.validate()) return;
 
     if (_selectedDocuments.isEmpty) {
@@ -100,6 +104,7 @@ class _TechnicianRegisterScreenState
     }
 
     setState(() {
+      _submitError = null;
       _isUploading = true;
       _uploadStatus = 'جاري رفع المستندات...';
     });
@@ -114,6 +119,7 @@ class _TechnicianRegisterScreenState
           _selectedDocuments,
           'technician_documents',
           onProgress: (current, total) {
+            if (!mounted) return;
             setState(() {
               _uploadStatus = 'جاري رفع المستندات ($current / $total)...';
             });
@@ -122,10 +128,11 @@ class _TechnicianRegisterScreenState
       }
 
       // 2. Register
+      if (!mounted) return;
       setState(() => _uploadStatus = 'جاري إنشاء الحساب...');
 
-      final success = await ref
-          .read(authControllerProvider.notifier)
+      await ref
+          .read(authRepositoryProvider)
           .register(
             email: _emailController.text,
             password: _passwordController.text,
@@ -136,11 +143,14 @@ class _TechnicianRegisterScreenState
             documentUrls: documentUrls,
           );
 
-      if (success && mounted) {
+      if (mounted) {
         context.go(AppRoutes.technicianHome);
       }
     } catch (e) {
       if (mounted) {
+        setState(() {
+          _submitError = e.toString();
+        });
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('حدث خطأ: ${e.toString()}')));
@@ -157,7 +167,6 @@ class _TechnicianRegisterScreenState
 
   @override
   Widget build(BuildContext context) {
-    final state = ref.watch(authControllerProvider);
     final subtitleColor =
         Theme.of(context).textTheme.bodySmall?.color ?? Colors.grey;
 
@@ -356,11 +365,31 @@ class _TechnicianRegisterScreenState
                               height: 100,
                               decoration: BoxDecoration(
                                 borderRadius: BorderRadius.circular(8),
-                                image: DecorationImage(
-                                  image: FileImage(File(file.path)),
-                                  fit: BoxFit.cover,
-                                ),
                               ),
+                              clipBehavior: Clip.antiAlias,
+                              child: kIsWeb
+                                  ? Image.network(
+                                      file.path,
+                                      fit: BoxFit.cover,
+                                      errorBuilder:
+                                          (context, error, stackTrace) =>
+                                              const Center(
+                                                child: Icon(
+                                                  Icons.insert_drive_file,
+                                                ),
+                                              ),
+                                    )
+                                  : Image.file(
+                                      File(file.path),
+                                      fit: BoxFit.cover,
+                                      errorBuilder:
+                                          (context, error, stackTrace) =>
+                                              const Center(
+                                                child: Icon(
+                                                  Icons.insert_drive_file,
+                                                ),
+                                              ),
+                                    ),
                             ),
                             Positioned(
                               top: 4,
@@ -404,7 +433,7 @@ class _TechnicianRegisterScreenState
                     ),
                   ),
                   child: InkWell(
-                    onTap: _pickDocuments,
+                    onTap: _isUploading ? null : _pickDocuments,
                     borderRadius: BorderRadius.circular(8),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -450,11 +479,11 @@ class _TechnicianRegisterScreenState
                 ],
                 const SizedBox(height: 32),
 
-                if (state.hasError)
+                if (_submitError != null)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 16.0),
                     child: Text(
-                      state.error.toString(),
+                      _submitError!,
                       style: TextStyle(
                         color: Theme.of(context).colorScheme.error,
                       ),
@@ -465,8 +494,8 @@ class _TechnicianRegisterScreenState
                 // Submit Button
                 KadmatPrimaryButton(
                   label: _isSocialLogin ? 'إكمال التسجيل' : 'إنشاء الحساب',
-                  onPressed: state.isLoading || _isUploading ? null : _submit,
-                  isLoading: state.isLoading || _isUploading,
+                  onPressed: _isUploading ? null : _submit,
+                  isLoading: _isUploading,
                 ),
               ],
             ),
