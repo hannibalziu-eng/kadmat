@@ -3,7 +3,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-TARGET_FLUTTER_VERSION="${1:-3.30.0}"
+TARGET_FLUTTER_VERSION="${1:-3.41.4}"
 
 if [[ ! -f "$ROOT_DIR/pubspec.yaml" ]]; then
   echo "ERROR: pubspec.yaml not found at repo root: $ROOT_DIR"
