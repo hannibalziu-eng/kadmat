@@ -1,18 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_scalify/flutter_scalify.dart';
 
+import 'design/kadmat_theme_extension.dart';
+import 'design/kadmat_tokens.dart';
+
 class AppTheme {
   // Brand Colors
-  static const Color primaryColor = Color(0xFF13b6ec);
-  static const Color secondaryColor = Color(0xFF0e8cb5);
-  static const Color accentColor = Color(0xFFebf9fc);
+  static const Color primaryColor = KadmatColors.brandPrimary;
+  static const Color secondaryColor = KadmatColors.brandSecondary;
+  static const Color accentColor = KadmatColors.brandAccent;
 
   // Dark Mode Colors
-  static const Color backgroundDark = Color(0xFF101d22);
-  static const Color surfaceDark = Color(0xFF1a2b32);
-  static const Color borderDark = Color(0xFF233f48);
-  static const Color textPrimaryDark = Colors.white;
-  static const Color textSecondaryDark = Color(0xFF92bbc9);
+  static const Color backgroundDark = KadmatColors.darkBackground;
+  static const Color surfaceDark = KadmatColors.darkSurface;
+  static const Color borderDark = KadmatColors.darkBorder;
+  static const Color textPrimaryDark = KadmatColors.darkTextPrimary;
+  static const Color textSecondaryDark = KadmatColors.darkTextSecondary;
 
   // Glassmorphism Decoration
   static BoxDecoration glassDecoration({
@@ -50,6 +53,7 @@ class AppTheme {
         surface: Colors.white,
       ),
       fontFamily: 'Cairo',
+      extensions: const <ThemeExtension<dynamic>>[KadmatSemanticColors.light()],
       textTheme: TextTheme(
         displayLarge: TextStyle(
           fontSize: 32.fz,
@@ -124,6 +128,7 @@ class AppTheme {
         onSurface: textPrimaryDark,
       ),
       fontFamily: 'Cairo',
+      extensions: const <ThemeExtension<dynamic>>[KadmatSemanticColors.dark()],
       textTheme: TextTheme(
         displayLarge: TextStyle(
           fontSize: 32.fz,

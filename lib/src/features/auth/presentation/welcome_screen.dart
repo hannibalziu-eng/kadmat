@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_scalify/flutter_scalify.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/design/kadmat_tokens.dart';
 import '../../../core/navigation/app_routes.dart';
+import '../../../core/widgets/kadmat_components.dart';
 import 'widgets/social_auth_button.dart';
 
 class WelcomeScreen extends StatefulWidget {
@@ -123,26 +125,12 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        ElevatedButton(
+                        KadmatPrimaryButton(
+                          label: 'إنشاء حساب',
+                          icon: Icons.person_add_alt_1_rounded,
                           onPressed: () {
                             context.push(AppRoutes.register);
                           },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF13b6ec),
-                            foregroundColor: Colors.white,
-                            padding: EdgeInsets.symmetric(vertical: 16.h),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12.r),
-                            ),
-                            elevation: 0,
-                          ),
-                          child: Text(
-                            'إنشاء حساب',
-                            style: TextStyle(
-                              fontSize: 16.fz,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
                         ),
                         SizedBox(height: 12.h),
                         Row(
@@ -167,39 +155,19 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                           ],
                         ),
                         SizedBox(height: 12.h),
-                        TextButton(
+                        KadmatSecondaryButton(
+                          label: 'تسجيل الدخول',
+                          icon: Icons.login_rounded,
                           onPressed: () => context.push(AppRoutes.login),
-                          child: Text(
-                            'تسجيل الدخول',
-                            style: TextStyle(
-                              color: const Color(0xFF13b6ec),
-                              fontSize: 16.fz,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
                         ),
                         SizedBox(height: 24.h),
                         // Technician Login Option
-                        Center(
-                          child: TextButton(
-                            onPressed: () {
-                              context.push(AppRoutes.technicianLanding);
-                            },
-                            style: TextButton.styleFrom(
-                              foregroundColor: Colors.grey[600],
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.engineering, size: 18.s),
-                                SizedBox(width: 8.w),
-                                Text(
-                                  'هل أنت فني؟ سجل دخولك من هنا',
-                                  style: TextStyle(fontSize: 14.fz),
-                                ),
-                              ],
-                            ),
-                          ),
+                        KadmatSecondaryButton(
+                          label: 'هل أنت فني؟ سجل دخولك من هنا',
+                          icon: Icons.engineering,
+                          onPressed: () {
+                            context.push(AppRoutes.technicianLanding);
+                          },
                         ),
                         SizedBox(height: 8.h),
                         Text(
@@ -228,7 +196,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
       margin: EdgeInsets.only(left: 16.w, top: 16.h, bottom: 16.h),
       decoration: BoxDecoration(
         color: Theme.of(context).cardTheme.color,
-        borderRadius: BorderRadius.circular(16.r),
+        borderRadius: BorderRadius.circular(KadmatRadius.lg.r),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.05),
@@ -242,7 +210,9 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
         children: [
           Expanded(
             child: ClipRRect(
-              borderRadius: BorderRadius.vertical(top: Radius.circular(16.r)),
+              borderRadius: BorderRadius.vertical(
+                top: Radius.circular(KadmatRadius.lg.r),
+              ),
               child: Image.network(
                 imageUrl,
                 fit: BoxFit.cover,

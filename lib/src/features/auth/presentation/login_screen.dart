@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_scalify/flutter_scalify.dart';
 import '../../../core/navigation/app_routes.dart';
+import '../../../core/widgets/kadmat_components.dart';
 import 'auth_controller.dart';
 import 'widgets/oauth_login_screen.dart';
 
@@ -60,13 +61,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   textAlign: TextAlign.center,
                 ),
                 SizedBox(height: 32.h),
-                TextFormField(
+                KadmatTextField(
                   controller: _emailController,
-                  decoration: const InputDecoration(
-                    labelText: 'البريد الإلكتروني',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.email),
-                  ),
+                  label: 'البريد الإلكتروني',
+                  prefixIcon: Icons.email,
                   keyboardType: TextInputType.emailAddress,
                   validator: (value) {
                     if (value == null || value.isEmpty) {
@@ -76,13 +74,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   },
                 ),
                 SizedBox(height: 16.h),
-                TextFormField(
+                KadmatTextField(
                   controller: _passwordController,
-                  decoration: const InputDecoration(
-                    labelText: 'كلمة المرور',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.lock),
-                  ),
+                  label: 'كلمة المرور',
+                  prefixIcon: Icons.lock,
                   obscureText: true,
                   validator: (value) {
                     if (value == null || value.isEmpty) {
@@ -97,7 +92,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     padding: EdgeInsets.only(bottom: 16.0.h),
                     child: Text(
                       state.error.toString(),
-                      style: const TextStyle(color: Colors.red),
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
                       textAlign: TextAlign.center,
                     ),
                   ),
@@ -112,20 +109,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ),
                 ),
                 SizedBox(height: 24.h),
-                FilledButton(
-                  onPressed: state.isLoading ? null : _submit,
-                  child: state.isLoading
-                      ? SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator.adaptive(
-                            strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(
-                              Colors.white,
-                            ),
-                          ),
-                        )
-                      : const Text('دخول'),
+                KadmatPrimaryButton(
+                  label: 'دخول',
+                  onPressed: _submit,
+                  isLoading: state.isLoading,
                 ),
                 SizedBox(height: 16.h),
                 Row(
@@ -139,7 +126,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ],
                 ),
                 SizedBox(height: 16.h),
-                OutlinedButton.icon(
+                KadmatSecondaryButton(
+                  label: 'دخول كزائر',
+                  icon: Icons.person_outline,
                   onPressed: state.isLoading
                       ? null
                       : () async {
@@ -149,11 +138,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           if (!context.mounted || !success) return;
                           context.go(AppRoutes.home);
                         },
-                  icon: const Icon(Icons.person_outline),
-                  label: const Text('دخول كزائر'),
                 ),
                 const SizedBox(height: 16),
-                OutlinedButton.icon(
+                KadmatSecondaryButton(
+                  label: 'تسجيل الدخول الاجتماعي',
+                  icon: Icons.alternate_email,
                   onPressed: state.isLoading
                       ? null
                       : () {
@@ -163,8 +152,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             ),
                           );
                         },
-                  icon: const Icon(Icons.alternate_email),
-                  label: const Text('تسجيل الدخول الاجتماعي'),
                 ),
               ],
             ),

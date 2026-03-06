@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_scalify/flutter_scalify.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../../core/app_theme.dart';
+import '../../../core/design/kadmat_tokens.dart';
 import '../../../core/navigation/app_routes.dart';
+import '../../../core/widgets/kadmat_components.dart';
 
 /// شاشة Onboarding لتعريف المستخدم الجديد بالتطبيق
 class OnboardingScreen extends StatefulWidget {
@@ -61,7 +62,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   void _nextPage() {
     if (_currentPage < _pages.length - 1) {
       _pageController.nextPage(
-        duration: const Duration(milliseconds: 300),
+        duration: KadmatMotion.medium,
         curve: Curves.easeInOut,
       );
     } else {
@@ -76,7 +77,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.backgroundDark,
+      backgroundColor: KadmatColors.darkBackground,
       body: SafeArea(
         child: Column(
           children: [
@@ -89,7 +90,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   onPressed: _skipOnboarding,
                   child: Text(
                     'تخطي',
-                    style: TextStyle(fontSize: 14.fz, color: Colors.white60),
+                    style: TextStyle(
+                      fontSize: 14.fz,
+                      color: KadmatColors.darkTextSecondary,
+                    ),
                   ),
                 ),
               ),
@@ -117,7 +121,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 children: List.generate(
                   _pages.length,
                   (index) => AnimatedContainer(
-                    duration: const Duration(milliseconds: 300),
+                    duration: KadmatMotion.medium,
                     margin: EdgeInsets.symmetric(horizontal: 4.w),
                     width: _currentPage == index ? 24.w : 8.w,
                     height: 8.h,
@@ -135,27 +139,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             // Next / Get Started Button
             Padding(
               padding: EdgeInsets.all(24.w),
-              child: SizedBox(
-                width: double.infinity,
-                height: 56.h,
-                child: ElevatedButton(
-                  onPressed: _nextPage,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _pages[_currentPage].color,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16.r),
-                    ),
-                    elevation: 0,
-                  ),
-                  child: Text(
-                    _currentPage == _pages.length - 1 ? 'ابدأ الآن' : 'التالي',
-                    style: TextStyle(
-                      fontSize: 18.fz,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
+              child: KadmatPrimaryButton(
+                label: _currentPage == _pages.length - 1
+                    ? 'ابدأ الآن'
+                    : 'التالي',
+                onPressed: _nextPage,
+                backgroundColor: _pages[_currentPage].color,
+                foregroundColor: Colors.white,
               ),
             ),
           ],
@@ -189,7 +179,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             style: TextStyle(
               fontSize: 28.fz,
               fontWeight: FontWeight.bold,
-              color: Colors.white,
+              color: KadmatColors.darkTextPrimary,
             ),
           ),
           SizedBox(height: 16.h),
@@ -200,7 +190,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 16.fz,
-              color: Colors.white60,
+              color: KadmatColors.darkTextSecondary,
               height: 1.5,
             ),
           ),

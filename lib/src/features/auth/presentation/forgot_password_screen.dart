@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_scalify/flutter_scalify.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/navigation/app_routes.dart';
+import '../../../core/widgets/kadmat_components.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({super.key});
@@ -44,38 +46,38 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('نسيت كلمة المرور'), centerTitle: true),
       body: Padding(
-        padding: const EdgeInsets.all(24.0),
+        padding: EdgeInsets.all(24.w),
         child: _isSent
             ? Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Icon(
                     Icons.mark_email_read_outlined,
-                    size: 80,
+                    size: 80.s,
                     color: Theme.of(context).primaryColor,
                   ),
-                  const SizedBox(height: 24),
-                  const Text(
+                  SizedBox(height: 24.h),
+                  Text(
                     'تم إرسال الرابط',
-                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                    style: TextStyle(
+                      fontSize: 24.fz,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
-                  const SizedBox(height: 12),
+                  SizedBox(height: 12.h),
                   Text(
                     'تم إرسال رابط إعادة تعيين كلمة المرور إلى ${_emailController.text}',
                     textAlign: TextAlign.center,
-                    style: const TextStyle(color: Colors.grey),
-                  ),
-                  const SizedBox(height: 32),
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton(
-                      onPressed: () => context.go(AppRoutes.login),
-                      style: FilledButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        backgroundColor: const Color(0xFF13b6ec),
-                      ),
-                      child: const Text('العودة لتسجيل الدخول'),
+                    style: TextStyle(
+                      color: Theme.of(context).textTheme.bodySmall?.color,
+                      fontSize: 14.fz,
                     ),
+                  ),
+                  SizedBox(height: 32.h),
+                  KadmatPrimaryButton(
+                    label: 'العودة لتسجيل الدخول',
+                    icon: Icons.login_rounded,
+                    onPressed: () => context.go(AppRoutes.login),
                   ),
                 ],
               )
@@ -84,31 +86,29 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const SizedBox(height: 24),
-                    const Text(
+                    SizedBox(height: 24.h),
+                    Text(
                       'استعادة كلمة المرور',
                       style: TextStyle(
-                        fontSize: 24,
+                        fontSize: 24.fz,
                         fontWeight: FontWeight.bold,
                       ),
                       textAlign: TextAlign.center,
                     ),
-                    const SizedBox(height: 12),
+                    SizedBox(height: 12.h),
                     Text(
                       'أدخل بريدك الإلكتروني وسنرسل لك رابطاً لاستعادة كلمة المرور',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: Theme.of(context).textTheme.bodySmall?.color,
+                        fontSize: 14.fz,
                       ),
                     ),
-                    const SizedBox(height: 32),
-                    TextFormField(
+                    SizedBox(height: 32.h),
+                    KadmatTextField(
                       controller: _emailController,
-                      decoration: const InputDecoration(
-                        labelText: 'البريد الإلكتروني',
-                        prefixIcon: Icon(Icons.email_outlined),
-                        border: OutlineInputBorder(),
-                      ),
+                      label: 'البريد الإلكتروني',
+                      prefixIcon: Icons.email_outlined,
                       keyboardType: TextInputType.emailAddress,
                       validator: (value) {
                         if (value == null || value.isEmpty) {
@@ -120,29 +120,18 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                         return null;
                       },
                     ),
-                    const SizedBox(height: 24),
-                    FilledButton(
-                      onPressed: _isLoading ? null : _submit,
-                      style: FilledButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        backgroundColor: const Color(0xFF13b6ec),
-                      ),
-                      child: _isLoading
-                          ? SizedBox(
-                              height: 20,
-                              width: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            )
-                          : const Text(
-                              'إرسال الرابط',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
+                    SizedBox(height: 24.h),
+                    KadmatPrimaryButton(
+                      label: 'إرسال الرابط',
+                      icon: Icons.send_rounded,
+                      onPressed: _submit,
+                      isLoading: _isLoading,
+                    ),
+                    SizedBox(height: 12.h),
+                    KadmatSecondaryButton(
+                      label: 'الرجوع',
+                      icon: Icons.arrow_back_rounded,
+                      onPressed: () => context.pop(),
                     ),
                   ],
                 ),

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_scalify/flutter_scalify.dart';
 import '../../../core/navigation/app_routes.dart';
+import '../../../core/widgets/kadmat_components.dart';
 import 'auth_controller.dart';
 
 class RegisterScreen extends ConsumerStatefulWidget {
@@ -75,13 +76,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 32),
-                TextFormField(
+                KadmatTextField(
                   controller: _nameController,
-                  decoration: const InputDecoration(
-                    labelText: 'الاسم الكامل',
-                    prefixIcon: Icon(Icons.person_outline),
-                    border: OutlineInputBorder(),
-                  ),
+                  label: 'الاسم الكامل',
+                  prefixIcon: Icons.person_outline,
                   validator: (value) {
                     if (value == null || value.isEmpty) {
                       return 'الرجاء إدخال الاسم';
@@ -90,13 +88,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   },
                 ),
                 const SizedBox(height: 16),
-                TextFormField(
+                KadmatTextField(
                   controller: _emailController,
-                  decoration: const InputDecoration(
-                    labelText: 'البريد الإلكتروني',
-                    prefixIcon: Icon(Icons.email_outlined),
-                    border: OutlineInputBorder(),
-                  ),
+                  label: 'البريد الإلكتروني',
+                  prefixIcon: Icons.email_outlined,
                   keyboardType: TextInputType.emailAddress,
                   validator: (value) {
                     if (value == null || value.isEmpty) {
@@ -109,14 +104,11 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   },
                 ),
                 const SizedBox(height: 16),
-                TextFormField(
+                KadmatTextField(
                   controller: _phoneController,
-                  decoration: const InputDecoration(
-                    labelText: 'رقم الجوال',
-                    prefixIcon: Icon(Icons.phone_android),
-                    border: OutlineInputBorder(),
-                    hintText: '05xxxxxxxx',
-                  ),
+                  label: 'رقم الجوال',
+                  hint: '05xxxxxxxx',
+                  prefixIcon: Icons.phone_android,
                   keyboardType: TextInputType.phone,
                   validator: (value) {
                     if (value == null || value.isEmpty) {
@@ -129,13 +121,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   },
                 ),
                 const SizedBox(height: 16),
-                TextFormField(
+                KadmatTextField(
                   controller: _passwordController,
-                  decoration: const InputDecoration(
-                    labelText: 'كلمة المرور',
-                    prefixIcon: Icon(Icons.lock_outline),
-                    border: OutlineInputBorder(),
-                  ),
+                  label: 'كلمة المرور',
+                  prefixIcon: Icons.lock_outline,
                   obscureText: true,
                   validator: (value) {
                     if (value == null || value.isEmpty) {
@@ -148,13 +137,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   },
                 ),
                 const SizedBox(height: 16),
-                TextFormField(
+                KadmatTextField(
                   controller: _confirmPasswordController,
-                  decoration: const InputDecoration(
-                    labelText: 'تأكيد كلمة المرور',
-                    prefixIcon: Icon(Icons.lock_outline),
-                    border: OutlineInputBorder(),
-                  ),
+                  label: 'تأكيد كلمة المرور',
+                  prefixIcon: Icons.lock_outline,
                   obscureText: true,
                   validator: (value) {
                     if (value == null || value.isEmpty) {
@@ -172,32 +158,16 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     padding: const EdgeInsets.only(bottom: 16.0),
                     child: Text(
                       state.error.toString(),
-                      style: const TextStyle(color: Colors.red),
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
                       textAlign: TextAlign.center,
                     ),
                   ),
-                FilledButton(
-                  onPressed: state.isLoading ? null : _submit,
-                  style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    backgroundColor: Theme.of(context).primaryColor,
-                  ),
-                  child: state.isLoading
-                      ? SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : const Text(
-                          'إنشاء حساب',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
+                KadmatPrimaryButton(
+                  label: 'إنشاء حساب',
+                  onPressed: _submit,
+                  isLoading: state.isLoading,
                 ),
                 const SizedBox(height: 16),
                 Row(

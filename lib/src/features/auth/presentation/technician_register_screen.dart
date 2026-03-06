@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import '../../../core/navigation/app_routes.dart';
 import '../../../core/providers/photo_upload_provider.dart';
+import '../../../core/widgets/kadmat_components.dart';
 import 'widgets/social_auth_button.dart';
 import 'auth_controller.dart';
 
@@ -157,9 +158,8 @@ class _TechnicianRegisterScreenState
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(authControllerProvider);
-    // Using the theme colors defined in AppTheme
     final subtitleColor =
-        Theme.of(context).inputDecorationTheme.labelStyle?.color ?? Colors.grey;
+        Theme.of(context).textTheme.bodySmall?.color ?? Colors.grey;
 
     return Scaffold(
       appBar: AppBar(
@@ -231,25 +231,21 @@ class _TechnicianRegisterScreenState
                 ),
                 const SizedBox(height: 24),
 
-                // Full Name
-                _buildLabel('الاسم الكامل'),
-                TextFormField(
+                KadmatTextField(
                   controller: _nameController,
-                  decoration: const InputDecoration(
-                    hintText: 'أدخل اسمك الكامل',
-                  ),
+                  label: 'الاسم الكامل',
+                  hint: 'أدخل اسمك الكامل',
+                  prefixIcon: Icons.person_outline,
                   validator: (value) =>
                       value?.isEmpty ?? true ? 'الرجاء إدخال الاسم' : null,
                 ),
                 const SizedBox(height: 16),
 
-                // Email
-                _buildLabel('البريد الإلكتروني'),
-                TextFormField(
+                KadmatTextField(
                   controller: _emailController,
-                  decoration: const InputDecoration(
-                    hintText: 'example@mail.com',
-                  ),
+                  label: 'البريد الإلكتروني',
+                  hint: 'example@mail.com',
+                  prefixIcon: Icons.email_outlined,
                   keyboardType: TextInputType.emailAddress,
                   readOnly: _isSocialLogin, // Read-only if social login
                   validator: (value) => value?.isEmpty ?? true
@@ -258,11 +254,11 @@ class _TechnicianRegisterScreenState
                 ),
                 const SizedBox(height: 16),
 
-                // Phone
-                _buildLabel('رقم الهاتف'),
-                TextFormField(
+                KadmatTextField(
                   controller: _phoneController,
-                  decoration: const InputDecoration(hintText: '+966 5xxxxxxxx'),
+                  label: 'رقم الهاتف',
+                  hint: '+966 5xxxxxxxx',
+                  prefixIcon: Icons.phone_android,
                   keyboardType: TextInputType.phone,
                   validator: (value) =>
                       value?.isEmpty ?? true ? 'الرجاء إدخال رقم الهاتف' : null,
@@ -270,11 +266,11 @@ class _TechnicianRegisterScreenState
                 const SizedBox(height: 16),
 
                 if (!_isSocialLogin) ...[
-                  // Password
-                  _buildLabel('كلمة المرور'),
-                  TextFormField(
+                  KadmatTextField(
                     controller: _passwordController,
-                    decoration: const InputDecoration(hintText: '********'),
+                    label: 'كلمة المرور',
+                    hint: '********',
+                    prefixIcon: Icons.lock_outline,
                     obscureText: true,
                     validator: (value) => value?.isEmpty ?? true
                         ? 'الرجاء إدخال كلمة المرور'
@@ -282,11 +278,11 @@ class _TechnicianRegisterScreenState
                   ),
                   const SizedBox(height: 16),
 
-                  // Confirm Password
-                  _buildLabel('تأكيد كلمة المرور'),
-                  TextFormField(
+                  KadmatTextField(
                     controller: _confirmPasswordController,
-                    decoration: const InputDecoration(hintText: '********'),
+                    label: 'تأكيد كلمة المرور',
+                    hint: '********',
+                    prefixIcon: Icons.lock_outline,
                     obscureText: true,
                     validator: (value) {
                       if (value != _passwordController.text) {
@@ -298,8 +294,6 @@ class _TechnicianRegisterScreenState
                   const SizedBox(height: 16),
                 ],
 
-                // Specialty
-                _buildLabel('مجال التخصص'),
                 // Specialty
                 _buildLabel('مجال التخصص'),
                 Consumer(
@@ -461,24 +455,18 @@ class _TechnicianRegisterScreenState
                     padding: const EdgeInsets.only(bottom: 16.0),
                     child: Text(
                       state.error.toString(),
-                      style: const TextStyle(color: Colors.red),
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
                       textAlign: TextAlign.center,
                     ),
                   ),
 
                 // Submit Button
-                SizedBox(
-                  height: 50,
-                  child: ElevatedButton(
-                    onPressed: state.isLoading || _isUploading ? null : _submit,
-                    child: state.isLoading || _isUploading
-                        ? const CircularProgressIndicator(
-                            color: Color(0xFF101d22),
-                          )
-                        : Text(
-                            _isSocialLogin ? 'إكمال التسجيل' : 'إنشاء الحساب',
-                          ),
-                  ),
+                KadmatPrimaryButton(
+                  label: _isSocialLogin ? 'إكمال التسجيل' : 'إنشاء الحساب',
+                  onPressed: state.isLoading || _isUploading ? null : _submit,
+                  isLoading: state.isLoading || _isUploading,
                 ),
               ],
             ),

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_scalify/flutter_scalify.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/navigation/app_routes.dart';
+import '../../../core/widgets/kadmat_components.dart';
 import 'auth_controller.dart';
 
 class TechnicianLoginScreen extends ConsumerStatefulWidget {
@@ -44,7 +46,7 @@ class _TechnicianLoginScreenState extends ConsumerState<TechnicianLoginScreen> {
   Widget build(BuildContext context) {
     final state = ref.watch(authControllerProvider);
     final subtitleColor =
-        Theme.of(context).inputDecorationTheme.labelStyle?.color ?? Colors.grey;
+        Theme.of(context).textTheme.bodySmall?.color ?? Colors.grey;
     final primaryColor = Theme.of(context).primaryColor;
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
@@ -52,7 +54,7 @@ class _TechnicianLoginScreenState extends ConsumerState<TechnicianLoginScreen> {
       appBar: AppBar(backgroundColor: Colors.transparent, elevation: 0),
       body: Center(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24.0),
+          padding: EdgeInsets.all(24.0.w),
           child: Form(
             key: _formKey,
             child: Column(
@@ -61,8 +63,8 @@ class _TechnicianLoginScreenState extends ConsumerState<TechnicianLoginScreen> {
               children: [
                 // Header Icon
                 Container(
-                  width: 96,
-                  height: 96,
+                  width: 96.w,
+                  height: 96.w,
                   decoration: BoxDecoration(
                     color: isDarkMode
                         ? const Color(0xFF233f48)
@@ -85,12 +87,12 @@ class _TechnicianLoginScreenState extends ConsumerState<TechnicianLoginScreen> {
                   child: Center(
                     child: Icon(
                       Icons.engineering,
-                      size: 48,
+                      size: 48.s,
                       color: primaryColor,
                     ),
                   ),
                 ),
-                const SizedBox(height: 32),
+                SizedBox(height: 32.h),
 
                 // Title & Subtitle
                 const Text(
@@ -98,26 +100,22 @@ class _TechnicianLoginScreenState extends ConsumerState<TechnicianLoginScreen> {
                   style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
                   textAlign: TextAlign.center,
                 ),
-                const SizedBox(height: 12),
+                SizedBox(height: 12.h),
                 Text(
                   'سجّل الدخول إلى حساب الفني الخاص بك لإدارة خدماتك وعملائك.',
                   style: TextStyle(
-                    fontSize: 16,
+                    fontSize: 16.fz,
                     color: subtitleColor,
                     height: 1.5,
                   ),
                   textAlign: TextAlign.center,
                 ),
-                const SizedBox(height: 32),
-
-                // Email/Phone Field
-                _buildLabel('البريد الإلكتروني أو رقم الهاتف'),
-                TextFormField(
+                SizedBox(height: 32.h),
+                KadmatTextField(
                   controller: _emailController,
-                  decoration: const InputDecoration(
-                    hintText: 'ادخل بريدك الإلكتروني أو رقم هاتفك',
-                    prefixIcon: Icon(Icons.alternate_email),
-                  ),
+                  label: 'البريد الإلكتروني أو رقم الهاتف',
+                  hint: 'ادخل بريدك الإلكتروني أو رقم هاتفك',
+                  prefixIcon: Icons.alternate_email,
                   validator: (value) {
                     if (value == null || value.isEmpty) {
                       return 'الرجاء إدخال البريد الإلكتروني';
@@ -125,16 +123,12 @@ class _TechnicianLoginScreenState extends ConsumerState<TechnicianLoginScreen> {
                     return null;
                   },
                 ),
-                const SizedBox(height: 16),
-
-                // Password Field
-                _buildLabel('كلمة المرور'),
-                TextFormField(
+                SizedBox(height: 16.h),
+                KadmatTextField(
                   controller: _passwordController,
-                  decoration: const InputDecoration(
-                    hintText: 'ادخل كلمة المرور',
-                    prefixIcon: Icon(Icons.lock_outline),
-                  ),
+                  label: 'كلمة المرور',
+                  hint: 'ادخل كلمة المرور',
+                  prefixIcon: Icons.lock_outline,
                   obscureText: true,
                   validator: (value) {
                     if (value == null || value.isEmpty) {
@@ -150,7 +144,7 @@ class _TechnicianLoginScreenState extends ConsumerState<TechnicianLoginScreen> {
                   child: TextButton(
                     onPressed: () => context.push(AppRoutes.forgotPassword),
                     style: TextButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      padding: EdgeInsets.symmetric(vertical: 8.h),
                       minimumSize: Size.zero,
                       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     ),
@@ -167,26 +161,18 @@ class _TechnicianLoginScreenState extends ConsumerState<TechnicianLoginScreen> {
                     padding: const EdgeInsets.only(bottom: 16.0),
                     child: Text(
                       state.error.toString(),
-                      style: const TextStyle(color: Colors.red),
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
                       textAlign: TextAlign.center,
                     ),
                   ),
-
-                // Submit Button
-                SizedBox(
-                  width: double.infinity,
-                  height: 50,
-                  child: ElevatedButton(
-                    onPressed: state.isLoading ? null : _submit,
-                    child: state.isLoading
-                        ? const CircularProgressIndicator(
-                            color: Color(0xFF101d22),
-                          )
-                        : const Text('تسجيل الدخول'),
-                  ),
+                KadmatPrimaryButton(
+                  label: 'تسجيل الدخول',
+                  onPressed: _submit,
+                  isLoading: state.isLoading,
                 ),
-
-                const SizedBox(height: 24),
+                SizedBox(height: 24.h),
 
                 // Register Link
                 Row(
@@ -206,7 +192,7 @@ class _TechnicianLoginScreenState extends ConsumerState<TechnicianLoginScreen> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
+                SizedBox(height: 16.h),
                 // Guest Mode Button (Development)
                 TextButton(
                   onPressed: () => context.push(AppRoutes.technicianHome),
@@ -221,25 +207,6 @@ class _TechnicianLoginScreenState extends ConsumerState<TechnicianLoginScreen> {
                 ),
               ],
             ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildLabel(String label) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6.0),
-      child: Align(
-        alignment: Alignment.centerRight,
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w500,
-            color:
-                Theme.of(context).inputDecorationTheme.labelStyle?.color ??
-                Colors.grey,
           ),
         ),
       ),
