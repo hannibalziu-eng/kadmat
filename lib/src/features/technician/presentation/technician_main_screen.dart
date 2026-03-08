@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:geolocator/geolocator.dart';
 import '../../../core/services/location/location_service.dart';
 import '../../../core/services/notification_service.dart';
@@ -39,7 +38,6 @@ class _TechnicianMainScreenState extends ConsumerState<TechnicianMainScreen> {
   StreamSubscription? _fcmSubscription;
   ProviderSubscription<AsyncValue<Position>>? _locationSubscription;
   ProviderSubscription<AsyncValue<String?>>? _authSubscription;
-  ProviderSubscription<int>? _unreadNotificationsSubscription;
 
   @override
   void initState() {
@@ -47,7 +45,6 @@ class _TechnicianMainScreenState extends ConsumerState<TechnicianMainScreen> {
     _setupNotificationListener();
     _setupLocationSyncListener();
     _setupAuthListener();
-    _setupUnreadNotificationsListener();
   }
 
   void _setupNotificationListener() {
@@ -104,37 +101,11 @@ class _TechnicianMainScreenState extends ConsumerState<TechnicianMainScreen> {
     );
   }
 
-  void _setupUnreadNotificationsListener() {
-    _unreadNotificationsSubscription = ref.listenManual<int>(
-      liveUnreadNotificationsCountProvider,
-      (previous, next) {
-        if (!mounted) return;
-        if (previous == null) return;
-        if (next <= previous) return;
-
-        final delta = next - previous;
-        final label = delta == 1 ? 'إشعار جديد' : '$delta إشعارات جديدة';
-        ScaffoldMessenger.of(context).hideCurrentSnackBar();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('لديك $label في لوحة الفني'),
-            action: SnackBarAction(
-              label: 'عرض',
-              onPressed: () => context.push(AppRoutes.notifications),
-            ),
-          ),
-        );
-      },
-      fireImmediately: true,
-    );
-  }
-
   @override
   void dispose() {
     _fcmSubscription?.cancel();
     _locationSubscription?.close();
     _authSubscription?.close();
-    _unreadNotificationsSubscription?.close();
     super.dispose();
   }
 
@@ -145,15 +116,7 @@ class _TechnicianMainScreenState extends ConsumerState<TechnicianMainScreen> {
 
     return Scaffold(
       extendBody: true,
-      body: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 220),
-        switchInCurve: Curves.easeOut,
-        switchOutCurve: Curves.easeIn,
-        child: KeyedSubtree(
-          key: ValueKey<int>(currentIndex),
-          child: _pages[currentIndex],
-        ),
-      ),
+      body: IndexedStack(index: currentIndex, children: _pages),
       bottomNavigationBar: KadmatShellBottomBar(
         currentIndex: currentIndex,
         items: [
@@ -183,7 +146,7 @@ class _TechnicianMainScreenState extends ConsumerState<TechnicianMainScreen> {
                 ref.read(technicianTabIndexProvider.notifier).state = 3,
           ),
         ],
-      ).animate().fadeIn(duration: 600.ms).slideY(begin: 1, end: 0),
+      ),
     );
   }
 }
