@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_scalify/flutter_scalify.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/app_theme.dart';
+import '../../../../core/design/kadmat_tokens.dart';
 import '../../../../core/widgets/kadmat_toast.dart';
 import '../../../../core/utils/error_handler.dart';
 import '../../data/job_repository.dart';
@@ -565,7 +566,7 @@ class _TechnicianInProgressScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.backgroundDark,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         title: const Text('تنفيذ الخدمة'),
         backgroundColor: Colors.transparent,
@@ -627,190 +628,229 @@ class _TechnicianInProgressScreenState
         await _fetchPhotos();
       },
       child: SingleChildScrollView(
-        padding: EdgeInsets.all(16.w),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Job Header with Map
-            _buildJobMapHeader(),
-            SizedBox(height: 16.h),
-
-            if (normalizedStatus == JobStatus.onTheWay)
-              Padding(
-                padding: EdgeInsets.only(bottom: 16.h),
-                child: SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: _isLoading ? null : _markArrived,
-                    icon: const Icon(Icons.place),
-                    label: const Text('وصلت إلى موقع العميل'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.teal,
-                      padding: EdgeInsets.symmetric(vertical: 16.h),
+        padding: EdgeInsets.all(18.w),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 960),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TechnicianFlowHero(
+                  icon: normalizedStatus == JobStatus.onTheWay
+                      ? Icons.route_rounded
+                      : normalizedStatus == JobStatus.arrived
+                      ? Icons.place_rounded
+                      : Icons.handyman_rounded,
+                  eyebrow: 'تنفيذ الخدمة',
+                  title: _inProgressTitle(normalizedStatus),
+                  subtitle: _inProgressSubtitle(normalizedStatus),
+                  bottom: Wrap(
+                    spacing: 8.w,
+                    runSpacing: 8.h,
+                    children: [
+                      TechnicianFlowPill(
+                        icon: Icons.work_outline_rounded,
+                        label: _job?.service?['name'] ?? 'الخدمة المطلوبة',
+                      ),
+                      if (normalizedStatus == JobStatus.inProgress)
+                        TechnicianFlowPill(
+                          icon: Icons.timer_outlined,
+                          label: _formatDuration(_elapsed),
+                        ),
+                    ],
+                  ),
+                ),
+                SizedBox(height: 16.h),
+                TechnicianFlowSurface(
+                  child: TechnicianFlowNextStepCard(
+                    icon: normalizedStatus == JobStatus.onTheWay
+                        ? Icons.place_outlined
+                        : normalizedStatus == JobStatus.arrived
+                        ? Icons.play_circle_outline_rounded
+                        : Icons.assignment_turned_in_outlined,
+                    title: _inProgressNextStepTitle(normalizedStatus),
+                    description: _inProgressNextStepDescription(
+                      normalizedStatus,
                     ),
                   ),
                 ),
-              ),
-
-            if (normalizedStatus == JobStatus.arrived)
-              Padding(
-                padding: EdgeInsets.only(bottom: 24.h),
-                child: SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: _isLoading ? null : _startWork,
-                    icon: const Icon(Icons.play_arrow),
-                    label: const Text('بدء العمل'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blue,
-                      padding: EdgeInsets.symmetric(vertical: 16.h),
-                    ),
-                  ),
-                ),
-              ),
-
-            // Timer Display
-            if (normalizedStatus == JobStatus.inProgress)
-              Container(
-                width: double.infinity,
-                margin: EdgeInsets.only(bottom: 24.h),
-                padding: EdgeInsets.all(16.w),
-                decoration: BoxDecoration(
-                  color: Colors.blue.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12.r),
-                  border: Border.all(color: Colors.blue.withValues(alpha: 0.3)),
-                ),
-                child: Column(
-                  children: [
-                    Text(
-                      'وقت العمل',
-                      style: TextStyle(color: Colors.blue, fontSize: 14.fz),
-                    ),
-                    Text(
-                      _formatDuration(_elapsed),
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 32.fz,
-                        fontWeight: FontWeight.bold,
-                        fontFamily: 'monospace',
+                SizedBox(height: 16.h),
+                _buildJobMapHeader(),
+                SizedBox(height: 16.h),
+                if (normalizedStatus == JobStatus.onTheWay)
+                  Padding(
+                    padding: EdgeInsets.only(bottom: 16.h),
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: _isLoading ? null : _markArrived,
+                        icon: const Icon(Icons.place),
+                        label: const Text('تأكيد الوصول إلى الموقع'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.teal,
+                          padding: EdgeInsets.symmetric(vertical: 16.h),
+                        ),
                       ),
                     ),
-                  ],
+                  ),
+                if (normalizedStatus == JobStatus.arrived)
+                  Padding(
+                    padding: EdgeInsets.only(bottom: 16.h),
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: _isLoading ? null : _startWork,
+                        icon: const Icon(Icons.play_arrow),
+                        label: const Text('بدء تنفيذ العمل الآن'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue,
+                          padding: EdgeInsets.symmetric(vertical: 16.h),
+                        ),
+                      ),
+                    ),
+                  ),
+                if (normalizedStatus == JobStatus.inProgress)
+                  TechnicianFlowSurface(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'وقت التنفيذ',
+                          style: TextStyle(
+                            color: KadmatColors.lightTextSecondary,
+                            fontSize: 13.fz,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        SizedBox(height: 6.h),
+                        Text(
+                          _formatDuration(_elapsed),
+                          style: TextStyle(
+                            color: AppTheme.primaryColor,
+                            fontSize: 32.fz,
+                            fontWeight: FontWeight.w800,
+                            fontFamily: 'monospace',
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                SizedBox(height: 16.h),
+                _buildJobHeader(),
+                SizedBox(height: 24.h),
+                _buildStep(
+                  step: 1,
+                  title: 'صور قبل الخدمة',
+                  isCompleted: _prePhotos.isNotEmpty,
+                  isActive: true,
+                  content: _buildPhotoSection(
+                    type: 'pre',
+                    photos: _prePhotos,
+                    onAdd: () async {
+                      await context.push(
+                        AppRoutes.buildTechnicianPrePhotosPath(widget.jobId),
+                      );
+                      _fetchPhotos();
+                    },
+                  ),
                 ),
-              ),
-
-            // Step Header (retained logic)
-            _buildJobHeader(),
-            SizedBox(height: 24.h),
-
-            // Steps
-            _buildStep(
-              step: 1,
-              title: 'صور قبل الخدمة',
-              isCompleted: _prePhotos.isNotEmpty,
-              isActive: true,
-              content: _buildPhotoSection(
-                type: 'pre',
-                photos: _prePhotos,
-                onAdd: () async {
-                  await context.push(
-                    AppRoutes.buildTechnicianPrePhotosPath(widget.jobId),
-                  );
-                  _fetchPhotos();
-                },
-              ),
-            ),
-            _buildConnector(isCompleted: _prePhotos.isNotEmpty),
-
-            _buildStep(
-              step: 2,
-              title: 'تنفيذ العمل',
-              isCompleted: _postPhotos.isNotEmpty,
-              isActive: _prePhotos.isNotEmpty,
-              content: _prePhotos.isNotEmpty
-                  ? Container(
-                      padding: EdgeInsets.all(16.w),
-                      decoration: AppTheme.glassDecoration(radius: 12.r),
-                      child: Row(
-                        children: [
-                          Icon(Icons.handyman, color: Colors.amber, size: 24.s),
-                          SizedBox(width: 12.w),
-                          Text(
-                            'العمل جاري...',
-                            style: TextStyle(
-                              fontSize: 16.fz,
+                _buildConnector(isCompleted: _prePhotos.isNotEmpty),
+                _buildStep(
+                  step: 2,
+                  title: 'تنفيذ العمل',
+                  isCompleted: _postPhotos.isNotEmpty,
+                  isActive: _prePhotos.isNotEmpty,
+                  content: _prePhotos.isNotEmpty
+                      ? Container(
+                          padding: EdgeInsets.all(16.w),
+                          decoration: BoxDecoration(
+                            color: KadmatColors.brandAccent,
+                            borderRadius: BorderRadius.circular(16.r),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.handyman,
+                                color: KadmatColors.brandSecondary,
+                                size: 24.s,
+                              ),
+                              SizedBox(width: 12.w),
+                              Expanded(
+                                child: Text(
+                                  'العمل جارٍ. أكمِل التنفيذ ثم انتقل مباشرة إلى صور ما بعد الخدمة.',
+                                  style: TextStyle(
+                                    fontSize: 14.fz,
+                                    color: KadmatColors.lightTextPrimary,
+                                    fontWeight: FontWeight.w700,
+                                    height: 1.45,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      : const SizedBox.shrink(),
+                ),
+                _buildConnector(isCompleted: _postPhotos.isNotEmpty),
+                _buildStep(
+                  step: 3,
+                  title: 'صور بعد الخدمة',
+                  isCompleted: _postPhotos.isNotEmpty,
+                  isActive: _prePhotos.isNotEmpty,
+                  content: _buildPhotoSection(
+                    type: 'post',
+                    photos: _postPhotos,
+                    onAdd: () async {
+                      await context.push(
+                        AppRoutes.buildTechnicianPostPhotosPath(widget.jobId),
+                      );
+                      _fetchPhotos();
+                    },
+                    isLocked: _prePhotos.isEmpty,
+                  ),
+                ),
+                SizedBox(height: 32.h),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: (_isLoading || _postPhotos.isEmpty)
+                        ? null
+                        : _completeJob,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green,
+                      padding: EdgeInsets.symmetric(vertical: 16.h),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12.r),
+                      ),
+                    ),
+                    child: _isLoading
+                        ? const SizedBox(
+                            height: 24,
+                            width: 24,
+                            child: CircularProgressIndicator(
                               color: Colors.white,
+                            ),
+                          )
+                        : Text(
+                            'الانتقال إلى إنهاء الخدمة',
+                            style: TextStyle(
+                              fontSize: 18.fz,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
-                        ],
-                      ),
-                    )
-                  : const SizedBox.shrink(),
-            ),
-            _buildConnector(isCompleted: _postPhotos.isNotEmpty),
-
-            _buildStep(
-              step: 3,
-              title: 'صور بعد الخدمة',
-              isCompleted: _postPhotos.isNotEmpty,
-              isActive: _prePhotos.isNotEmpty,
-              content: _buildPhotoSection(
-                type: 'post',
-                photos: _postPhotos,
-                onAdd: () async {
-                  await context.push(
-                    AppRoutes.buildTechnicianPostPhotosPath(widget.jobId),
-                  );
-                  _fetchPhotos();
-                },
-                isLocked: _prePhotos.isEmpty,
-              ),
-            ),
-
-            SizedBox(height: 32.h),
-
-            // Finish Button
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: (_isLoading || _postPhotos.isEmpty)
-                    ? null
-                    : _completeJob,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green,
-                  padding: EdgeInsets.symmetric(vertical: 16.h),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12.r),
                   ),
-                  disabledBackgroundColor: Colors.grey[800],
                 ),
-                child: _isLoading
-                    ? const SizedBox(
-                        height: 24,
-                        width: 24,
-                        child: CircularProgressIndicator(color: Colors.white),
-                      )
-                    : Text(
-                        'إنهاء الخدمة وبدء الدفع',
-                        style: TextStyle(
-                          fontSize: 18.fz,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-              ),
+                SizedBox(height: 40.h),
+              ],
             ),
-            SizedBox(height: 40.h),
-          ],
+          ),
         ),
       ),
     );
   }
 
   Widget _buildJobHeader() {
-    return Container(
-      padding: EdgeInsets.all(16.w),
-      decoration: AppTheme.glassDecoration(radius: 16.r),
+    return TechnicianFlowSurface(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -831,13 +871,16 @@ class _TechnicianInProgressScreenState
                       style: TextStyle(
                         fontSize: 18.fz,
                         fontWeight: FontWeight.bold,
-                        color: Colors.white,
+                        color: KadmatColors.lightTextPrimary,
                       ),
                     ),
                     SizedBox(height: 4.h),
                     Text(
                       'رقم الطلب #${_job?.id.substring(0, 5)}',
-                      style: TextStyle(fontSize: 12.fz, color: Colors.white54),
+                      style: TextStyle(
+                        fontSize: 12.fz,
+                        color: KadmatColors.lightTextSecondary,
+                      ),
                     ),
                   ],
                 ),
@@ -845,11 +888,15 @@ class _TechnicianInProgressScreenState
             ],
           ),
           if (_job?.description != null) ...[
-            Divider(color: Colors.white24, height: 24.h),
+            Divider(color: KadmatColors.lightBorder, height: 24.h),
             Text(
               _job!.description!,
-              style: TextStyle(fontSize: 14.fz, color: Colors.white70),
-              maxLines: 2,
+              style: TextStyle(
+                fontSize: 14.fz,
+                color: KadmatColors.lightTextSecondary,
+                height: 1.5,
+              ),
+              maxLines: 3,
               overflow: TextOverflow.ellipsis,
             ),
           ],
@@ -876,7 +923,7 @@ class _TechnicianInProgressScreenState
               decoration: BoxDecoration(
                 color: isCompleted
                     ? Colors.green
-                    : (isActive ? AppTheme.primaryColor : Colors.grey[800]),
+                    : (isActive ? AppTheme.primaryColor : Colors.grey[300]),
                 shape: BoxShape.circle,
                 border: Border.all(
                   color: isActive ? Colors.white : Colors.transparent,
@@ -902,7 +949,9 @@ class _TechnicianInProgressScreenState
               style: TextStyle(
                 fontSize: 16.fz,
                 fontWeight: FontWeight.bold,
-                color: isActive ? Colors.white : Colors.white38,
+                color: isActive
+                    ? KadmatColors.lightTextPrimary
+                    : KadmatColors.lightTextSecondary,
               ),
             ),
           ],
@@ -916,7 +965,7 @@ class _TechnicianInProgressScreenState
             padding: EdgeInsets.only(right: 24.w),
             decoration: BoxDecoration(
               border: Border(
-                right: BorderSide(color: Colors.white24, width: 2.w),
+                right: BorderSide(color: KadmatColors.lightBorder, width: 2.w),
               ),
             ),
             child: Padding(
@@ -937,7 +986,7 @@ class _TechnicianInProgressScreenState
       decoration: BoxDecoration(
         border: Border(
           right: BorderSide(
-            color: isCompleted ? Colors.green : Colors.grey[800]!,
+            color: isCompleted ? Colors.green : KadmatColors.lightBorder,
             width: 2.w,
           ),
         ),
@@ -955,16 +1004,16 @@ class _TechnicianInProgressScreenState
       return Container(
         padding: EdgeInsets.all(16.w),
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.05),
+          color: Colors.grey[50],
           borderRadius: BorderRadius.circular(12.r),
         ),
         child: Row(
           children: [
-            Icon(Icons.lock, color: Colors.white38, size: 20.s),
+            Icon(Icons.lock, color: Colors.grey[500], size: 20.s),
             SizedBox(width: 8.w),
             Text(
               'أكمل الخطوة السابقة أولاً',
-              style: TextStyle(color: Colors.white38, fontSize: 14.fz),
+              style: TextStyle(color: Colors.grey[600], fontSize: 14.fz),
             ),
           ],
         ),
@@ -988,13 +1037,13 @@ class _TechnicianInProgressScreenState
                     child: Container(
                       width: 80.w,
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.05),
+                        color: Colors.grey[50],
                         borderRadius: BorderRadius.circular(8.r),
-                        border: Border.all(color: Colors.white24),
+                        border: Border.all(color: KadmatColors.lightBorder),
                       ),
                       child: Icon(
                         Icons.add_a_photo,
-                        color: Colors.white60,
+                        color: Colors.grey[500],
                         size: 24.s,
                       ),
                     ),
@@ -1074,8 +1123,6 @@ class _TechnicianInProgressScreenState
       icon: const Icon(Icons.camera_alt),
       label: Text(type == 'pre' ? 'إضافة صور وتفاصيل' : 'إضافة صور الإنجاز'),
       style: OutlinedButton.styleFrom(
-        foregroundColor: Colors.white,
-        side: BorderSide(color: Colors.white54),
         padding: EdgeInsets.symmetric(vertical: 12.h, horizontal: 16.w),
       ),
     );
@@ -1088,7 +1135,7 @@ class _TechnicianInProgressScreenState
       height: 200.h,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16.r),
-        border: Border.all(color: Colors.white10),
+        border: Border.all(color: KadmatColors.lightBorder),
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(16.r),
@@ -1179,6 +1226,58 @@ class _TechnicianInProgressScreenState
     final seconds = twoDigits(duration.inSeconds.remainder(60));
     return "$hours:$minutes:$seconds";
   }
+
+  String _inProgressTitle(String status) {
+    switch (status) {
+      case JobStatus.onTheWay:
+        return 'أنت في الطريق إلى العميل';
+      case JobStatus.arrived:
+        return 'أنت في موقع العميل الآن';
+      case JobStatus.inProgress:
+        return 'العمل جارٍ الآن';
+      default:
+        return 'متابعة تنفيذ الخدمة';
+    }
+  }
+
+  String _inProgressSubtitle(String status) {
+    switch (status) {
+      case JobStatus.onTheWay:
+        return 'راجع الموقع ثم أكّد وصولك فورًا عند الوصول حتى ينتقل الطلب إلى المرحلة التالية.';
+      case JobStatus.arrived:
+        return 'العميل بانتظار بدء التنفيذ. ابدأ العمل من الزر الرئيسي عندما تصبح جاهزًا.';
+      case JobStatus.inProgress:
+        return 'أكمل خطوات التنفيذ بالتسلسل: راجع الصور، أضف صور ما بعد الخدمة، ثم انتقل إلى شاشة الإنهاء.';
+      default:
+        return 'هذه الشاشة تلخّص لك المرحلة الحالية والخطوة المطلوبة قبل الإنهاء.';
+    }
+  }
+
+  String _inProgressNextStepTitle(String status) {
+    switch (status) {
+      case JobStatus.onTheWay:
+        return 'الخطوة التالية: أكّد الوصول';
+      case JobStatus.arrived:
+        return 'الخطوة التالية: ابدأ العمل';
+      case JobStatus.inProgress:
+        return 'الخطوة التالية: أكمِل الصور ثم أنهِ الخدمة';
+      default:
+        return 'الخطوة التالية: تابع التنفيذ';
+    }
+  }
+
+  String _inProgressNextStepDescription(String status) {
+    switch (status) {
+      case JobStatus.onTheWay:
+        return 'استخدم الموقع أعلاه للوصول، ثم اضغط زر تأكيد الوصول بمجرد وصولك للموقع الحقيقي.';
+      case JobStatus.arrived:
+        return 'لا تحتاج إلى التنقل بين الشاشات. ابدأ التنفيذ من هذه الشاشة نفسها عندما تصبح جاهزًا.';
+      case JobStatus.inProgress:
+        return 'ركّز الآن على إكمال خطوات التوثيق فقط: صور ما قبل الخدمة، ثم صور ما بعد الخدمة، ثم انتقل لشاشة الإنهاء.';
+      default:
+        return 'تابع الحالة الحالية واتخذ الإجراء الرئيسي الظاهر في الأعلى.';
+    }
+  }
 }
 
 /// Technician Completed Screen - Shows earnings summary
@@ -1220,7 +1319,7 @@ class _TechnicianCompletedScreenState
     final earnings = price - commission;
 
     return Scaffold(
-      backgroundColor: AppTheme.backgroundDark,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         title: const Text('تم الإنهاء'),
         backgroundColor: Colors.transparent,
@@ -1229,145 +1328,117 @@ class _TechnicianCompletedScreenState
       body: _job == null
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
-              padding: EdgeInsets.all(24.w),
-              child: Column(
-                children: [
-                  // Success Badge
-                  Container(
-                    padding: EdgeInsets.all(24.w),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          Colors.green.withValues(alpha: 0.3),
-                          Colors.teal.withValues(alpha: 0.3),
-                        ],
-                      ),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      Icons.celebration,
-                      color: Colors.amber,
-                      size: 60.s,
-                    ),
-                  ),
-
-                  SizedBox(height: 24.h),
-
-                  Text(
-                    'ممتاز! أنهيت الخدمة 🎉',
-                    style: TextStyle(
-                      fontSize: 24.fz,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-
-                  SizedBox(height: 32.h),
-
-                  // Earnings Card (Prominent)
-                  Container(
-                    padding: EdgeInsets.all(24.w),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          Colors.green.withValues(alpha: 0.2),
-                          Colors.green.withValues(alpha: 0.1),
-                        ],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      borderRadius: BorderRadius.circular(20.r),
-                      border: Border.all(
-                        color: Colors.green.withValues(alpha: 0.3),
-                      ),
-                    ),
-                    child: Column(
-                      children: [
-                        Text(
-                          'أرباحك من هذه الخدمة',
-                          style: TextStyle(
-                            fontSize: 14.fz,
-                            color: Colors.white60,
-                          ),
+              padding: EdgeInsets.all(18.w),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 960),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      TechnicianFlowHero(
+                        icon: Icons.verified_rounded,
+                        eyebrow: 'تم إنهاء الخدمة',
+                        title: 'أغلقت المهمة بنجاح',
+                        subtitle:
+                            'تم تسجيل نتيجة هذه الخدمة. راجع أرباحك من هذه المهمة ثم عد إلى الرئيسية أو إلى الطلبات الجديدة.',
+                        bottom: Wrap(
+                          spacing: 8.w,
+                          runSpacing: 8.h,
+                          children: [
+                            TechnicianFlowPill(
+                              icon: Icons.payments_outlined,
+                              label: '${earnings.toStringAsFixed(0)} ر.س أرباح',
+                            ),
+                            TechnicianFlowPill(
+                              icon: Icons.receipt_long_outlined,
+                              label: '${price.toStringAsFixed(0)} ر.س إجمالي',
+                            ),
+                          ],
                         ),
-                        SizedBox(height: 8.h),
-                        Text(
-                          earnings.toStringAsFixed(0),
-                          style: TextStyle(
-                            fontSize: 56.fz,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.green,
-                          ),
+                      ),
+                      SizedBox(height: 16.h),
+                      const TechnicianFlowSurface(
+                        child: TechnicianFlowNextStepCard(
+                          icon: Icons.home_outlined,
+                          title: 'لا يوجد إجراء متبقٍ على هذه المهمة',
+                          description:
+                              'راجع الملخص إذا أردت، ثم عد للطلبات الجديدة أو للرئيسية. لا تحتاج إلى خطوة إضافية لإغلاق هذه الخدمة.',
                         ),
-                        Text(
-                          'ريال سعودي',
-                          style: TextStyle(
-                            fontSize: 18.fz,
-                            color: Colors.green,
-                          ),
+                      ),
+                      SizedBox(height: 16.h),
+                      TechnicianFlowSurface(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'ملخص الأرباح',
+                              style: TextStyle(
+                                fontSize: 18.fz,
+                                fontWeight: FontWeight.w800,
+                                color: KadmatColors.lightTextPrimary,
+                              ),
+                            ),
+                            SizedBox(height: 14.h),
+                            Text(
+                              earnings.toStringAsFixed(0),
+                              style: TextStyle(
+                                fontSize: 52.fz,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.green,
+                              ),
+                            ),
+                            Text(
+                              'ريال سعودي',
+                              style: TextStyle(
+                                fontSize: 16.fz,
+                                color: Colors.green,
+                              ),
+                            ),
+                            SizedBox(height: 16.h),
+                            Divider(color: KadmatColors.lightBorder),
+                            SizedBox(height: 12.h),
+                            _buildRow('سعر الخدمة', price),
+                            SizedBox(height: 8.h),
+                            _buildRow(
+                              'عمولة المنصة (10%)',
+                              commission,
+                              isNegative: true,
+                            ),
+                          ],
                         ),
+                      ),
+                      if (_job?.customer != null) ...[
                         SizedBox(height: 16.h),
-                        Divider(color: Colors.green.withValues(alpha: 0.3)),
-                        SizedBox(height: 12.h),
-                        _buildRow('سعر الخدمة', price),
-                        SizedBox(height: 8.h),
-                        _buildRow(
-                          'عمولة المنصة (10%)',
-                          commission,
-                          isNegative: true,
+                        TechnicianFlowSurface(
+                          child: ProfileCard(
+                            name: _job!.customer?['full_name'],
+                            phone: _job!.customer?['phone'],
+                            imageUrl: _job!.customer?['profile_image_url'],
+                            rating: (_job!.customer?['rating'] as num?)
+                                ?.toDouble(),
+                            label: 'العميل',
+                            showContactButtons: false,
+                          ),
                         ),
                       ],
-                    ),
-                  ),
-
-                  SizedBox(height: 24.h),
-
-                  // Customer Card
-                  if (_job?.customer != null)
-                    ProfileCard(
-                      name: _job!.customer?['full_name'],
-                      phone: _job!.customer?['phone'],
-                      imageUrl: _job!.customer?['profile_image_url'],
-                      rating: (_job!.customer?['rating'] as num?)?.toDouble(),
-                      label: 'العميل',
-                      showContactButtons: false,
-                    ),
-
-                  SizedBox(height: 32.h),
-
-                  // Action Buttons
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton.icon(
-                      onPressed: () => context.go(AppRoutes.technicianHome),
-                      icon: const Icon(Icons.work),
-                      label: const Text('عرض المزيد من الطلبات'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppTheme.primaryColor,
-                        padding: EdgeInsets.symmetric(vertical: 16.h),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12.r),
+                      SizedBox(height: 24.h),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: () => context.go(AppRoutes.technicianHome),
+                          icon: const Icon(Icons.work),
+                          label: const Text('العودة إلى طلبات الفني'),
                         ),
                       ),
-                    ),
-                  ),
-
-                  SizedBox(height: 12.h),
-
-                  OutlinedButton.icon(
-                    onPressed: () => context.go(AppRoutes.home),
-                    icon: const Icon(Icons.home),
-                    label: const Text('العودة للرئيسية'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.white,
-                      side: BorderSide(color: Colors.white54),
-                      padding: EdgeInsets.symmetric(
-                        vertical: 14.h,
-                        horizontal: 24.w,
+                      SizedBox(height: 12.h),
+                      OutlinedButton.icon(
+                        onPressed: () => context.go(AppRoutes.home),
+                        icon: const Icon(Icons.home),
+                        label: const Text('العودة للرئيسية'),
                       ),
-                    ),
+                    ],
                   ),
-                ],
+                ),
               ),
             ),
     );
@@ -1379,13 +1450,16 @@ class _TechnicianCompletedScreenState
       children: [
         Text(
           label,
-          style: TextStyle(fontSize: 14.fz, color: Colors.white70),
+          style: TextStyle(
+            fontSize: 14.fz,
+            color: KadmatColors.lightTextSecondary,
+          ),
         ),
         Text(
           '${isNegative ? "-" : ""}${amount.toStringAsFixed(0)} ر.س',
           style: TextStyle(
             fontSize: 14.fz,
-            color: isNegative ? Colors.red : Colors.white,
+            color: isNegative ? Colors.red : KadmatColors.lightTextPrimary,
           ),
         ),
       ],
