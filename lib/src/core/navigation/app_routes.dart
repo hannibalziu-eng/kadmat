@@ -49,7 +49,7 @@ class AppRoutes {
   static const customerConfirmCompletion =
       '/jobs/:jobId/customer/confirm-completion';
   static const customerPaymentApproval =
-      '/jobs/:jobId/customer/payment-approval';
+      '/jobs/:jobId/customer/payment-approval'; // Compatibility alias
   static const customerPaymentProcessing =
       '/jobs/:jobId/customer/payment-processing';
 

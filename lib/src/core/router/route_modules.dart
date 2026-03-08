@@ -28,7 +28,6 @@ import '../../features/technician/presentation/screens/technician_help_screen.da
 // Job & Order Features
 import '../../features/jobs/presentation/screens/customer_job_tracking_screen.dart';
 import '../../features/jobs/presentation/screens/customer_payment_processing_screen.dart';
-import '../../features/jobs/presentation/payment/customer_payment_approval_screen.dart';
 import '../../features/jobs/presentation/screens/customer_screens.dart';
 import '../../features/jobs/presentation/screens/technician_screens.dart';
 import '../../features/jobs/presentation/screens/customer_service_request_screen.dart';
@@ -234,7 +233,7 @@ class RouteModules {
         path: AppRoutes.customerPaymentApproval,
         builder: (context, state) {
           final jobId = state.pathParameters['jobId']!;
-          return CustomerPaymentApprovalScreen(jobId: jobId);
+          return CustomerPaymentProcessingScreen(jobId: jobId);
         },
       ),
       GoRoute(
