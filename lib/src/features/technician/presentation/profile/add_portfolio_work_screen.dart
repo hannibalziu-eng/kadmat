@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../data/technician_repository.dart';
 import '../../../../core/providers/photo_upload_provider.dart';
+import '../../../../core/utils/error_handler.dart';
 
 class AddPortfolioWorkScreen extends ConsumerStatefulWidget {
   const AddPortfolioWorkScreen({super.key});
@@ -55,7 +56,7 @@ class _AddPortfolioWorkScreenState
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('فشل اختيار الصورة: $e')));
+        ).showSnackBar(SnackBar(content: Text(ErrorHandler.getMessage(e))));
       }
     }
   }
@@ -99,7 +100,7 @@ class _AddPortfolioWorkScreenState
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('خطأ: $e')));
+        ).showSnackBar(SnackBar(content: Text(ErrorHandler.getMessage(e))));
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -184,9 +185,6 @@ class _AddPortfolioWorkScreenState
                 ),
                 onTap: () async {
                   FocusScope.of(context).requestFocus(FocusNode());
-                  // Show date picker (Simple mock for now)
-                  // In real app use showDatePicker
-                  // For now let user type or just pick current date
                   final date = await showDatePicker(
                     context: context,
                     initialDate: DateTime.now(),

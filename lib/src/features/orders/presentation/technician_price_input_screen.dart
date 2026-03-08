@@ -11,6 +11,7 @@ import '../../jobs/domain/job.dart';
 import '../../jobs/domain/job_communication_policy.dart';
 import '../../jobs/data/job_repository.dart';
 import '../../../core/navigation/app_routes.dart';
+import '../../../core/utils/error_handler.dart';
 
 class TechnicianPriceInputScreen extends ConsumerStatefulWidget {
   final String orderId;
@@ -76,7 +77,7 @@ class _TechnicianPriceInputScreenState
       if (mounted) {
         setState(() {
           _isLoading = false;
-          _errorMessage = 'فشل تحميل بيانات الطلب: $e';
+          _errorMessage = ErrorHandler.getMessage(e);
         });
       }
     }
@@ -128,7 +129,10 @@ class _TechnicianPriceInputScreenState
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('حدث خطأ: $e'), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text(ErrorHandler.getMessage(e)),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     } finally {

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_scalify/flutter_scalify.dart';
 import 'package:go_router/go_router.dart';
 import '../../auth/data/auth_repository.dart';
+import '../../../core/utils/error_handler.dart';
 
 class EditProfileScreen extends ConsumerStatefulWidget {
   const EditProfileScreen({super.key});
@@ -17,6 +18,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   late TextEditingController _phoneController;
   final _emailController =
       TextEditingController(); // Email usually not editable directly
+  String? _avatarUrl;
 
   @override
   void initState() {
@@ -27,6 +29,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     );
     _phoneController = TextEditingController(text: userProfile?['phone'] ?? '');
     _emailController.text = userProfile?['email'] ?? '';
+    _avatarUrl =
+        userProfile?['avatar_url']?.toString() ??
+        userProfile?['profile_image_url']?.toString();
   }
 
   @override
@@ -66,7 +71,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
           Navigator.pop(context); // Hide loading
           ScaffoldMessenger.of(
             context,
-          ).showSnackBar(SnackBar(content: Text('خطأ: ${e.toString()}')));
+          ).showSnackBar(SnackBar(content: Text(ErrorHandler.getMessage(e))));
         }
       }
     }
@@ -96,31 +101,23 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
           child: Column(
             children: [
               // Avatar
-              Stack(
-                children: [
-                  CircleAvatar(
-                    radius: 50.r,
-                    backgroundImage: const NetworkImage(
-                      'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400',
-                    ),
-                  ),
-                  Positioned(
-                    bottom: 0,
-                    right: 0,
-                    child: Container(
-                      padding: EdgeInsets.all(6.w),
-                      decoration: const BoxDecoration(
-                        color: Color(0xFF13b6ec),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        Icons.camera_alt,
-                        color: Colors.white,
-                        size: 16.s,
-                      ),
-                    ),
-                  ),
-                ],
+              CircleAvatar(
+                radius: 50.r,
+                backgroundImage: _avatarUrl != null && _avatarUrl!.isNotEmpty
+                    ? NetworkImage(_avatarUrl!)
+                    : null,
+                child: _avatarUrl == null || _avatarUrl!.isEmpty
+                    ? Text(
+                        (_nameController.text.trim().isNotEmpty
+                                ? _nameController.text.trim().characters.first
+                                : '؟')
+                            .toUpperCase(),
+                        style: TextStyle(
+                          fontSize: 28.fz,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      )
+                    : null,
               ),
               SizedBox(height: 32.h),
 

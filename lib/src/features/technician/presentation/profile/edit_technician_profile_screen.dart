@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/technician_repository.dart';
 import '../../../auth/data/auth_repository.dart';
+import '../../../../core/utils/error_handler.dart';
 
 class EditTechnicianProfileScreen extends ConsumerStatefulWidget {
   const EditTechnicianProfileScreen({super.key});
@@ -96,37 +97,15 @@ class _EditTechnicianProfileScreenState
           key: _formKey,
           child: Column(
             children: [
-              // Avatar Edit (Simplified for now)
-              Stack(
-                children: [
-                  CircleAvatar(
-                    radius: 50.r,
-                    backgroundColor: Colors.grey.shade300,
-                    backgroundImage:
-                        _avatarUrl != null && _avatarUrl!.isNotEmpty
-                        ? NetworkImage(_avatarUrl!)
-                        : null,
-                    child: _avatarUrl == null || _avatarUrl!.isEmpty
-                        ? Icon(Icons.person, color: Colors.white, size: 40.s)
-                        : null,
-                  ),
-                  Positioned(
-                    bottom: 0,
-                    right: 0,
-                    child: Container(
-                      padding: EdgeInsets.all(6.w),
-                      decoration: const BoxDecoration(
-                        color: Color(0xFF13b6ec),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        Icons.camera_alt,
-                        color: Colors.white,
-                        size: 16.s,
-                      ),
-                    ),
-                  ),
-                ],
+              CircleAvatar(
+                radius: 50.r,
+                backgroundColor: Colors.grey.shade300,
+                backgroundImage: _avatarUrl != null && _avatarUrl!.isNotEmpty
+                    ? NetworkImage(_avatarUrl!)
+                    : null,
+                child: _avatarUrl == null || _avatarUrl!.isEmpty
+                    ? Icon(Icons.person, color: Colors.white, size: 40.s)
+                    : null,
               ),
               SizedBox(height: 32.h),
 
@@ -205,7 +184,9 @@ class _EditTechnicianProfileScreenState
                             } catch (e) {
                               if (!context.mounted) return;
                               ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text('خطأ: $e')),
+                                SnackBar(
+                                  content: Text(ErrorHandler.getMessage(e)),
+                                ),
                               );
                             } finally {
                               if (mounted) setState(() => _isLoading = false);

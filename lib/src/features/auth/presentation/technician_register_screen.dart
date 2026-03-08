@@ -6,6 +6,7 @@ import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import '../../../core/navigation/app_routes.dart';
 import '../../../core/providers/photo_upload_provider.dart';
+import '../../../core/utils/error_handler.dart';
 import '../../../core/widgets/kadmat_components.dart';
 import 'auth_controller.dart';
 import '../data/auth_repository.dart';
@@ -61,7 +62,7 @@ class _TechnicianRegisterScreenState
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('فشل اختيار المستندات: $e')));
+        ).showSnackBar(SnackBar(content: Text(ErrorHandler.getMessage(e))));
       }
     }
   }
@@ -130,13 +131,14 @@ class _TechnicianRegisterScreenState
         context.go(AppRoutes.technicianHome);
       }
     } catch (e) {
+      final message = ErrorHandler.getMessage(e);
       if (mounted) {
         setState(() {
-          _submitError = e.toString();
+          _submitError = message;
         });
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('حدث خطأ: ${e.toString()}')));
+        ).showSnackBar(SnackBar(content: Text(message)));
       }
     } finally {
       if (mounted) {
