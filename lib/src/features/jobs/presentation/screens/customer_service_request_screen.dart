@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -12,6 +13,7 @@ import '../../../../core/design/kadmat_tokens.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/providers/photo_upload_provider.dart';
 import '../../../../core/utils/error_handler.dart';
+import '../../../../core/utils/location_error_message.dart';
 import '../../../../core/widgets/kadmat_components.dart';
 import '../../../home/data/service_repository.dart';
 import '../../../home/domain/service.dart';
@@ -56,7 +58,11 @@ class _CustomerServiceRequestScreenState
   void initState() {
     super.initState();
     _loadServices();
-    _resolveLocation();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _resolveLocation();
+      }
+    });
   }
 
   @override
@@ -105,14 +111,16 @@ class _CustomerServiceRequestScreenState
         throw Exception('يجب السماح بالوصول إلى الموقع لتحديد مكان الخدمة');
       }
 
-      final lastKnown = await Geolocator.getLastKnownPosition();
-      final position =
-          lastKnown ??
-          await Geolocator.getCurrentPosition(
-            locationSettings: const LocationSettings(
-              accuracy: LocationAccuracy.high,
-            ),
-          );
+      Position? lastKnown;
+      if (!kIsWeb) {
+        try {
+          lastKnown = await Geolocator.getLastKnownPosition();
+        } catch (_) {
+          lastKnown = null;
+        }
+      }
+
+      final position = lastKnown ?? await _getFreshPosition();
 
       if (!mounted) return;
       setState(() {
@@ -126,8 +134,26 @@ class _CustomerServiceRequestScreenState
       if (!mounted) return;
       setState(() {
         _isLocating = false;
-        _locationHint = ErrorHandler.getMessage(error);
+        _locationHint = resolveLocationErrorMessage(error);
       });
+    }
+  }
+
+  Future<Position> _getFreshPosition() async {
+    try {
+      return await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 12),
+        ),
+      );
+    } on TimeoutException {
+      return Geolocator.getPositionStream(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          distanceFilter: 0,
+        ),
+      ).first.timeout(const Duration(seconds: 10));
     }
   }
 
