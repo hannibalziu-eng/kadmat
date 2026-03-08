@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import '../../../../core/utils/error_handler.dart';
 import '../../data/job_repository.dart';
 import '../../domain/job.dart';
 
@@ -46,7 +47,7 @@ class JobPollingController with WidgetsBindingObserver {
         onStatusChange?.call(job);
       }
     } catch (e) {
-      onError?.call(e.toString());
+      onError?.call(ErrorHandler.getMessage(e));
     }
   }
 

@@ -226,7 +226,7 @@ class JobRepository implements IJobRepository {
       debugPrint('🚨 [createJob] General error: $e');
       if (e is JobCreationException) rethrow;
       throw JobCreationException(
-        message: e.toString(),
+        message: _friendlyJobError(e, fallback: 'فشل إنشاء الطلب'),
         statusCode: 0,
         errorCode: 'UNKNOWN_ERROR',
         originalException: e,

@@ -2,6 +2,7 @@ import 'package:dartz/dartz.dart';
 import 'package:injectable/injectable.dart';
 import 'package:kadmat/src/core/errors/failures.dart';
 import 'package:kadmat/src/core/network/rate_limiter.dart';
+import 'package:kadmat/src/core/utils/error_messages.dart';
 import 'package:kadmat/src/features/bidding/domain/entities/bid_entity.dart';
 import 'package:kadmat/src/features/bidding/domain/entities/dispute_entity.dart';
 import 'package:kadmat/src/features/bidding/domain/params/create_dispute_params.dart';
@@ -17,6 +18,18 @@ class BiddingRepositoryImpl implements BiddingRepository {
   final RateLimiter _rateLimiter;
 
   BiddingRepositoryImpl(this._supabase, this._rateLimiter);
+
+  String _friendlyFailureMessage(dynamic error, {required String fallback}) {
+    if (error is PostgrestException) {
+      final message = error.message.trim();
+      if (message.isNotEmpty) {
+        return message;
+      }
+    }
+
+    final resolved = ErrorMessages.fromException(error);
+    return resolved == ErrorMessages.unknownError ? fallback : resolved;
+  }
 
   @override
   Stream<Job> watchJob(String jobId) {
@@ -100,7 +113,11 @@ class BiddingRepositoryImpl implements BiddingRepository {
     } on PostgrestException catch (e) {
       return Left(ServerFailure(message: e.message));
     } catch (e) {
-      return Left(ServerFailure(message: e.toString()));
+      return Left(
+        ServerFailure(
+          message: _friendlyFailureMessage(e, fallback: 'فشل إنشاء الطلب'),
+        ),
+      );
     }
   }
 
@@ -149,7 +166,11 @@ class BiddingRepositoryImpl implements BiddingRepository {
     } on PostgrestException catch (e) {
       return Left(ServerFailure(message: e.message));
     } catch (e) {
-      return Left(ServerFailure(message: e.toString()));
+      return Left(
+        ServerFailure(
+          message: _friendlyFailureMessage(e, fallback: 'تعذر قبول العرض'),
+        ),
+      );
     }
   }
 
@@ -167,7 +188,14 @@ class BiddingRepositoryImpl implements BiddingRepository {
     } on PostgrestException catch (e) {
       return Left(ServerFailure(message: e.message));
     } catch (e) {
-      return Left(ServerFailure(message: e.toString()));
+      return Left(
+        ServerFailure(
+          message: _friendlyFailureMessage(
+            e,
+            fallback: 'تعذر تمديد مهلة العطاءات',
+          ),
+        ),
+      );
     }
   }
 
@@ -190,7 +218,11 @@ class BiddingRepositoryImpl implements BiddingRepository {
     } on PostgrestException catch (e) {
       return Left(ServerFailure(message: e.message));
     } catch (e) {
-      return Left(ServerFailure(message: e.toString()));
+      return Left(
+        ServerFailure(
+          message: _friendlyFailureMessage(e, fallback: 'تعذر إلغاء الطلب'),
+        ),
+      );
     }
   }
 
@@ -216,7 +248,14 @@ class BiddingRepositoryImpl implements BiddingRepository {
     } on PostgrestException catch (e) {
       return Left(ServerFailure(message: e.message));
     } catch (e) {
-      return Left(ServerFailure(message: e.toString()));
+      return Left(
+        ServerFailure(
+          message: _friendlyFailureMessage(
+            e,
+            fallback: 'تعذر تحميل الطلبات القريبة',
+          ),
+        ),
+      );
     }
   }
 
@@ -341,7 +380,11 @@ class BiddingRepositoryImpl implements BiddingRepository {
     } on PostgrestException catch (e) {
       return Left(ServerFailure(message: e.message));
     } catch (e) {
-      return Left(ServerFailure(message: e.toString()));
+      return Left(
+        ServerFailure(
+          message: _friendlyFailureMessage(e, fallback: 'تعذر تقديم العرض'),
+        ),
+      );
     }
   }
 
@@ -369,7 +412,14 @@ class BiddingRepositoryImpl implements BiddingRepository {
     } on PostgrestException catch (e) {
       return Left(ServerFailure(message: e.message));
     } catch (e) {
-      return Left(ServerFailure(message: e.toString()));
+      return Left(
+        ServerFailure(
+          message: _friendlyFailureMessage(
+            e,
+            fallback: 'تعذر قبول عرض قائمة الانتظار',
+          ),
+        ),
+      );
     }
   }
 
@@ -387,7 +437,14 @@ class BiddingRepositoryImpl implements BiddingRepository {
     } on PostgrestException catch (e) {
       return Left(ServerFailure(message: e.message));
     } catch (e) {
-      return Left(ServerFailure(message: e.toString()));
+      return Left(
+        ServerFailure(
+          message: _friendlyFailureMessage(
+            e,
+            fallback: 'تعذر تأكيد الدفع النقدي',
+          ),
+        ),
+      );
     }
   }
 
@@ -435,7 +492,11 @@ class BiddingRepositoryImpl implements BiddingRepository {
     } on PostgrestException catch (e) {
       return Left(ServerFailure(message: e.message));
     } catch (e) {
-      return Left(ServerFailure(message: e.toString()));
+      return Left(
+        ServerFailure(
+          message: _friendlyFailureMessage(e, fallback: 'تعذر إنشاء النزاع'),
+        ),
+      );
     }
   }
 }
