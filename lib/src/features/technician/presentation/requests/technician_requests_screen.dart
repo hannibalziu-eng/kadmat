@@ -8,6 +8,7 @@ import '../../../../core/app_theme.dart';
 import '../../../../core/design/kadmat_tokens.dart';
 import '../../../../core/services/location/location_service.dart';
 import '../../../../core/widgets/kadmat_toast.dart';
+import '../../../../core/widgets/kadmat_components.dart';
 import '../../../jobs/presentation/job_controller.dart';
 import '../../../jobs/domain/job.dart';
 import '../../../jobs/data/job_repository.dart';
@@ -595,37 +596,19 @@ class _TechnicianRequestsScreenState
     return Center(
       child: Padding(
         padding: EdgeInsets.all(24.w),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 60.s, color: Colors.grey),
-            if (showSpinner) ...[
-              SizedBox(height: 16.h),
-              SizedBox(
-                width: 24.w,
-                height: 24.h,
-                child: const CircularProgressIndicator(strokeWidth: 2.5),
-              ),
-            ],
-            SizedBox(height: 16.h),
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 16.fz, fontWeight: FontWeight.bold),
-            ),
-            SizedBox(height: 8.h),
-            Text(
-              subtitle,
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 13.fz, color: Colors.grey),
-            ),
-            SizedBox(height: 16.h),
-            ElevatedButton.icon(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 520),
+          child: _buildStateSurface(
+            icon: icon,
+            title: title,
+            subtitle: subtitle,
+            showSpinner: showSpinner,
+            action: KadmatPrimaryButton(
+              label: actionLabel,
+              icon: Icons.refresh_rounded,
               onPressed: onAction,
-              icon: const Icon(Icons.refresh),
-              label: Text(actionLabel),
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -739,21 +722,11 @@ class _TechnicianRequestsScreenState
         debugPrint('📋 Awaiting Approval Tab: ${awaitingJobs.length} jobs');
 
         if (awaitingJobs.isEmpty) {
-          return Center(
-            child: Padding(
-              padding: EdgeInsets.all(24.w),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.hourglass_empty, size: 80.s, color: Colors.grey),
-                  SizedBox(height: 16.h),
-                  const Text(
-                    'لا توجد طلبات بانتظار الموافقة',
-                    style: TextStyle(color: Colors.grey, fontSize: 16),
-                  ),
-                ],
-              ),
-            ),
+          return _buildCenteredTabState(
+            icon: Icons.hourglass_empty_rounded,
+            title: 'لا توجد طلبات بانتظار الموافقة',
+            subtitle:
+                'أي طلب ترسل له سعرًا سيظهر هنا حتى يقرر العميل القبول أو الرفض.',
           );
         }
 
@@ -836,21 +809,11 @@ class _TechnicianRequestsScreenState
         debugPrint('✅ Filtered in_progress jobs=${inProgressJobs.length}');
 
         if (inProgressJobs.isEmpty) {
-          return Center(
-            child: Padding(
-              padding: EdgeInsets.all(24.w),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.inbox, size: 80.s, color: Colors.grey),
-                  SizedBox(height: 16.h),
-                  const Text(
-                    'لا توجد طلبات قيد التنفيذ',
-                    style: TextStyle(color: Colors.grey, fontSize: 16),
-                  ),
-                ],
-              ),
-            ),
+          return _buildCenteredTabState(
+            icon: Icons.work_history_outlined,
+            title: 'لا توجد طلبات قيد التنفيذ',
+            subtitle:
+                'عندما ينتقل طلب إلى الطريق أو التنفيذ سيظهر هنا مع الخطوة التالية المطلوبة منك.',
           );
         }
 
@@ -933,7 +896,12 @@ class _TechnicianRequestsScreenState
             .toList();
 
         if (completedJobs.isEmpty) {
-          return Center(child: Text('لا توجد طلبات مكتملة'));
+          return _buildCenteredTabState(
+            icon: Icons.task_alt_outlined,
+            title: 'لا توجد طلبات مكتملة بعد',
+            subtitle:
+                'سيظهر هنا سجل الأعمال المنتهية مع تقييم العميل وملخص التنفيذ.',
+          );
         }
 
         return ListView.builder(
@@ -974,29 +942,104 @@ class _TechnicianRequestsScreenState
     return Center(
       child: Padding(
         padding: EdgeInsets.all(24.w),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.error_outline, size: 56.s, color: Colors.orange),
-            SizedBox(height: 12.h),
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 16.fz, fontWeight: FontWeight.bold),
-            ),
-            SizedBox(height: 10.h),
-            Text(
-              'أعد المحاولة بعد ثوانٍ',
-              style: TextStyle(fontSize: 13.fz, color: Colors.grey),
-            ),
-            SizedBox(height: 16.h),
-            ElevatedButton.icon(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 520),
+          child: _buildStateSurface(
+            icon: Icons.error_outline_rounded,
+            title: title,
+            subtitle: 'أعد المحاولة بعد ثوانٍ أو حدّث الشاشة يدويًا.',
+            action: KadmatPrimaryButton(
+              label: 'إعادة المحاولة',
+              icon: Icons.refresh_rounded,
               onPressed: onRetry,
-              icon: const Icon(Icons.refresh),
-              label: const Text('إعادة المحاولة'),
             ),
-          ],
+          ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildCenteredTabState({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+  }) {
+    return Center(
+      child: Padding(
+        padding: EdgeInsets.all(24.w),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 520),
+          child: _buildStateSurface(
+            icon: icon,
+            title: title,
+            subtitle: subtitle,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStateSurface({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    Widget? action,
+    bool showSpinner = false,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(22.w),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24.r),
+        border: Border.all(color: KadmatColors.lightBorder),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 18,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 58.w,
+            height: 58.w,
+            decoration: BoxDecoration(
+              color: KadmatColors.brandAccent,
+              borderRadius: BorderRadius.circular(18.r),
+            ),
+            child: showSpinner
+                ? Padding(
+                    padding: EdgeInsets.all(14.w),
+                    child: const CircularProgressIndicator(strokeWidth: 2.5),
+                  )
+                : Icon(icon, color: KadmatColors.brandSecondary, size: 28.s),
+          ),
+          SizedBox(height: 16.h),
+          Text(
+            title,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 16.fz,
+              fontWeight: FontWeight.w800,
+              color: KadmatColors.lightTextPrimary,
+            ),
+          ),
+          SizedBox(height: 8.h),
+          Text(
+            subtitle,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 12.8.fz,
+              color: KadmatColors.lightTextSecondary,
+              height: 1.55,
+            ),
+          ),
+          if (action != null) ...[SizedBox(height: 18.h), action],
+        ],
       ),
     );
   }
