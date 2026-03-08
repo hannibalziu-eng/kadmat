@@ -60,7 +60,7 @@ class ServiceRepository {
       final response = await _client.get(Endpoints.serviceById(id));
       final service = responseObjectField(response.data, 'service');
       if (service.isEmpty) {
-        throw Exception('Service payload is empty');
+        throw Exception('بيانات الخدمة غير متاحة');
       }
       return Service.fromJson(service);
     } catch (e) {

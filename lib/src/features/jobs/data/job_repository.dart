@@ -518,7 +518,7 @@ class JobRepository implements IJobRepository {
   }) async {
     final normalized = progress.trim().toLowerCase();
     if (normalized.isEmpty) {
-      throw Exception('progress is required');
+      throw Exception('يجب تحديد مرحلة التقدم');
     }
 
     try {
@@ -572,12 +572,23 @@ class JobRepository implements IJobRepository {
 
       final body = response.data;
       if (body == null || body['success'] != true) {
-        throw Exception(body?['error']?['message'] ?? 'فشل إرسال طلب الإكمال');
+        final apiError = ApiError.fromData(
+          body,
+          statusCode: response.statusCode,
+        );
+        throw Exception(
+          ErrorMessages.fromApiCode(
+            apiError.code,
+            fallback: apiError.message.isNotEmpty
+                ? apiError.message
+                : 'فشل إرسال طلب الإكمال',
+          ),
+        );
       }
       return Job.fromJson(body['data']);
     } catch (e) {
       if (e is Exception) rethrow;
-      throw Exception('فشل إرسال طلب الإكمال');
+      throw Exception(_friendlyJobError(e, fallback: 'فشل إرسال طلب الإكمال'));
     }
   }
 
@@ -594,12 +605,23 @@ class JobRepository implements IJobRepository {
 
       final body = response.data;
       if (body == null || body['success'] != true) {
-        throw Exception(body?['error']?['message'] ?? 'فشل تأكيد الإكمال');
+        final apiError = ApiError.fromData(
+          body,
+          statusCode: response.statusCode,
+        );
+        throw Exception(
+          ErrorMessages.fromApiCode(
+            apiError.code,
+            fallback: apiError.message.isNotEmpty
+                ? apiError.message
+                : 'فشل تأكيد الإكمال',
+          ),
+        );
       }
       return Job.fromJson(body['data']);
     } catch (e) {
       if (e is Exception) rethrow;
-      throw Exception('فشل تأكيد الإكمال');
+      throw Exception(_friendlyJobError(e, fallback: 'فشل تأكيد الإكمال'));
     }
   }
 
@@ -613,12 +635,23 @@ class JobRepository implements IJobRepository {
 
       final body = response.data;
       if (body == null || body['success'] != true) {
-        throw Exception(body?['error']?['message'] ?? 'فشل إرسال التقييم');
+        final apiError = ApiError.fromData(
+          body,
+          statusCode: response.statusCode,
+        );
+        throw Exception(
+          ErrorMessages.fromApiCode(
+            apiError.code,
+            fallback: apiError.message.isNotEmpty
+                ? apiError.message
+                : 'فشل إرسال التقييم',
+          ),
+        );
       }
       return Job.fromJson(body['data']);
     } catch (e) {
       if (e is Exception) rethrow;
-      throw Exception('فشل إرسال التقييم');
+      throw Exception(_friendlyJobError(e, fallback: 'فشل إرسال التقييم'));
     }
   }
 
@@ -719,7 +752,7 @@ class JobRepository implements IJobRepository {
         .eq('id', jobId)
         .asyncMap((data) async {
           if (data.isEmpty) {
-            throw Exception('Job not found');
+            throw Exception(ErrorMessages.jobNotFound);
           }
 
           try {
