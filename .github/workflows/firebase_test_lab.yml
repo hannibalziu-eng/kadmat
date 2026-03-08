@@ -55,18 +55,52 @@ jobs:
           cd android
           ./gradlew app:assembleDebugAndroidTest
 
+      - name: Collect APK artifacts
+        id: collect_apks
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p tmp/apks
+
+          APP_APK="build/app/outputs/flutter-apk/app-debug.apk"
+          TEST_APK=""
+
+          if [ ! -f "$APP_APK" ]; then
+            echo "::error::App APK not found at $APP_APK"
+            exit 1
+          fi
+
+          if [ -f build/app/outputs/apk/androidTest/debug/app-debug-androidTest.apk ]; then
+            TEST_APK="build/app/outputs/apk/androidTest/debug/app-debug-androidTest.apk"
+          elif [ -f android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk ]; then
+            TEST_APK="android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk"
+          fi
+
+          cp -f "$APP_APK" tmp/apks/app-debug.apk
+          echo "app_apk=tmp/apks/app-debug.apk" >> "$GITHUB_OUTPUT"
+
+          if [ -n "$TEST_APK" ]; then
+            cp -f "$TEST_APK" tmp/apks/app-debug-androidTest.apk
+            echo "test_apk=tmp/apks/app-debug-androidTest.apk" >> "$GITHUB_OUTPUT"
+            echo "has_test_apk=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::app-debug-androidTest.apk was not found after Gradle build. Firebase Test Lab upload will be skipped."
+            echo "has_test_apk=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Upload App APK
         uses: actions/upload-artifact@v4
         with:
           name: app-debug
-          path: build/app/outputs/flutter-apk/app-debug.apk
+          path: ${{ steps.collect_apks.outputs.app_apk }}
 
       - name: Upload Test APK
         uses: actions/upload-artifact@v4
-        if: success()
+        if: steps.collect_apks.outputs.has_test_apk == 'true'
         with:
           name: app-debug-androidTest
-          path: android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+          path: ${{ steps.collect_apks.outputs.test_apk }}
 
       - name: Authenticate to Google Cloud
         if: github.ref == 'refs/heads/main' && env.GCP_SA_KEY != ''
@@ -79,12 +113,12 @@ jobs:
         uses: google-github-actions/setup-gcloud@v2
 
       - name: Run Firebase Test Lab
-        if: github.ref == 'refs/heads/main' && env.GCP_SA_KEY != ''
+        if: github.ref == 'refs/heads/main' && env.GCP_SA_KEY != '' && steps.collect_apks.outputs.has_test_apk == 'true'
         run: |
           gcloud firebase test android run \
             --type instrumentation \
-            --app build/app/outputs/flutter-apk/app-debug.apk \
-            --test android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk \
+            --app "${{ steps.collect_apks.outputs.app_apk }}" \
+            --test "${{ steps.collect_apks.outputs.test_apk }}" \
             --device model=Pixel5,version=30,locale=en,orientation=portrait \
             --device model=MediumPhone.arm,version=34,locale=en,orientation=portrait \
             --timeout 15m \
