@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/api/endpoints.dart';
+import '../../../core/utils/error_messages.dart';
 
 part 'auth_repository.g.dart';
 
@@ -23,6 +24,25 @@ class AuthRepository {
   AuthRepository(this._client) {
     _checkAuthStatus();
     _setupAuthListener();
+  }
+
+  String _friendlyErrorMessage(dynamic error, {required String fallback}) {
+    if (error is DioException) {
+      final data = error.response?.data;
+      if (data is Map<String, dynamic>) {
+        final message =
+            data['message'] ??
+            (data['error'] is Map<String, dynamic>
+                ? data['error']['message']
+                : null);
+        if (message is String && message.trim().isNotEmpty) {
+          return message.trim();
+        }
+      }
+    }
+
+    final resolved = ErrorMessages.fromException(error);
+    return resolved == ErrorMessages.unknownError ? fallback : resolved;
   }
 
   void _setupAuthListener() {
@@ -198,15 +218,7 @@ class AuthRepository {
         requiredUserType: userType,
       );
     } catch (e) {
-      if (e is DioException) {
-        final message = e.response?.data['message'] ?? 'فشل إنشاء الحساب';
-        final statusCode = e.response?.statusCode;
-        final rawData = e.response?.data;
-        throw Exception(
-          '$message (Status: $statusCode, Data: $rawData, Error: ${e.message})',
-        );
-      }
-      throw Exception('حدث خطأ غير متوقع: $e');
+      throw Exception(_friendlyErrorMessage(e, fallback: 'فشل إنشاء الحساب'));
     }
   }
 
@@ -246,7 +258,9 @@ class AuthRepository {
         _userProfile!.addAll(updates);
       }
     } catch (e) {
-      throw Exception('فشل تحديث الملف الشخصي: $e');
+      throw Exception(
+        _friendlyErrorMessage(e, fallback: 'فشل تحديث الملف الشخصي'),
+      );
     }
   }
 
@@ -260,9 +274,13 @@ class AuthRepository {
         UserAttributes(password: newPassword),
       );
     } on AuthException catch (e) {
-      throw Exception('فشل تغيير كلمة المرور: ${e.message}');
+      throw Exception(
+        e.message.trim().isEmpty ? 'فشل تغيير كلمة المرور' : e.message.trim(),
+      );
     } catch (e) {
-      throw Exception('فشل تغيير كلمة المرور: $e');
+      throw Exception(
+        _friendlyErrorMessage(e, fallback: 'فشل تغيير كلمة المرور'),
+      );
     }
   }
 

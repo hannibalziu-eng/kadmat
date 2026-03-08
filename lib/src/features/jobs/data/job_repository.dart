@@ -51,6 +51,20 @@ class JobRepository implements IJobRepository {
     this._realtimeService,
   );
 
+  String _friendlyJobError(dynamic error, {required String fallback}) {
+    if (error is DioException) {
+      final apiError = ApiError.fromDioException(error);
+      final message = ErrorMessages.fromApiCode(
+        apiError.code,
+        fallback: apiError.message,
+      );
+      return message == ErrorMessages.unknownError ? fallback : message;
+    }
+
+    final message = ErrorMessages.fromException(error);
+    return message == ErrorMessages.unknownError ? fallback : message;
+  }
+
   /// Fetch nearby jobs using Supabase RPC for scalable server-side filtering
 
   @override
@@ -425,7 +439,9 @@ class JobRepository implements IJobRepository {
         rethrow;
       }
       // Convert to generic exception
-      throw Exception('فشل قبول الطلب: ${e.toString()}');
+      throw Exception(
+        _friendlyJobError(e, fallback: ErrorMessages.jobAcceptFailed),
+      );
     }
   }
 
@@ -446,7 +462,7 @@ class JobRepository implements IJobRepository {
       if (e is DioException) {
         // Handle Dio errors specifically if needed
       }
-      throw Exception('فشل تحديد السعر: ${e.toString()}');
+      throw Exception(_friendlyJobError(e, fallback: 'فشل تحديد السعر'));
     }
   }
 

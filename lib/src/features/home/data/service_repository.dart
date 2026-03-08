@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/api/endpoints.dart';
 import '../../../core/api/response_utils.dart';
+import '../../../core/utils/error_messages.dart';
 import '../domain/service.dart';
 
 part 'service_repository.g.dart';
@@ -13,6 +14,27 @@ class ServiceRepository {
   final Dio _client;
 
   ServiceRepository(this._client);
+
+  String _friendlyServiceError(dynamic error) {
+    if (error is DioException) {
+      final data = error.response?.data;
+      if (data is Map<String, dynamic>) {
+        final message =
+            data['message'] ??
+            (data['error'] is Map<String, dynamic>
+                ? data['error']['message']
+                : null);
+        if (message is String && message.trim().isNotEmpty) {
+          return message.trim();
+        }
+      }
+    }
+
+    final resolved = ErrorMessages.fromException(error);
+    return resolved == ErrorMessages.unknownError
+        ? 'فشل جلب الخدمات'
+        : resolved;
+  }
 
   Future<List<Service>> getServices() async {
     try {
@@ -27,12 +49,8 @@ class ServiceRepository {
             .select()
             .order('name');
         return (data as List).map((e) => Service.fromJson(e)).toList();
-      } catch (dbError) {
-        if (e is DioException) {
-          final message = e.response?.data['message'] ?? 'فشل جلب الخدمات';
-          throw Exception('$message (Fallback failed: $dbError)');
-        }
-        throw Exception('فشل جلب الخدمات: $e');
+      } catch (_) {
+        throw Exception(_friendlyServiceError(e));
       }
     }
   }
