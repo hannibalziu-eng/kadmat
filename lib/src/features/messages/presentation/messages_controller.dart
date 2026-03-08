@@ -15,13 +15,12 @@ class MessagesController extends _$MessagesController {
   Future<void> sendMessage({
     required String jobId,
     required String content,
-    required String receiverId,
   }) async {
     state = const AsyncValue.loading();
     state = await AsyncValue.guard(
       () => ref
           .read(messagesRepositoryProvider)
-          .sendMessage(jobId: jobId, content: content, receiverId: receiverId),
+          .sendMessage(jobId: jobId, content: content),
     );
   }
 }

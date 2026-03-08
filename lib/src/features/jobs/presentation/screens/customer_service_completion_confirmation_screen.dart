@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/app_theme.dart';
 import '../../../../core/widgets/kadmat_toast.dart';
+import '../../../../core/utils/service_name_formatter.dart';
 import '../../data/job_repository.dart';
 import '../../domain/job.dart';
 import '../../../../core/navigation/app_routes.dart';
@@ -102,7 +103,10 @@ class _CustomerServiceCompletionConfirmationScreenState
 
     final price = _job?.finalPrice ?? _job?.technicianPrice ?? 0;
     final technicianName = _job?.technician?['full_name'] ?? 'الفني';
-    final serviceName = _job?.service?['name'] ?? 'خدمة عامة';
+    final serviceName = formatServiceDisplayName(
+      _job?.service,
+      fallback: 'خدمة عامة',
+    );
 
     return Scaffold(
       backgroundColor: AppTheme.backgroundDark,

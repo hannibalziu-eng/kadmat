@@ -35,6 +35,16 @@ void main() {
       expect(activePath, '/active-job/$jobId');
     });
 
+    test(
+      'should route tracking helper to current customer in-progress flow',
+      () {
+        const jobId = 'job123';
+        final trackingPath = AppRoutes.buildTrackingPath(jobId);
+
+        expect(trackingPath, '/jobs/$jobId/customer/in-progress');
+      },
+    );
+
     test('should handle empty job ID in rate path', () {
       const jobId = '';
       final ratePath = AppRoutes.buildCustomerRatePath(jobId);

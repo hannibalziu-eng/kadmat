@@ -54,6 +54,11 @@ class TechnicianPublicProfileScreen extends ConsumerWidget {
               _buildTechnicianHeader(context, profile),
               SizedBox(height: 24.h),
 
+              if (profile.bio != null && profile.bio!.isNotEmpty) ...[
+                _buildAboutSection(profile.bio!),
+                SizedBox(height: 24.h),
+              ],
+
               // ============ الإحصائيات ============
               _buildStatisticsSection(profile),
               SizedBox(height: 24.h),
@@ -154,13 +159,23 @@ class TechnicianPublicProfileScreen extends ConsumerWidget {
           ),
           SizedBox(height: 8.h),
 
-          // التخصص - Hardcoded temporarily as backend might not return it in this endpoint yet
-          // Or we can update backend to return service name if linked
           Text(
-            profile.specialization ?? 'فني خدمات عامة',
+            profile.title?.trim().isNotEmpty == true
+                ? profile.title!
+                : (profile.specialization ?? 'فني خدمات عامة'),
             style: TextStyle(fontSize: 14.fz, color: Colors.white70),
             textAlign: TextAlign.center,
           ),
+          if (profile.title?.trim().isNotEmpty == true &&
+              profile.specialization?.trim().isNotEmpty == true &&
+              profile.specialization != profile.title) ...[
+            SizedBox(height: 6.h),
+            Text(
+              profile.specialization!,
+              style: TextStyle(fontSize: 12.fz, color: Colors.white54),
+              textAlign: TextAlign.center,
+            ),
+          ],
           SizedBox(height: 16.h),
 
           // التقييم
@@ -195,7 +210,9 @@ class TechnicianPublicProfileScreen extends ConsumerWidget {
               Icon(Icons.location_on, color: AppTheme.primaryColor, size: 16.s),
               SizedBox(width: 4.w),
               Text(
-                'المملكة العربية السعودية', // Could fetch address if available
+                profile.location?.trim().isNotEmpty == true
+                    ? profile.location!
+                    : 'الموقع غير مضاف',
                 style: TextStyle(fontSize: 14.fz, color: Colors.white70),
               ),
             ],
@@ -212,6 +229,36 @@ class TechnicianPublicProfileScreen extends ConsumerWidget {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildAboutSection(String bio) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'نبذة عن الفني',
+          style: TextStyle(
+            fontSize: 18.fz,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
+        ),
+        SizedBox(height: 12.h),
+        Container(
+          width: double.infinity,
+          padding: EdgeInsets.all(16.w),
+          decoration: AppTheme.glassDecoration(radius: 16.r),
+          child: Text(
+            bio,
+            style: TextStyle(
+              fontSize: 14.fz,
+              color: Colors.white.withValues(alpha: 0.9),
+              height: 1.6,
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -373,9 +420,9 @@ class TechnicianPublicProfileScreen extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (item.description != null)
+                if (item.title != null && item.title!.isNotEmpty)
                   Text(
-                    item.description!,
+                    item.title!,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
@@ -384,6 +431,17 @@ class TechnicianPublicProfileScreen extends ConsumerWidget {
                       color: Colors.white,
                     ),
                   ),
+                if (item.description != null &&
+                    item.description!.isNotEmpty) ...[
+                  if (item.title != null && item.title!.isNotEmpty)
+                    SizedBox(height: 4.h),
+                  Text(
+                    item.description!,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 11.fz, color: Colors.white70),
+                  ),
+                ],
                 if (item.projectDate != null) ...[
                   SizedBox(height: 4.h),
                   Text(

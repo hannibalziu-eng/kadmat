@@ -92,6 +92,8 @@ class ErrorMessages {
       case 'JOB_NOT_FOUND':
       case 'NOT_FOUND':
         return jobNotFound;
+      case 'COMMUNICATION_NOT_AVAILABLE':
+        return 'يتاح التواصل فقط بعد قبول العرض';
       case 'UNAUTHORIZED':
         return unauthorized;
       case 'FORBIDDEN':
@@ -108,7 +110,9 @@ class ErrorMessages {
       case 'CANCELLATION_RESTRICTED':
         return cancellationRestricted;
       case 'CONFLICT':
-        return (fallback != null && fallback.isNotEmpty) ? fallback : activeJobLocked;
+        return (fallback != null && fallback.isNotEmpty)
+            ? fallback
+            : activeJobLocked;
       case 'VALIDATION_FAILED':
       case 'INVALID_INPUT':
         return (fallback != null && fallback.isNotEmpty)

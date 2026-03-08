@@ -18,8 +18,9 @@ class WalletRepository {
     final data =
         response.data['data'] ??
         response.data['wallet'] ??
-        response.data['result'];
-    return Wallet.fromJson(Map<String, dynamic>.from(data as Map));
+        response.data['result'] ??
+        const <String, dynamic>{};
+    return Wallet.fromApiJson(Map<String, dynamic>.from(data as Map));
   }
 
   /// Get Wallet Transactions (Paginated)
@@ -36,7 +37,10 @@ class WalletRepository {
         response.data['data'] ??
         response.data['transactions'] ??
         const <dynamic>[];
-    return (data as List).map((e) => WalletTransaction.fromJson(e)).toList();
+    return (data as List)
+        .whereType<Map>()
+        .map((e) => WalletTransaction.fromApiJson(Map<String, dynamic>.from(e)))
+        .toList();
   }
 
   /// Request Withdrawal

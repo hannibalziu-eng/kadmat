@@ -200,61 +200,73 @@ class _TechnicianMainScreenState extends ConsumerState<TechnicianMainScreen> {
     int badgeCount = 0,
   }) {
     final isSelected = currentIndex == index;
-    return GestureDetector(
-      onTap: () => ref.read(technicianTabIndexProvider.notifier).state = index,
-      behavior: HitTestBehavior.opaque,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+    return Semantics(
+      button: true,
+      label: label,
+      selected: isSelected,
+      child: Tooltip(
+        message: label,
+        child: GestureDetector(
+          onTap: () =>
+              ref.read(technicianTabIndexProvider.notifier).state = index,
+          behavior: HitTestBehavior.opaque,
+          child: Stack(
+            clipBehavior: Clip.none,
             children: [
-              Icon(
-                    icon,
-                    color: isSelected
-                        ? Theme.of(context).primaryColor
-                        : Colors.grey,
-                    size: 24.s,
-                  )
-                  .animate(target: isSelected ? 1 : 0)
-                  .scale(begin: const Offset(1, 1), end: const Offset(1.2, 1.2))
-                  .tint(color: Theme.of(context).primaryColor),
-              SizedBox(height: 4.h),
-              if (isSelected)
-                Container(
-                  width: 4.w,
-                  height: 4.w,
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).primaryColor,
-                    shape: BoxShape.circle,
-                  ),
-                ).animate().fadeIn().scale(),
-            ],
-          ),
-          if (badgeCount > 0)
-            Positioned(
-              top: -5,
-              right: -5,
-              child: GestureDetector(
-                onTap: () => context.push(AppRoutes.notifications),
-                child: Container(
-                  padding: EdgeInsets.all(4.w),
-                  decoration: const BoxDecoration(
-                    color: Colors.red,
-                    shape: BoxShape.circle,
-                  ),
-                  child: Text(
-                    badgeCount > 9 ? '+9' : badgeCount.toString(),
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 10.fz,
-                      fontWeight: FontWeight.bold,
+              Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                        icon,
+                        color: isSelected
+                            ? Theme.of(context).primaryColor
+                            : Colors.grey,
+                        size: 24.s,
+                      )
+                      .animate(target: isSelected ? 1 : 0)
+                      .scale(
+                        begin: const Offset(1, 1),
+                        end: const Offset(1.2, 1.2),
+                      )
+                      .tint(color: Theme.of(context).primaryColor),
+                  SizedBox(height: 4.h),
+                  if (isSelected)
+                    Container(
+                      width: 4.w,
+                      height: 4.w,
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).primaryColor,
+                        shape: BoxShape.circle,
+                      ),
+                    ).animate().fadeIn().scale(),
+                ],
+              ),
+              if (badgeCount > 0)
+                Positioned(
+                  top: -5,
+                  right: -5,
+                  child: GestureDetector(
+                    onTap: () => context.push(AppRoutes.notifications),
+                    child: Container(
+                      padding: EdgeInsets.all(4.w),
+                      decoration: const BoxDecoration(
+                        color: Colors.red,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Text(
+                        badgeCount > 9 ? '+9' : badgeCount.toString(),
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 10.fz,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ),
-        ],
+            ],
+          ),
+        ),
       ),
     );
   }

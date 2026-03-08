@@ -473,9 +473,9 @@ class JobRepository implements IJobRepository {
 
           final techPrice = jobData['technician_price'];
 
-              final data = await Supabase.instance.client
-                  .from('jobs')
-                  .update({
+          final data = await Supabase.instance.client
+              .from('jobs')
+              .update({
                 'status': 'on_the_way',
                 'price_confirmed_at': DateTime.now().toIso8601String(),
                 'final_price': techPrice,
@@ -513,7 +513,10 @@ class JobRepository implements IJobRepository {
 
       final body = response.data;
       if (body == null || body['success'] != true) {
-        final apiError = ApiError.fromData(body, statusCode: response.statusCode);
+        final apiError = ApiError.fromData(
+          body,
+          statusCode: response.statusCode,
+        );
         final message = ErrorMessages.fromApiCode(
           apiError.code,
           fallback: apiError.message,
@@ -940,21 +943,24 @@ class JobRepository implements IJobRepository {
             return status == 'pending' && isActive;
           }).toList();
 
-          // Enrich with technician details
-          // This is N+1 but acceptable for small number of offers (usually < 5)
-          // Better approach would be a View or RPC, but this is quick for now.
+          final technicianIds = pendingActiveOffers
+              .map((offer) => offer['technician_id']?.toString().trim() ?? '')
+              .where((id) => id.isNotEmpty)
+              .toSet()
+              .toList();
+          final techniciansById = await _loadOfferTechnicians(technicianIds);
           final enrichedOffers = <Map<String, dynamic>>[];
 
           for (final offer in pendingActiveOffers) {
             try {
-              final tech = await Supabase.instance.client
-                  .from('users')
-                  .select('id, full_name, rating, profile_image_url')
-                  .eq('id', offer['technician_id'])
-                  .maybeSingle();
+              final technicianId =
+                  offer['technician_id']?.toString().trim() ?? '';
+              final tech = techniciansById[technicianId];
 
-              if (tech == null) continue;
-              enrichedOffers.add({...offer, 'technician': tech});
+              enrichedOffers.add({
+                ...offer,
+                'technician': tech ?? const <String, dynamic>{},
+              });
             } catch (e) {
               debugPrint('⚠️ Failed to enrich offer ${offer['id']}: $e');
               // Keep basic offer visible even if technician enrich fails.
@@ -963,6 +969,132 @@ class JobRepository implements IJobRepository {
           }
           return enrichedOffers;
         });
+  }
+
+  Future<Map<String, Map<String, dynamic>>> _loadOfferTechnicians(
+    List<String> technicianIds,
+  ) async {
+    if (technicianIds.isEmpty) {
+      return const {};
+    }
+
+    final technicians = await _fetchOfferTechnicians(technicianIds);
+    final completedJobsByTechnician = await _fetchCompletedJobsByTechnician(
+      technicianIds,
+    );
+    final mapped = <String, Map<String, dynamic>>{};
+
+    for (final row in technicians) {
+      final technicianId = row['id']?.toString().trim() ?? '';
+      if (technicianId.isEmpty) {
+        continue;
+      }
+
+      mapped[technicianId] = {
+        ...row,
+        'specialization': _extractServiceName(row['service']),
+        'location': _displayLocation(row['address'], row['location']),
+        'completed_jobs': completedJobsByTechnician[technicianId] ?? 0,
+      };
+    }
+
+    return mapped;
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchOfferTechnicians(
+    List<String> technicianIds,
+  ) async {
+    try {
+      final rows = await Supabase.instance.client
+          .from('users')
+          .select(
+            'id, full_name, rating, profile_image_url, title, address, location, service:service_id(name_ar)',
+          )
+          .inFilter('id', technicianIds)
+          .eq('user_type', 'technician');
+
+      return (rows as List)
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList();
+    } catch (error) {
+      debugPrint('⚠️ Rich technician offer lookup failed: $error');
+      final fallbackRows = await Supabase.instance.client
+          .from('users')
+          .select('id, full_name, rating, profile_image_url, title, address')
+          .inFilter('id', technicianIds)
+          .eq('user_type', 'technician');
+
+      return (fallbackRows as List)
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList();
+    }
+  }
+
+  Future<Map<String, int>> _fetchCompletedJobsByTechnician(
+    List<String> technicianIds,
+  ) async {
+    try {
+      final rows = await Supabase.instance.client
+          .from('jobs')
+          .select('technician_id')
+          .inFilter('technician_id', technicianIds)
+          .filter('status', 'in', '("completed","rated")');
+
+      final counts = <String, int>{};
+      for (final row in (rows as List).whereType<Map>()) {
+        final technicianId = row['technician_id']?.toString().trim() ?? '';
+        if (technicianId.isEmpty) {
+          continue;
+        }
+        counts.update(technicianId, (value) => value + 1, ifAbsent: () => 1);
+      }
+      return counts;
+    } catch (error) {
+      debugPrint('⚠️ Completed jobs enrichment failed: $error');
+      return const {};
+    }
+  }
+
+  String _extractServiceName(Object? rawService) {
+    if (rawService is Map) {
+      final serviceName = rawService['name_ar']?.toString().trim();
+      if (serviceName != null && serviceName.isNotEmpty) {
+        return serviceName;
+      }
+    }
+
+    if (rawService is List && rawService.isNotEmpty) {
+      final first = rawService.first;
+      if (first is Map) {
+        final serviceName = first['name_ar']?.toString().trim();
+        if (serviceName != null && serviceName.isNotEmpty) {
+          return serviceName;
+        }
+      }
+    }
+
+    return 'فني خدمات عامة';
+  }
+
+  String? _displayLocation(Object? address, Object? location) {
+    final addressText = address?.toString().trim();
+    if (addressText != null && addressText.isNotEmpty) {
+      return addressText;
+    }
+
+    final locationText = location?.toString().trim();
+    if (locationText == null || locationText.isEmpty) {
+      return null;
+    }
+
+    final normalized = locationText.toUpperCase();
+    if (normalized.contains('POINT(') || normalized.contains('SRID=')) {
+      return null;
+    }
+
+    return locationText;
   }
 
   @override

@@ -1,158 +1,229 @@
-import 'dart:async';
+import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:kadmat/src/core/api/endpoints.dart';
 import 'package:kadmat/src/features/messages/data/messages_repository.dart';
-
+import 'package:kadmat/src/features/messages/domain/conversation_thread.dart';
 import 'package:mockito/mockito.dart';
-import 'package:mockito/annotations.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-@GenerateMocks([
-  SupabaseClient,
-  GoTrueClient,
-  SupabaseQueryBuilder,
-  PostgrestFilterBuilder,
-  PostgrestTransformBuilder,
-  RealtimeChannel,
-])
-import 'messages_repository_test.mocks.dart';
-
-void main() {
-  group('MessagesRepository Tests', () {
-    late MessagesRepository repository;
-    late MockSupabaseClient mockSupabaseClient;
-    late MockGoTrueClient mockAuth;
-
-    setUp(() {
-      mockSupabaseClient = MockSupabaseClient();
-      mockAuth = MockGoTrueClient();
-
-      // Setup Auth
-      when(mockSupabaseClient.auth).thenReturn(mockAuth);
-
-      repository = MessagesRepository(mockSupabaseClient);
-    });
-
-    test('markAsRead calls RPC correctly', () async {
-      // Arrange
-      const jobId = 'job-123';
-      const userId = 'user-123';
-
-      when(mockAuth.currentUser).thenReturn(
-        User(
-          id: userId,
-          appMetadata: {},
-          userMetadata: {},
-          aud: 'authenticated',
-          createdAt: '',
-        ),
-      );
-
-      when(
-        mockSupabaseClient.rpc(
-          'mark_messages_as_read',
-          params: {'p_job_id': jobId, 'p_user_id': userId},
-        ),
-      ).thenAnswer((_) => FakePostgrestBuilder(5) as dynamic);
-
-      // Act
-      final result = await repository.markAsRead(jobId);
-
-      // Assert
-      expect(result, 5);
-      verify(
-        mockSupabaseClient.rpc(
-          'mark_messages_as_read',
-          params: {'p_job_id': jobId, 'p_user_id': userId},
-        ),
-      ).called(1);
-    });
-
-    test('sendMessage returns Message on success', () async {
-      // Arrange
-      const jobId = 'job-123';
-      const userId = 'sender-123';
-      const receiverId = 'receiver-123';
-      const content = 'Hello';
-
-      final Map<String, dynamic> mockResponse = {
-        'id': 'msg-1',
-        'job_id': jobId,
-        'sender_id': userId,
-        'receiver_id': receiverId,
-        'content': content,
-        'is_read': false,
-        'created_at': DateTime.now().toIso8601String(),
-        'sender': {
-          'id': userId,
-          'full_name': 'Test User',
-          'profile_image_url': null,
-        },
-      };
-
-      when(mockAuth.currentUser).thenReturn(
-        User(
-          id: userId,
-          appMetadata: {},
-          userMetadata: {},
-          aud: 'authenticated',
-          createdAt: '',
-        ),
-      );
-
-      final mockQueryBuilder = MockSupabaseQueryBuilder();
-      final mockFilterBuilder =
-          MockPostgrestFilterBuilder<List<Map<String, dynamic>>>();
-      final mockTransformBuilder =
-          MockPostgrestTransformBuilder<List<Map<String, dynamic>>>();
-
-      // Mock the chain: client.from() -> insert() -> select() -> single()
-      when(
-        mockSupabaseClient.from('messages'),
-      ).thenAnswer((_) => mockQueryBuilder);
-      when(
-        mockQueryBuilder.insert(any),
-      ).thenAnswer((_) => mockFilterBuilder as dynamic);
-      when(
-        mockFilterBuilder.select(any),
-      ).thenAnswer((_) => mockTransformBuilder as dynamic);
-      when(
-        mockTransformBuilder.single(),
-      ).thenAnswer((_) => FakePostgrestBuilder(mockResponse) as dynamic);
-
-      // Act
-      final result = await repository.sendMessage(
-        jobId: jobId,
-        content: content,
-        receiverId: receiverId,
-      );
-
-      // Assert
-      expect(result.content, content);
-      expect(result.senderId, userId);
-
-      verify(mockSupabaseClient.from('messages')).called(1);
-      verify(
-        mockQueryBuilder.insert({
-          'job_id': jobId,
-          'sender_id': userId,
-          'receiver_id': receiverId,
-          'content': content,
-        }),
-      ).called(1);
-    });
-  });
-}
-
-class FakePostgrestBuilder<T> extends Fake
-    implements PostgrestFilterBuilder<T> {
-  final T _value;
-  FakePostgrestBuilder(this._value);
+class StubDio extends Fake implements Dio {
+  Future<Response<dynamic>> Function(String path)? onGet;
+  Future<Response<dynamic>> Function(String path, {dynamic data})? onPost;
+  Future<Response<dynamic>> Function(String path)? onPatch;
 
   @override
-  Future<R> then<R>(
-    FutureOr<R> Function(T value) onValue, {
-    Function? onError,
+  Future<Response<T>> get<T>(
+    String path, {
+    Object? data,
+    Map<String, dynamic>? queryParameters,
+    Options? options,
+    CancelToken? cancelToken,
+    ProgressCallback? onReceiveProgress,
   }) async {
-    return onValue(_value);
+    final response = await onGet!(path);
+    return response as Response<T>;
   }
+
+  @override
+  Future<Response<T>> post<T>(
+    String path, {
+    data,
+    Map<String, dynamic>? queryParameters,
+    Options? options,
+    CancelToken? cancelToken,
+    ProgressCallback? onSendProgress,
+    ProgressCallback? onReceiveProgress,
+  }) async {
+    final response = await onPost!(path, data: data);
+    return response as Response<T>;
+  }
+
+  @override
+  Future<Response<T>> patch<T>(
+    String path, {
+    data,
+    Map<String, dynamic>? queryParameters,
+    Options? options,
+    CancelToken? cancelToken,
+    ProgressCallback? onSendProgress,
+    ProgressCallback? onReceiveProgress,
+  }) async {
+    final response = await onPatch!(path);
+    return response as Response<T>;
+  }
+}
+
+class MockSupabaseClient extends Mock implements SupabaseClient {}
+
+void main() {
+  group('MessagesRepository', () {
+    late StubDio dio;
+    late MockSupabaseClient supabaseClient;
+    late MessagesRepository repository;
+
+    setUp(() {
+      dio = StubDio();
+      supabaseClient = MockSupabaseClient();
+      repository = MessagesRepository(dio, supabaseClient);
+    });
+
+    test('getMessages fetches messages from backend API', () async {
+      const jobId = 'job-123';
+      final responseData = [
+        {
+          'id': 'msg-1',
+          'job_id': jobId,
+          'sender_id': 'sender-1',
+          'receiver_id': 'receiver-1',
+          'content': 'مرحبا',
+          'is_read': false,
+          'created_at': DateTime(2026, 3, 7, 10).toIso8601String(),
+          'sender': {'id': 'sender-1', 'full_name': 'مرسل'},
+        },
+      ];
+
+      dio.onGet = (path) async {
+        expect(path, Endpoints.messagesForJob(jobId));
+        return Response(
+          data: {'success': true, 'data': responseData},
+          requestOptions: RequestOptions(path: path),
+          statusCode: 200,
+        );
+      };
+
+      final messages = await repository.getMessages(jobId);
+
+      expect(messages, hasLength(1));
+      expect(messages.first.content, 'مرحبا');
+    });
+
+    test(
+      'getMessages maps COMMUNICATION_NOT_AVAILABLE to a user-facing message',
+      () async {
+        const jobId = 'job-locked';
+
+        dio.onGet = (path) async {
+          throw DioException(
+            requestOptions: RequestOptions(path: path),
+            response: Response(
+              data: {
+                'success': false,
+                'error': {
+                  'code': 'COMMUNICATION_NOT_AVAILABLE',
+                  'message': 'Communication is restricted',
+                },
+              },
+              requestOptions: RequestOptions(path: path),
+              statusCode: 403,
+            ),
+            type: DioExceptionType.badResponse,
+          );
+        };
+
+        await expectLater(
+          () => repository.getMessages(jobId),
+          throwsA(
+            isA<Exception>().having(
+              (error) => error.toString(),
+              'message',
+              contains('يتاح التواصل فقط بعد قبول العرض'),
+            ),
+          ),
+        );
+      },
+    );
+
+    test('sendMessage posts only content to backend API', () async {
+      const jobId = 'job-123';
+      final now = DateTime(2026, 3, 7, 10).toIso8601String();
+
+      dio.onPost = (path, {data}) async {
+        expect(path, Endpoints.messagesForJob(jobId));
+        expect(data, {'content': 'أهلاً'});
+        return Response(
+          data: {
+            'success': true,
+            'data': {
+              'id': 'msg-1',
+              'job_id': jobId,
+              'sender_id': 'customer-1',
+              'receiver_id': 'tech-1',
+              'content': 'أهلاً',
+              'is_read': false,
+              'created_at': now,
+              'sender': {'id': 'customer-1', 'full_name': 'عميل'},
+            },
+          },
+          requestOptions: RequestOptions(path: path),
+          statusCode: 201,
+        );
+      };
+
+      final message = await repository.sendMessage(
+        jobId: jobId,
+        content: 'أهلاً',
+      );
+
+      expect(message.jobId, jobId);
+      expect(message.content, 'أهلاً');
+    });
+
+    test('markAsRead reads updated count from backend payload', () async {
+      const jobId = 'job-123';
+      dio.onPatch = (path) async {
+        expect(path, Endpoints.markMessagesRead(jobId));
+        return Response(
+          data: {
+            'success': true,
+            'data': {'updated_count': 4},
+          },
+          requestOptions: RequestOptions(path: path),
+          statusCode: 200,
+        );
+      };
+
+      final updatedCount = await repository.markAsRead(jobId);
+
+      expect(updatedCount, 4);
+    });
+
+    test(
+      'getConversationThreads returns last message and unread count',
+      () async {
+        dio.onGet = (path) async {
+          expect(path, Endpoints.messageConversations);
+          return Response(
+            data: {
+              'success': true,
+              'data': [
+                {
+                  'job_id': 'job-1',
+                  'status': 'on_the_way',
+                  'service_name': 'سباكة',
+                  'unread_count': 2,
+                  'last_message': 'أنا في الطريق',
+                  'last_message_at': DateTime(2026, 3, 7, 12).toIso8601String(),
+                  'other_user': {
+                    'id': 'tech-1',
+                    'full_name': 'فني',
+                    'profile_image_url': 'tech.png',
+                    'phone': '2222222222',
+                  },
+                },
+              ],
+            },
+            requestOptions: RequestOptions(path: path),
+            statusCode: 200,
+          );
+        };
+
+        final threads = await repository.getConversationThreads();
+
+        expect(threads, hasLength(1));
+        expect(threads.first, isA<ConversationThread>());
+        expect(threads.first.lastMessage, 'أنا في الطريق');
+        expect(threads.first.unreadCount, 2);
+      },
+    );
+  });
 }

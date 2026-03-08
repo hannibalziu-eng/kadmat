@@ -6,6 +6,7 @@
 import cron from 'node-cron';
 import { supabaseAdmin } from '../config/supabase.js';
 import { startJobSearch } from '../services/jobSearchService.js';
+import { hasActivePendingOffers } from '../utils/jobOfferState.js';
 
 // Run every hour at minute 0
 const RETRY_SCHEDULE = '0 * * * *'; // 00:00, 01:00, 02:00, etc.
@@ -77,6 +78,23 @@ export function startJobRetryScheduler() {
             // Retry each job
             for (const job of jobsToRetry) {
                 try {
+                    if (await hasActivePendingOffers(job.id)) {
+                        const nowIso = new Date().toISOString();
+                        await supabaseAdmin
+                            .from('jobs')
+                            .update({
+                                status: 'searching',
+                                next_search_at: null,
+                                updated_at: nowIso
+                            })
+                            .eq('id', job.id)
+                            .eq('status', 'no_technician_found')
+                            .is('technician_id', null);
+
+                        console.log(`ℹ️ [Scheduler] Restored job ${job.id} to searching because active offers still exist.`);
+                        continue;
+                    }
+
                     if (isRetryWindowExpired(job)) {
                         const nowIso = new Date().toISOString();
                         await supabaseAdmin

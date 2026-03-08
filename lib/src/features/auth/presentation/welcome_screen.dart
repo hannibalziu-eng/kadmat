@@ -4,7 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/design/kadmat_tokens.dart';
 import '../../../core/navigation/app_routes.dart';
 import '../../../core/widgets/kadmat_components.dart';
-import 'widgets/social_auth_button.dart';
+import 'widgets/oauth_login_screen.dart';
 
 class WelcomeScreen extends StatefulWidget {
   const WelcomeScreen({super.key});
@@ -65,7 +65,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'سوقك للمواهب الاحترافية',
+                                'خدمات منزلية موثوقة عند الطلب',
                                 style: TextStyle(
                                   color: Colors.white,
                                   fontSize: 28.fz,
@@ -75,7 +75,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                               ),
                               SizedBox(height: 8.h),
                               Text(
-                                'تواصل مع أفضل المستقلين لإنجاز مشاريعك',
+                                'اطلب فنيًا قريبًا للصيانة أو التركيب أو الإصلاح، وتابع الخدمة حتى الإتمام والتقييم.',
                                 style: TextStyle(
                                   color: Colors.white70,
                                   fontSize: 16.fz,
@@ -96,21 +96,23 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                       padEnds: false,
                       children: [
                         _buildFeatureCard(
-                          title: 'ابحث عن خبراء',
+                          title: 'فنيون قريبون',
                           subtitle:
-                              'اعثر على المحترفين المناسبين لمشروعك بسهولة',
+                              'أرسل طلبك واستقبل عروض فنيين قريبين حسب التخصص والموقع.',
                           imageUrl:
                               'https://images.unsplash.com/photo-1521737711867-e3b97375f902?w=800',
                         ),
                         _buildFeatureCard(
-                          title: 'مدفوعات آمنة',
-                          subtitle: 'نضمن لك معاملات آمنة وموثوقة لكل خدمة',
+                          title: 'متابعة واضحة',
+                          subtitle:
+                              'تابع حالة الطلب والسعر والوصول والتقدم من داخل التطبيق خطوة بخطوة.',
                           imageUrl:
                               'https://images.unsplash.com/photo-1580519542036-c47de6196ba5?w=800',
                         ),
                         _buildFeatureCard(
-                          title: 'جودة مضمونة',
-                          subtitle: 'خبراء معتمدون لضمان أفضل النتائج لمشاريعك',
+                          title: 'توثيق وثقة',
+                          subtitle:
+                              'صور قبل وبعد الخدمة وتقييمات حقيقية تساعدك على اتخاذ قرار مطمئن.',
                           imageUrl:
                               'https://images.unsplash.com/photo-1513224502586-d254a5245511?w=800',
                         ),
@@ -133,26 +135,22 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                           },
                         ),
                         SizedBox(height: 12.h),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: SocialAuthButton(
-                                text: 'جوجل',
-                                icon: Icons.g_mobiledata,
-                                iconColor: Colors.red,
-                                onPressed: () {},
+                        KadmatSecondaryButton(
+                          label: 'المتابعة عبر حساب اجتماعي',
+                          icon: Icons.alternate_email,
+                          onPressed: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (context) => const OAuthLoginScreen(),
                               ),
-                            ),
-                            SizedBox(width: 12.w),
-                            Expanded(
-                              child: SocialAuthButton(
-                                text: 'فيسبوك',
-                                icon: Icons.facebook,
-                                iconColor: Colors.blue,
-                                onPressed: () {},
-                              ),
-                            ),
-                          ],
+                            );
+                          },
+                        ),
+                        SizedBox(height: 8.h),
+                        Text(
+                          'يمكنك اختيار Google أو Apple أو Facebook في الخطوة التالية.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: Colors.grey, fontSize: 12.fz),
                         ),
                         SizedBox(height: 12.h),
                         KadmatSecondaryButton(

@@ -33,7 +33,7 @@ jobs:
             echo "HAS_SUPABASE_SECRETS=true" >> "$GITHUB_ENV"
           else
             echo "HAS_SUPABASE_SECRETS=false" >> "$GITHUB_ENV"
-            echo "::warning::Skipping accept-offer audit because SUPABASE secrets are missing."
+            echo "::warning::Skipping accept-offer contract audit because SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY is not configured."
           fi
 
       - name: Use Node.js 18.x
@@ -55,6 +55,6 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
 
-      - name: Skip audit (no secrets)
+      - name: Skip accept-offer audit when secrets are missing
         if: env.HAS_SUPABASE_SECRETS != 'true'
         run: 'echo "Accept-offer contract audit skipped: missing SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY."'

@@ -18,19 +18,20 @@ class AppRoutes {
   static const technicianHome = '/technician/home';
   static const technicianSettings = '/technician/settings';
   static const technicianHelp = '/technician/help';
+  static const admin = '/admin';
+  static const adminDashboard = '/admin/dashboard';
 
   // ==================== CUSTOMER HOME & TABS ====================
   static const home = '/';
-  static const booking = 'booking/:serviceId';
-  static const serviceDetails = 'service-details'; // Sub-route of home
+  static const booking = 'booking/:serviceId'; // Compatibility alias
+  static const serviceDetails = 'service-details'; // Compatibility alias
   static const messages = 'messages'; // Sub-route of home
-  static const tracking = 'tracking/:bookingId'; // Sub-route of home
+  static const tracking = 'tracking/:bookingId'; // Compatibility alias
   static const customerWallet = '/customer-wallet';
+  static const customerWalletTransactions = '/customer-wallet/transactions';
   static const wallet = '/wallet';
   static const customerCreateRequest = '/customer/create-request';
   static const notifications = '/notifications';
-  static const admin = '/admin';
-  static const adminDashboard = '/admin/dashboard';
 
   // ==================== SHARED JOB SCREENS ====================
   static const searchingForTechnician = '/searching-for-technician';
@@ -54,7 +55,7 @@ class AppRoutes {
 
   // ==================== TECHNICIAN JOB FLOW ====================
   static const technicianJobDetail =
-      '/technician/job/:jobId'; // Legacy? Or specific?
+      '/technician/job/:jobId'; // Compatibility alias
   static const technicianJobDetailV2 = '/jobs/:jobId/technician/detail';
   static const technicianAccepted = '/jobs/:jobId/technician/accepted';
   static const technicianSetPrice = '/jobs/:jobId/technician/set-price';
@@ -79,7 +80,8 @@ class AppRoutes {
   // ==================== HELPER METHODS ====================
 
   static String buildBookingPath(String serviceId) => '/booking/$serviceId';
-  static String buildTrackingPath(String bookingId) => '/tracking/$bookingId';
+  static String buildTrackingPath(String bookingId) =>
+      buildCustomerInProgressPath(bookingId);
   static String buildActiveJobPath(String jobId) => '/active-job/$jobId';
 
   static String buildJobChatPath(String jobId) => '/jobs/$jobId/chat';

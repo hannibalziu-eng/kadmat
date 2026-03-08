@@ -20,6 +20,28 @@ class Wallet with _$Wallet {
 
   factory Wallet.fromJson(Map<String, dynamic> json) => _$WalletFromJson(json);
 
+  factory Wallet.fromApiJson(Map<String, dynamic> json) {
+    final now = DateTime.now();
+    final normalized = <String, dynamic>{
+      'id': json['id']?.toString() ?? '',
+      'user_id': json['user_id']?.toString() ?? '',
+      'balance': _asDouble(json['balance']),
+      'totalEarnings': _asDouble(
+        json['total_earnings'] ?? json['totalEarnings'],
+      ),
+      'currency': json['currency']?.toString() ?? 'SAR',
+      'created_at':
+          _asDateTimeString(json['created_at']) ??
+          _asDateTimeString(json['updated_at']) ??
+          now.toIso8601String(),
+      'updated_at':
+          _asDateTimeString(json['updated_at']) ??
+          _asDateTimeString(json['created_at']) ??
+          now.toIso8601String(),
+    };
+    return Wallet.fromJson(normalized);
+  }
+
   @override
   @JsonKey(name: 'user_id')
   String get userId => throw UnimplementedError();
@@ -50,6 +72,22 @@ class WalletTransaction with _$WalletTransaction {
 
   factory WalletTransaction.fromJson(Map<String, dynamic> json) =>
       _$WalletTransactionFromJson(json);
+
+  factory WalletTransaction.fromApiJson(Map<String, dynamic> json) {
+    final createdAt =
+        _asDateTimeString(json['created_at']) ??
+        DateTime.now().toIso8601String();
+    final normalized = <String, dynamic>{
+      'id': json['id']?.toString() ?? '',
+      'wallet_id': json['wallet_id']?.toString() ?? '',
+      'amount': _asDouble(json['amount']),
+      'type': json['type']?.toString() ?? 'transaction',
+      'description': json['description']?.toString(),
+      'reference_id': json['reference_id']?.toString(),
+      'created_at': createdAt,
+    };
+    return WalletTransaction.fromJson(normalized);
+  }
 
   @override
   @JsonKey(name: 'wallet_id')
@@ -116,4 +154,19 @@ class WithdrawRequest {
         return 'قيد المراجعة';
     }
   }
+}
+
+double _asDouble(Object? value) {
+  if (value is num) return value.toDouble();
+  if (value is String) {
+    return double.tryParse(value) ?? 0.0;
+  }
+  return 0.0;
+}
+
+String? _asDateTimeString(Object? value) {
+  if (value == null) return null;
+  final raw = value.toString().trim();
+  if (raw.isEmpty) return null;
+  return DateTime.tryParse(raw)?.toIso8601String();
 }

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_scalify/flutter_scalify.dart';
 import 'package:shimmer/shimmer.dart';
+import '../../../core/navigation/app_routes.dart';
 import '../data/service_repository.dart';
 import '../domain/service.dart';
 import '../../auth/data/auth_repository.dart';
@@ -345,7 +346,7 @@ class _HomeScreenContentState extends ConsumerState<HomeScreenContent> {
   }) {
     return GestureDetector(
       onTap: () => context.push(
-        '/service-details',
+        AppRoutes.customerCreateRequest,
         extra: {'serviceId': service.id, 'serviceName': title},
       ),
       child: Container(

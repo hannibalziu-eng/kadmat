@@ -7,6 +7,7 @@ import cron from 'node-cron';
 import { supabaseAdmin } from '../config/supabase.js';
 import { sendPushNotification } from '../services/fcmService.js';
 import { startJobSearch } from '../services/jobSearchService.js';
+import { hasActivePendingOffers } from '../utils/jobOfferState.js';
 
 // Configuration
 const JOB_EXPIRY_MINUTES = 30;       // Job expires if no technician found in 30 mins
@@ -63,6 +64,10 @@ async function checkJobExpiry() {
 
     for (const job of expiredJobs) {
         try {
+            if (await hasActivePendingOffers(job.id)) {
+                continue;
+            }
+
             // Check if we should retry or give up
             const searchAttempts = job.search_attempts || 0;
 

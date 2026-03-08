@@ -16,7 +16,8 @@ class Endpoints {
   static String acceptOffer(String id) => '/jobs/$id/accept-offer';
   static String setPrice(String id) => '/jobs/$id/set-price';
   static String confirmPrice(String id) => '/jobs/$id/confirm-price';
-  static String technicianProgress(String id) => '/jobs/$id/technician-progress';
+  static String technicianProgress(String id) =>
+      '/jobs/$id/technician-progress';
   static String completeJob(String id) => '/jobs/$id/complete';
   static String rateJob(String id) => '/jobs/$id/rate';
   static String cancelJob(String id) => '/jobs/$id/cancel';
@@ -26,6 +27,12 @@ class Endpoints {
   static const String walletTransactions = '/wallet/transactions';
   static const String walletWithdraw = '/wallet/withdraw';
   static const String walletWithdrawals = '/wallet/withdrawals';
+
+  // Messages
+  static const String messageConversations = '/messages/conversations';
+  static const String messageUnreadCount = '/messages/unread-count';
+  static String messagesForJob(String jobId) => '/messages/$jobId';
+  static String markMessagesRead(String jobId) => '/messages/$jobId/read';
 
   // Technician
   static const String technicianLocation = '/technician/location';

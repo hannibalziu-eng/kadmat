@@ -65,6 +65,12 @@ backend/logs/
 # Local workspace artifacts
 analysis_output.txt
 memory/
+output/playwright/
+
+# Playwright E2E
+e2e/playwright/node_modules/
+e2e/playwright/.env
+e2e/playwright/.env.local
 
 # Accidental duplicate copies ("... 2")
 .flutter-plugins-dependencies 2

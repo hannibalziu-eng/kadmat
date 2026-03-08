@@ -7,7 +7,6 @@ import 'package:image_picker/image_picker.dart';
 import '../../../core/navigation/app_routes.dart';
 import '../../../core/providers/photo_upload_provider.dart';
 import '../../../core/widgets/kadmat_components.dart';
-import 'widgets/social_auth_button.dart';
 import 'auth_controller.dart';
 import '../data/auth_repository.dart';
 
@@ -28,28 +27,12 @@ class _TechnicianRegisterScreenState
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
   String? _selectedService;
-  bool _isSocialLogin = false;
 
   // Document Upload State
   final List<XFile> _selectedDocuments = [];
   bool _isUploading = false;
   String _uploadStatus = '';
   String? _submitError;
-
-  void _simulateSocialLogin() {
-    setState(() {
-      _isSocialLogin = true;
-      _nameController.text = 'أحمد محمد (من فيسبوك)';
-      _emailController.text = 'ahmed.fb@example.com';
-      // Password fields are not needed
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('تم جلب البيانات من فيسبوك. يرجى إكمال باقي المعلومات.'),
-        backgroundColor: Colors.blue,
-      ),
-    );
-  }
 
   @override
   void dispose() {
@@ -196,27 +179,36 @@ class _TechnicianRegisterScreenState
                 ),
                 const SizedBox(height: 32),
 
-                // Social Auth Section
-                Row(
-                  children: [
-                    Expanded(
-                      child: SocialAuthButton(
-                        text: 'جوجل',
-                        icon: Icons.g_mobiledata,
-                        iconColor: Colors.red,
-                        onPressed: _simulateSocialLogin,
-                      ),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.04),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.08),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: SocialAuthButton(
-                        text: 'فيسبوك',
-                        icon: Icons.facebook,
-                        iconColor: Colors.blue,
-                        onPressed: _simulateSocialLogin,
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(
+                        Icons.info_outline,
+                        color: Colors.orange,
+                        size: 20,
                       ),
-                    ),
-                  ],
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'التسجيل الاجتماعي للفنيين غير متاح حالياً، لأن إنشاء الحساب يتطلب اختيار التخصص ورفع المستندات قبل التفعيل.',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: subtitleColor,
+                            height: 1.5,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 24),
 
@@ -256,7 +248,6 @@ class _TechnicianRegisterScreenState
                   hint: 'example@mail.com',
                   prefixIcon: Icons.email_outlined,
                   keyboardType: TextInputType.emailAddress,
-                  readOnly: _isSocialLogin, // Read-only if social login
                   validator: (value) => value?.isEmpty ?? true
                       ? 'الرجاء إدخال البريد الإلكتروني'
                       : null,
@@ -274,34 +265,32 @@ class _TechnicianRegisterScreenState
                 ),
                 const SizedBox(height: 16),
 
-                if (!_isSocialLogin) ...[
-                  KadmatTextField(
-                    controller: _passwordController,
-                    label: 'كلمة المرور',
-                    hint: '********',
-                    prefixIcon: Icons.lock_outline,
-                    obscureText: true,
-                    validator: (value) => value?.isEmpty ?? true
-                        ? 'الرجاء إدخال كلمة المرور'
-                        : null,
-                  ),
-                  const SizedBox(height: 16),
+                KadmatTextField(
+                  controller: _passwordController,
+                  label: 'كلمة المرور',
+                  hint: '********',
+                  prefixIcon: Icons.lock_outline,
+                  obscureText: true,
+                  validator: (value) => value?.isEmpty ?? true
+                      ? 'الرجاء إدخال كلمة المرور'
+                      : null,
+                ),
+                const SizedBox(height: 16),
 
-                  KadmatTextField(
-                    controller: _confirmPasswordController,
-                    label: 'تأكيد كلمة المرور',
-                    hint: '********',
-                    prefixIcon: Icons.lock_outline,
-                    obscureText: true,
-                    validator: (value) {
-                      if (value != _passwordController.text) {
-                        return 'كلمات المرور غير متطابقة';
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                ],
+                KadmatTextField(
+                  controller: _confirmPasswordController,
+                  label: 'تأكيد كلمة المرور',
+                  hint: '********',
+                  prefixIcon: Icons.lock_outline,
+                  obscureText: true,
+                  validator: (value) {
+                    if (value != _passwordController.text) {
+                      return 'كلمات المرور غير متطابقة';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
 
                 // Specialty
                 _buildLabel('مجال التخصص'),
@@ -493,7 +482,7 @@ class _TechnicianRegisterScreenState
 
                 // Submit Button
                 KadmatPrimaryButton(
-                  label: _isSocialLogin ? 'إكمال التسجيل' : 'إنشاء الحساب',
+                  label: 'إنشاء الحساب',
                   onPressed: _isUploading ? null : _submit,
                   isLoading: _isUploading,
                 ),

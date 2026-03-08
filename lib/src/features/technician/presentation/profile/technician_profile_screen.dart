@@ -25,6 +25,14 @@ class _TechnicianProfileScreenState
   bool _isLoading = true;
   String? _errorMessage;
 
+  ImageProvider? _networkImageOrNull(String? rawUrl) {
+    final url = rawUrl?.trim();
+    if (url == null || url.isEmpty) return null;
+    final uri = Uri.tryParse(url);
+    if (uri == null || !uri.hasScheme || !uri.hasAuthority) return null;
+    return NetworkImage(url);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -145,7 +153,11 @@ class _TechnicianProfileScreenState
 
     // Fallback values if profile fields are missing
     final fullName = profile.fullName;
-    final title = profile.title ?? 'فني';
+    final title = profile.title?.trim().isNotEmpty == true
+        ? profile.title!
+        : (profile.specialization?.trim().isNotEmpty == true
+              ? profile.specialization!
+              : 'فني');
     final bio = profile.bio ?? 'لا توجد نبذة شخصية';
     final location = profile.location ?? 'غير محدد';
 
@@ -191,10 +203,14 @@ class _TechnicianProfileScreenState
                     ),
                     child: CircleAvatar(
                       radius: 48.r,
-                      backgroundImage: NetworkImage(
-                        profile.profileImageUrl ??
-                            'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400',
+                      backgroundColor: Theme.of(context).colorScheme.primary,
+                      backgroundImage: _networkImageOrNull(
+                        profile.profileImageUrl,
                       ),
+                      child:
+                          _networkImageOrNull(profile.profileImageUrl) == null
+                          ? Icon(Icons.person, color: Colors.white, size: 34.s)
+                          : null,
                     ),
                   ),
                   SizedBox(width: 16.w),

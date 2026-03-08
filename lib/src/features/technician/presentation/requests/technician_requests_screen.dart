@@ -5,12 +5,15 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import 'package:geolocator/geolocator.dart' show Position;
 import '../../../../core/app_theme.dart';
+import '../../../../core/services/location/location_service.dart';
 import '../../../../core/widgets/kadmat_toast.dart';
 import '../../../jobs/presentation/job_controller.dart';
 import '../../../jobs/domain/job.dart';
 import '../../../jobs/data/job_repository.dart';
 import '../../../../core/navigation/app_routes.dart';
+import '../../../auth/data/auth_repository.dart';
 import '../providers/technician_dispatch_feed_provider.dart';
+import '../providers/technician_tab_provider.dart';
 import '../utils/technician_dispatch_queue.dart';
 
 enum _NewRequestsSortMode { newest, closest, oldestWaiting }
@@ -79,8 +82,51 @@ class _TechnicianRequestsScreenState
   }
 
   Widget _buildNewRequestsTab() {
+    final userProfile = ref.watch(authRepositoryProvider).userProfile;
+    final isOnline = userProfile?['is_online'] == true;
+    final locationAsync = ref.watch(locationStreamProvider);
     final dispatchFeedAsync = ref.watch(technicianDispatchFeedProvider);
     final repository = ref.watch(jobRepositoryProvider);
+
+    if (userProfile != null && !isOnline) {
+      return _buildNewRequestsGateState(
+        icon: Icons.power_settings_new_rounded,
+        title: 'أنت غير متصل حالياً',
+        subtitle:
+            'فعّل حالة الاتصال من الرئيسية حتى تبدأ باستقبال الطلبات الجديدة.',
+        actionLabel: 'العودة للرئيسية',
+        onAction: () => ref.read(technicianTabIndexProvider.notifier).state = 0,
+      );
+    }
+
+    if (locationAsync.hasError && !dispatchFeedAsync.hasValue) {
+      return _buildNewRequestsGateState(
+        icon: Icons.location_off_rounded,
+        title: 'تعذر تحديد موقعك',
+        subtitle:
+            'امنح التطبيق صلاحية الموقع ثم أعد المحاولة لعرض الطلبات القريبة.',
+        actionLabel: 'إعادة المحاولة',
+        onAction: () {
+          ref.invalidate(locationStreamProvider);
+          ref.invalidate(technicianDispatchFeedProvider);
+          ref.invalidate(watchNearbyJobsStreamProvider);
+        },
+      );
+    }
+
+    if (locationAsync.isLoading && !dispatchFeedAsync.hasValue) {
+      return _buildNewRequestsGateState(
+        icon: Icons.my_location_rounded,
+        title: 'جار تحديد موقعك',
+        subtitle: 'سنبدأ بعرض الطلبات الجديدة بمجرد توفر موقعك الحالي.',
+        actionLabel: 'تحديث',
+        onAction: () {
+          ref.invalidate(locationStreamProvider);
+          ref.invalidate(technicianDispatchFeedProvider);
+        },
+        showSpinner: true,
+      );
+    }
 
     return dispatchFeedAsync.when(
       data: (feed) {
@@ -516,6 +562,53 @@ class _TechnicianRequestsScreenState
           textAlign: TextAlign.center,
         ),
       ],
+    );
+  }
+
+  Widget _buildNewRequestsGateState({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required String actionLabel,
+    required VoidCallback onAction,
+    bool showSpinner = false,
+  }) {
+    return Center(
+      child: Padding(
+        padding: EdgeInsets.all(24.w),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 60.s, color: Colors.grey),
+            if (showSpinner) ...[
+              SizedBox(height: 16.h),
+              SizedBox(
+                width: 24.w,
+                height: 24.h,
+                child: const CircularProgressIndicator(strokeWidth: 2.5),
+              ),
+            ],
+            SizedBox(height: 16.h),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 16.fz, fontWeight: FontWeight.bold),
+            ),
+            SizedBox(height: 8.h),
+            Text(
+              subtitle,
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 13.fz, color: Colors.grey),
+            ),
+            SizedBox(height: 16.h),
+            ElevatedButton.icon(
+              onPressed: onAction,
+              icon: const Icon(Icons.refresh),
+              label: Text(actionLabel),
+            ),
+          ],
+        ),
+      ),
     );
   }
 

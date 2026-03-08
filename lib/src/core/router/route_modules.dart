@@ -12,13 +12,11 @@ import '../../features/auth/presentation/technician_register_screen.dart';
 
 // Home & Core Features
 import '../../features/main/main_screen.dart';
-import '../../features/booking/presentation/booking_screen.dart';
-import '../../features/booking/presentation/service_details_screen.dart';
 import '../../features/messages/presentation/messages_screen.dart';
 import '../../features/messages/presentation/chat_screen.dart';
-import '../../features/tracking/presentation/tracking_screen.dart';
-import '../../features/wallet/presentation/wallet_screen.dart';
 import '../../features/notifications/presentation/screens/notifications_screen.dart';
+import '../../features/profile/presentation/customer_wallet_screen.dart';
+import '../../features/profile/presentation/customer_wallet_transactions_screen.dart';
 
 // Technician Features
 import '../../features/technician/presentation/technician_main_screen.dart';
@@ -26,6 +24,7 @@ import '../../features/technician/presentation/jobs/technician_job_detail_screen
 import '../../features/technician/presentation/technician_public_profile_screen.dart';
 import '../../features/technician/presentation/screens/technician_settings_screen.dart';
 import '../../features/technician/presentation/screens/technician_help_screen.dart';
+import '../../features/technician/presentation/wallet/technician_wallet_screen.dart';
 
 // Job & Order Features
 import '../../features/jobs/presentation/screens/customer_job_tracking_screen.dart';
@@ -46,7 +45,7 @@ import '../../features/jobs/presentation/payment/price_confirmation_screen.dart'
 import '../../features/orders/presentation/technician_price_input_screen.dart';
 
 // Admin Features
-import '../admin/presentation/screens/admin_dashboard_screen.dart';
+import '../../admin/presentation/screens/admin_dashboard_screen.dart';
 import '../navigation/app_routes.dart';
 
 /// Modular route definitions for better organization and maintainability
@@ -113,16 +112,15 @@ class RouteModules {
             path: 'booking/:serviceId',
             builder: (context, state) {
               final serviceId = state.pathParameters['serviceId']!;
-              return BookingScreen(serviceId: serviceId);
+              return CustomerServiceRequestScreen(initialServiceId: serviceId);
             },
           ),
           GoRoute(
             path: 'service-details',
             builder: (context, state) {
-              final extra = state.extra as Map<String, dynamic>;
-              return ServiceDetailsScreen(
-                serviceId: extra['serviceId'],
-                serviceName: extra['serviceName'],
+              final extra = state.extra as Map<String, dynamic>? ?? const {};
+              return CustomerServiceRequestScreen(
+                initialServiceId: extra['serviceId']?.toString(),
               );
             },
           ),
@@ -132,18 +130,24 @@ class RouteModules {
           ),
           GoRoute(
             path: 'tracking/:bookingId',
-            builder: (context, state) {
+            redirect: (context, state) {
               final bookingId = state.pathParameters['bookingId']!;
-              return TrackingScreen(bookingId: bookingId);
+              return AppRoutes.buildCustomerInProgressPath(bookingId);
             },
           ),
           GoRoute(
             path: AppRoutes.asChild(AppRoutes.wallet),
-            builder: (context, state) => const WalletScreen(),
+            path: AppRoutes.asChild(AppRoutes.customerWallet),
+            builder: (context, state) => const TechnicianWalletScreen(),
           ),
           GoRoute(
             path: AppRoutes.asChild(AppRoutes.customerWallet),
-            builder: (context, state) => const WalletScreen(),
+            builder: (context, state) => const CustomerWalletScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.asChild(AppRoutes.customerWalletTransactions),
+            builder: (context, state) =>
+                const CustomerWalletTransactionsScreen(),
           ),
           GoRoute(
             path: AppRoutes.asChild(AppRoutes.notifications),
@@ -354,6 +358,7 @@ class RouteModules {
             jobId: jobId,
             otherUserName: extra['otherUserName']?.toString(),
             otherUserImage: extra['otherUserImage']?.toString(),
+            otherUserPhone: extra['otherUserPhone']?.toString(),
           );
         },
       ),
@@ -399,7 +404,12 @@ class RouteModules {
       ),
       GoRoute(
         path: AppRoutes.customerCreateRequest,
-        builder: (context, state) => const CustomerServiceRequestScreen(),
+        builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>? ?? const {};
+          return CustomerServiceRequestScreen(
+            initialServiceId: extra['serviceId']?.toString(),
+          );
+        },
       ),
       GoRoute(
         path: AppRoutes.rateJob,

@@ -11,9 +11,11 @@ import '../../../core/navigation/app_routes.dart';
 import '../../../core/navigation/job_flow_redirects.dart';
 import '../../../core/exceptions/app_exceptions.dart';
 import '../../../core/utils/error_handler.dart';
+import '../../../core/utils/technician_summary.dart';
 import '../data/job_repository.dart';
 import '../domain/job_status.dart';
 import '../../../common_widgets/badge_widget.dart';
+import 'widgets/technician_offer_identity.dart';
 
 class SearchingForTechnicianScreen extends ConsumerStatefulWidget {
   final String jobId;
@@ -51,6 +53,7 @@ class _SearchingForTechnicianScreenState
   bool _technicianFound = false;
   String? _acceptingOfferId;
   Map<String, dynamic>? _technician;
+  String? _nextCustomerRoute;
   final bool _showingNoTechMessage =
       false; // Show "no tech yet" without blocking
   StreamSubscription? _jobSubscription;
@@ -142,19 +145,23 @@ class _SearchingForTechnicianScreenState
   void _handleFoundTechnician(dynamic job) {
     if (_navigating) return;
 
+    final nextRoute =
+        customerRouteForJobStatus(
+          status: (job.status ?? '').toString(),
+          jobId: widget.jobId,
+        ) ??
+        AppRoutes.buildCustomerInProgressPath(widget.jobId);
+
     _navigating = true;
     setState(() {
       _technicianFound = true;
       _technician = job.technician;
+      _nextCustomerRoute = nextRoute;
     });
 
     Future.delayed(const Duration(seconds: 5), () {
       if (!mounted) return;
-      final route = customerRouteForJobStatus(
-        status: (job.status ?? '').toString(),
-        jobId: widget.jobId,
-      );
-      context.go(route ?? AppRoutes.buildCustomerInProgressPath(widget.jobId));
+      context.go(_nextCustomerRoute ?? nextRoute);
     });
   }
 
@@ -328,6 +335,14 @@ class _SearchingForTechnicianScreenState
     await Future.delayed(const Duration(milliseconds: 280));
     if (!mounted) return;
     context.go(route);
+  }
+
+  void _openTechnicianProfile(String technicianId) {
+    final normalizedId = technicianId.trim();
+    if (normalizedId.isEmpty || normalizedId == 'null') {
+      return;
+    }
+    context.push(AppRoutes.buildTechnicianProfilePath(normalizedId));
   }
 
   Future<void> _cancelJobAndExit() async {
@@ -690,10 +705,20 @@ class _SearchingForTechnicianScreenState
   }
 
   Widget _buildFoundScreen() {
-    final techName = _technician?['full_name'] ?? 'الفني';
-    final techPhone = _technician?['phone'] ?? '';
-    final techRating = (_technician?['rating'] ?? 5.0).toDouble();
-    final techPhoto = _technician?['avatar_url'];
+    final technician = TechnicianSummary.fromMap(
+      _technician,
+      fallbackName: 'الفني',
+      fallbackTitle: 'فني خدمات',
+    );
+    final techName = technician.fullName;
+    final techRating = technician.rating;
+    final techPhoto = technician.profileImageUrl;
+    final technicianId = technician.id.trim();
+    final showProfileButton =
+        technicianId.isNotEmpty && technicianId.toLowerCase() != 'null';
+    final continueRoute =
+        _nextCustomerRoute ??
+        AppRoutes.buildCustomerTechnicianFoundPath(widget.jobId);
 
     return SingleChildScrollView(
       padding: EdgeInsets.all(24.w),
@@ -772,6 +797,49 @@ class _SearchingForTechnicianScreenState
                             ),
                           ),
                           SizedBox(height: 4.h),
+                          if (technician.primaryTitle.isNotEmpty)
+                            Text(
+                              technician.primaryTitle,
+                              style: TextStyle(
+                                fontSize: 14.fz,
+                                color: Colors.white70,
+                              ),
+                            ),
+                          if (technician.secondaryTitle != null) ...[
+                            SizedBox(height: 4.h),
+                            Text(
+                              technician.secondaryTitle!,
+                              style: TextStyle(
+                                fontSize: 13.fz,
+                                color: Colors.white54,
+                              ),
+                            ),
+                          ],
+                          if (technician.location != null) ...[
+                            SizedBox(height: 8.h),
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.location_on_outlined,
+                                  size: 14.s,
+                                  color: Colors.white54,
+                                ),
+                                SizedBox(width: 4.w),
+                                Expanded(
+                                  child: Text(
+                                    technician.location!,
+                                    style: TextStyle(
+                                      fontSize: 12.fz,
+                                      color: Colors.white54,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                          SizedBox(height: 8.h),
                           Row(
                             children: [
                               Icon(Icons.star, color: Colors.amber, size: 18.s),
@@ -809,6 +877,28 @@ class _SearchingForTechnicianScreenState
                                   ),
                                 ),
                               ),
+                              if (technician.completedJobs > 0) ...[
+                                SizedBox(width: 8.w),
+                                Container(
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: 8.w,
+                                    vertical: 2.h,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.primaryColor.withValues(
+                                      alpha: 0.14,
+                                    ),
+                                    borderRadius: BorderRadius.circular(8.r),
+                                  ),
+                                  child: Text(
+                                    '${technician.completedJobs} أعمال مكتملة',
+                                    style: TextStyle(
+                                      fontSize: 12.fz,
+                                      color: AppTheme.primaryColor,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ],
                           ),
 
@@ -842,42 +932,72 @@ class _SearchingForTechnicianScreenState
                 Divider(color: Colors.white24),
                 SizedBox(height: 20.h),
 
-                // Action Buttons
+                Container(
+                  width: double.infinity,
+                  padding: EdgeInsets.all(14.w),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.04),
+                    borderRadius: BorderRadius.circular(16.r),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.08),
+                    ),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        Icons.info_outline,
+                        size: 18.s,
+                        color: AppTheme.primaryColor,
+                      ),
+                      SizedBox(width: 10.w),
+                      Expanded(
+                        child: Text(
+                          'هذه شاشة انتقالية فقط. ستجد المحادثة والاتصال وأدوات متابعة الطلب داخل الشاشة التالية فور نقلك إليها.',
+                          style: TextStyle(
+                            fontSize: 13.fz,
+                            color: Colors.white70,
+                            height: 1.45,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                SizedBox(height: 16.h),
                 Row(
                   children: [
-                    // Call Button
+                    if (showProfileButton) ...[
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => _openTechnicianProfile(technicianId),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.white,
+                            side: BorderSide(
+                              color: Colors.white.withValues(alpha: 0.28),
+                            ),
+                            padding: EdgeInsets.symmetric(vertical: 14.h),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12.r),
+                            ),
+                          ),
+                          child: const Text('ملف الفني'),
+                        ),
+                      ),
+                      SizedBox(width: 12.w),
+                    ],
                     Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: techPhone.isNotEmpty
-                            ? () => _callTechnician(techPhone)
-                            : null,
-                        icon: Icon(Icons.phone, size: 20.s),
-                        label: Text('اتصال'),
+                      child: ElevatedButton(
+                        onPressed: () => context.go(continueRoute),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.green,
+                          backgroundColor: AppTheme.primaryColor,
                           foregroundColor: Colors.white,
                           padding: EdgeInsets.symmetric(vertical: 14.h),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12.r),
                           ),
                         ),
-                      ),
-                    ),
-                    SizedBox(width: 12.w),
-                    // Chat Button (placeholder)
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () {},
-                        icon: Icon(Icons.chat_bubble_outline, size: 20.s),
-                        label: Text('محادثة'),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: AppTheme.primaryColor,
-                          padding: EdgeInsets.symmetric(vertical: 14.h),
-                          side: BorderSide(color: AppTheme.primaryColor),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12.r),
-                          ),
-                        ),
+                        child: const Text('متابعة الطلب الآن'),
                       ),
                     ),
                   ],
@@ -899,25 +1019,13 @@ class _SearchingForTechnicianScreenState
 
           // Skip button
           TextButton(
-            onPressed: () =>
-                context.go(AppRoutes.buildCustomerSearchingPath(widget.jobId)),
+            onPressed: () => context.go(continueRoute),
             child: Text(
-              'الانتقال الآن ←',
+              'فتح شاشة المتابعة ←',
               style: TextStyle(fontSize: 16.fz, color: AppTheme.primaryColor),
             ),
           ).animate().fadeIn(delay: 800.ms),
         ],
-      ),
-    );
-  }
-
-  void _callTechnician(String phone) {
-    // In a real app, use url_launcher to make a phone call
-    debugPrint('Calling: $phone');
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('جاري الاتصال بـ $phone'),
-        backgroundColor: Colors.green,
       ),
     );
   }
@@ -1032,7 +1140,11 @@ class _SearchingForTechnicianScreenState
   }
 
   Widget _buildOfferCard(Map<String, dynamic> offer) {
-    final tech = offer['technician'] ?? {};
+    final tech = (offer['technician'] as Map<String, dynamic>?) ?? const {};
+    final technician = TechnicianSummary.fromMap(tech);
+    final technicianId = ((offer['technician_id'] ?? tech['id']) ?? '')
+        .toString()
+        .trim();
     final price = offer['price'];
     final offerId = (offer['id'] ?? '').toString().trim();
     final isOfferValid = _isValidUuid(offerId);
@@ -1053,38 +1165,15 @@ class _SearchingForTechnicianScreenState
               CircleAvatar(
                 radius: 30.r,
                 backgroundColor: Colors.grey[800],
-                backgroundImage: tech['profile_image_url'] != null
-                    ? NetworkImage(tech['profile_image_url'])
+                backgroundImage: technician.profileImageUrl != null
+                    ? NetworkImage(technician.profileImageUrl!)
                     : null,
-                child: tech['profile_image_url'] == null
+                child: technician.profileImageUrl == null
                     ? const Icon(Icons.person, color: Colors.white)
                     : null,
               ),
               SizedBox(width: 12.w),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      tech['full_name'] ?? 'فني',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 16.fz,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    Row(
-                      children: [
-                        Icon(Icons.star, color: Colors.amber, size: 14.s),
-                        Text(
-                          ' ${tech['rating'] ?? 5.0}',
-                          style: TextStyle(color: Colors.white70),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
+              Expanded(child: TechnicianOfferIdentity(technician: technician)),
               Container(
                 padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 8.h),
                 decoration: BoxDecoration(
@@ -1104,33 +1193,56 @@ class _SearchingForTechnicianScreenState
             ],
           ),
           const Spacer(),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: (!isOfferValid || _acceptingOfferId != null)
-                  ? null
-                  : () => _acceptOffer(offerId),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.primaryColor,
-                padding: EdgeInsets.symmetric(vertical: 12.h),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12.r),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: (technicianId.isEmpty || technicianId == 'null')
+                      ? null
+                      : () => _openTechnicianProfile(technicianId),
+                  style: OutlinedButton.styleFrom(
+                    side: BorderSide(
+                      color: Colors.white.withValues(alpha: 0.28),
+                    ),
+                    padding: EdgeInsets.symmetric(vertical: 12.h),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12.r),
+                    ),
+                  ),
+                  child: const Text('ملف الفني'),
                 ),
               ),
-              child: isAcceptingThisOffer
-                  ? SizedBox(
-                      width: 18.s,
-                      height: 18.s,
-                      child: const CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : Text(
-                      isOfferValid ? 'قبول العرض' : 'عرض غير صالح',
-                      style: TextStyle(
-                        fontSize: 16.fz,
-                        fontWeight: FontWeight.bold,
-                      ),
+              SizedBox(width: 10.w),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: (!isOfferValid || _acceptingOfferId != null)
+                      ? null
+                      : () => _acceptOffer(offerId),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.primaryColor,
+                    padding: EdgeInsets.symmetric(vertical: 12.h),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12.r),
                     ),
-            ),
+                  ),
+                  child: isAcceptingThisOffer
+                      ? SizedBox(
+                          width: 18.s,
+                          height: 18.s,
+                          child: const CircularProgressIndicator(
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : Text(
+                          isOfferValid ? 'قبول العرض' : 'عرض غير صالح',
+                          style: TextStyle(
+                            fontSize: 16.fz,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                ),
+              ),
+            ],
           ),
         ],
       ),

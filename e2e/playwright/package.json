@@ -1,0 +1,26 @@
+{
+  "name": "kadmat-playwright-e2e",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:debug": "playwright test --debug",
+    "test:list": "playwright test --list",
+    "test:smoke": "playwright test tests/auth.spec.ts tests/navigation.spec.ts",
+    "report": "playwright show-report",
+    "bootstrap:local": "node scripts/bootstrap-local-env.mjs",
+    "verify:flow": "node scripts/snapshot-local-flow.mjs",
+    "verify:private-profile": "node scripts/verify-technician-private-profile.mjs",
+    "seed": "node scripts/seed-staging.mjs",
+    "cleanup": "node scripts/cleanup-staging.mjs",
+    "matrix": "node scripts/coverage-matrix.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.54.2",
+    "@types/node": "^22.13.5",
+    "dotenv": "^16.5.0",
+    "typescript": "^5.9.2"
+  }
+}

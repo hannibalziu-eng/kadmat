@@ -18,6 +18,7 @@ class AuthRepository {
   String? _currentUser;
   String? _userType;
   Map<String, dynamic>? _userProfile;
+  bool _isPerformingLogin = false;
 
   AuthRepository(this._client) {
     _checkAuthStatus();
@@ -32,6 +33,10 @@ class AuthRepository {
       final Session? session = data.session;
 
       if (event == AuthChangeEvent.signedOut) {
+        if (_isPerformingLogin) {
+          debugPrint('ℹ️ Ignoring signedOut event during login cleanup');
+          return;
+        }
         _handleSignOut();
       } else if (event == AuthChangeEvent.signedIn ||
           event == AuthChangeEvent.tokenRefreshed) {
@@ -88,12 +93,18 @@ class AuthRepository {
   String? get userType => _userType;
   Map<String, dynamic>? get userProfile => _userProfile;
 
+  void mergeCachedUserProfile(Map<String, dynamic> updates) {
+    _userProfile = {...?_userProfile, ...updates};
+  }
+
   Future<void> signInWithEmailAndPassword(
     String email,
     String password, {
     String? requiredUserType,
   }) async {
     try {
+      _isPerformingLogin = true;
+
       // Clear any existing session locally (without triggering auth listener redirect)
       // This prevents "Invalid Refresh Token" issues from lingering sessions
       try {
@@ -147,6 +158,8 @@ class AuthRepository {
       throw Exception(message);
     } catch (e) {
       rethrow;
+    } finally {
+      _isPerformingLogin = false;
     }
   }
 

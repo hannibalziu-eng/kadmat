@@ -8,10 +8,12 @@ import 'package:latlong2/latlong.dart';
 import '../../../../core/app_theme.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/navigation/job_flow_redirects.dart';
+import '../../../../core/utils/error_handler.dart';
 import '../../../../core/widgets/job_progress_stepper.dart';
 import '../../../messages/presentation/chat_screen.dart';
 import '../../data/job_repository.dart';
 import '../../domain/job.dart';
+import '../../domain/job_communication_policy.dart';
 import '../../domain/job_status.dart';
 import '../widgets/job_widgets.dart';
 
@@ -62,7 +64,15 @@ class _CustomerJobTrackingScreenState
       body: jobAsync.when(
         data: (job) => _buildContent(job),
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, _) => Center(child: Text('حدث خطأ: $err')),
+        error: (err, _) => Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Text(
+              ErrorHandler.getMessage(err),
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -221,7 +231,8 @@ class _CustomerJobTrackingScreenState
           ),
         ),
         // Chat FAB
-        if (job.technicianId != null)
+        if (job.technicianId != null &&
+            JobCommunicationPolicy.canUseJobCommunication(job))
           Positioned(
             bottom: 220,
             right: 16,
@@ -234,6 +245,7 @@ class _CustomerJobTrackingScreenState
                       jobId: widget.jobId,
                       otherUserName: job.technician?['full_name'],
                       otherUserImage: job.technician?['profile_image_url'],
+                      otherUserPhone: job.technician?['phone']?.toString(),
                     ),
                   ),
                 );

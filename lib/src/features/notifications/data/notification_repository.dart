@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
-import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
 import '../../../core/api/api_client.dart';
 
 part 'notification_repository.g.dart';
@@ -12,6 +15,10 @@ class NotificationItem {
   final String title;
   final String? body;
   final Map<String, dynamic> data;
+  final String? audienceRole;
+  final String? category;
+  final List<String> channels;
+  final int? priority;
   final bool isRead;
   final DateTime createdAt;
 
@@ -21,25 +28,43 @@ class NotificationItem {
     required this.title,
     this.body,
     required this.data,
+    this.audienceRole,
+    this.category,
+    this.channels = const [],
+    this.priority,
     required this.isRead,
     required this.createdAt,
   });
 
   factory NotificationItem.fromJson(Map<String, dynamic> json) {
+    final rawChannels = json['channels'];
     return NotificationItem(
-      id: json['id'],
-      type: json['type'] ?? '',
-      title: json['title'] ?? '',
-      body: json['body'],
-      data: json['data'] ?? {},
+      id: json['id']?.toString() ?? '',
+      type: json['type']?.toString() ?? '',
+      title: json['title']?.toString() ?? '',
+      body: json['body']?.toString(),
+      data: json['data'] is Map<String, dynamic>
+          ? json['data'] as Map<String, dynamic>
+          : json['data'] is Map
+          ? Map<String, dynamic>.from(json['data'] as Map)
+          : const <String, dynamic>{},
+      audienceRole: json['audience_role']?.toString(),
+      category: json['category']?.toString(),
+      channels: rawChannels is List
+          ? rawChannels.map((channel) => channel.toString()).toList()
+          : const <String>[],
+      priority: (json['priority'] as num?)?.toInt(),
       isRead: json['is_read'] ?? false,
-      createdAt: DateTime.parse(json['created_at']),
+      createdAt:
+          DateTime.tryParse(json['created_at']?.toString() ?? '') ??
+          DateTime.fromMillisecondsSinceEpoch(0),
     );
   }
 }
 
 class NotificationRepository {
   final Dio _client;
+  static const _pollInterval = Duration(seconds: 5);
 
   NotificationRepository(this._client);
 
@@ -57,8 +82,23 @@ class NotificationRepository {
           'unread_only': unreadOnly,
         },
       );
-      final List data = response.data['notifications'] ?? [];
-      return data.map((e) => NotificationItem.fromJson(e)).toList();
+      final payload = response.data;
+      final dynamic notifications = payload is Map<String, dynamic>
+          ? payload['notifications'] ??
+                (payload['data'] is Map<String, dynamic>
+                    ? payload['data']['notifications']
+                    : null)
+          : null;
+      final data = notifications is List ? notifications : const [];
+      return data
+          .map(
+            (item) => NotificationItem.fromJson(
+              item is Map<String, dynamic>
+                  ? item
+                  : Map<String, dynamic>.from(item as Map),
+            ),
+          )
+          .toList();
     } catch (e) {
       throw Exception('فشل جلب الإشعارات');
     }
@@ -67,7 +107,22 @@ class NotificationRepository {
   Future<int> getUnreadCount() async {
     try {
       final response = await _client.get('/notifications/unread-count');
-      return response.data['unread_count'] ?? 0;
+      final payload = response.data;
+      if (payload is Map<String, dynamic>) {
+        final nested = payload['data'];
+        if (nested is Map<String, dynamic>) {
+          return (nested['unread_count'] as num?)?.toInt() ?? 0;
+        }
+        return (payload['unread_count'] as num?)?.toInt() ?? 0;
+      }
+      if (payload is Map) {
+        final nested = payload['data'];
+        if (nested is Map) {
+          return (nested['unread_count'] as num?)?.toInt() ?? 0;
+        }
+        return (payload['unread_count'] as num?)?.toInt() ?? 0;
+      }
+      return 0;
     } catch (e) {
       return 0;
     }
@@ -97,14 +152,12 @@ class NotificationRepository {
     }
   }
 
-  /// Watch notifications in real-time
-  Stream<List<NotificationItem>> watchNotifications(String userId) {
-    return Supabase.instance.client
-        .from('notifications')
-        .stream(primaryKey: ['id'])
-        .eq('user_id', userId)
-        .order('created_at', ascending: false)
-        .map((data) => data.map((e) => NotificationItem.fromJson(e)).toList());
+  Stream<List<NotificationItem>> watchNotifications() async* {
+    yield await getNotifications();
+    while (true) {
+      await Future<void>.delayed(_pollInterval);
+      yield await getNotifications();
+    }
   }
 }
 
@@ -116,29 +169,30 @@ NotificationRepository notificationRepository(Ref ref) {
 
 @riverpod
 Stream<int> unreadNotificationCount(Ref ref) async* {
-  final userId = Supabase.instance.client.auth.currentUser?.id;
-  if (userId == null) {
+  final currentUser = Supabase.instance.client.auth.currentUser;
+  if (currentUser == null) {
     yield 0;
     return;
   }
 
-  yield* Supabase.instance.client
-      .from('notifications')
-      .stream(primaryKey: ['id'])
-      .eq('user_id', userId)
-      .map((data) => data.where((n) => n['is_read'] == false).length);
+  final repository = ref.watch(notificationRepositoryProvider);
+  yield await repository.getUnreadCount();
+  while (true) {
+    await Future<void>.delayed(NotificationRepository._pollInterval);
+    yield await repository.getUnreadCount();
+  }
 }
 
 /// Durable notifications stream for the currently authenticated user.
 final liveNotificationsProvider =
     StreamProvider.autoDispose<List<NotificationItem>>((ref) {
-      final userId = Supabase.instance.client.auth.currentUser?.id;
-      if (userId == null) {
+      final currentUser = Supabase.instance.client.auth.currentUser;
+      if (currentUser == null) {
         return Stream.value(const <NotificationItem>[]);
       }
 
       final repository = ref.watch(notificationRepositoryProvider);
-      return repository.watchNotifications(userId);
+      return repository.watchNotifications();
     });
 
 /// Readable unread counter derived from the durable notifications stream.

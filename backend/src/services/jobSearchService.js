@@ -4,6 +4,7 @@
  */
 import { supabaseAdmin } from '../config/supabase.js';
 import { notifyTechniciansWithPush } from './fcmService.js';
+import { hasActivePendingOffers } from '../utils/jobOfferState.js';
 
 // Search tiers: [radius in meters, timeout in seconds]
 const SEARCH_TIERS = [
@@ -391,6 +392,23 @@ async function handleNoTechnicianFound(state) {
     // Last defensive guard before writing terminal search status.
     const searchable = await isJobSearchable(state.jobId);
     if (!searchable) return;
+
+    const pendingOffersExist = await hasActivePendingOffers(state.jobId);
+    if (pendingOffersExist) {
+        await supabaseAdmin
+            .from('jobs')
+            .update({
+                status: 'searching',
+                next_search_at: null,
+                updated_at: new Date().toISOString()
+            })
+            .eq('id', state.jobId)
+            .in('status', SEARCHABLE_STATUSES)
+            .is('technician_id', null);
+
+        console.log(`ℹ️ [Job ${state.jobId}] Active offers exist. Keeping job searchable for customer review.`);
+        return;
+    }
 
     console.log(`😔 [Job ${state.jobId}] No technician found in any tier`);
 

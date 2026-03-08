@@ -2,7 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:dio/dio.dart';
 
+import '../../../core/api/api_error.dart';
+import '../../../core/utils/error_messages.dart';
+import '../../../core/utils/error_handler.dart';
+import '../../jobs/data/job_repository.dart';
 import 'chat_controller.dart';
 import 'widgets/chat_bubble.dart';
 import 'widgets/chat_input.dart';
@@ -12,12 +17,14 @@ class ChatScreen extends ConsumerStatefulWidget {
   final String jobId;
   final String? otherUserName;
   final String? otherUserImage;
+  final String? otherUserPhone;
 
   const ChatScreen({
     super.key,
     required this.jobId,
     this.otherUserName,
     this.otherUserImage,
+    this.otherUserPhone,
   });
 
   @override
@@ -27,6 +34,19 @@ class ChatScreen extends ConsumerStatefulWidget {
 class _ChatScreenState extends ConsumerState<ChatScreen> {
   final _scrollController = ScrollController();
   bool _isSending = false;
+  bool _isHydratingOtherUser = false;
+  String? _resolvedOtherUserName;
+  String? _resolvedOtherUserImage;
+  String? _resolvedOtherUserPhone;
+
+  @override
+  void initState() {
+    super.initState();
+    _resolvedOtherUserName = widget.otherUserName;
+    _resolvedOtherUserImage = widget.otherUserImage;
+    _resolvedOtherUserPhone = widget.otherUserPhone;
+    _hydrateOtherUserDetails();
+  }
 
   @override
   void dispose() {
@@ -51,29 +71,113 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
     setState(() => _isSending = true);
 
-    final success = await ref
+    final errorMessage = await ref
         .read(chatControllerProvider(widget.jobId).notifier)
         .sendMessage(content);
 
     if (!mounted) return;
     setState(() => _isSending = false);
 
-    if (success) {
+    if (errorMessage == null) {
       _scrollToBottom();
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('فشل إرسال الرسالة، حاول مرة أخرى'),
-          backgroundColor: Colors.red,
-        ),
+        SnackBar(content: Text(errorMessage), backgroundColor: Colors.red),
       );
+    }
+  }
+
+  Future<String?> _resolveOtherUserPhone() async {
+    if (_resolvedOtherUserPhone != null &&
+        _resolvedOtherUserPhone!.trim().isNotEmpty) {
+      return _resolvedOtherUserPhone!.trim();
+    }
+
+    final currentUserId = _currentUserIdOrNull();
+    if (currentUserId == null) return null;
+
+    final job = await ref.read(jobRepositoryProvider).getJob(widget.jobId);
+    if (job == null) return null;
+
+    if (job.customerId == currentUserId) {
+      return job.technician?['phone']?.toString();
+    }
+
+    if (job.technicianId == currentUserId) {
+      return job.customer?['phone']?.toString();
+    }
+
+    return null;
+  }
+
+  Future<void> _hydrateOtherUserDetails() async {
+    if (_isHydratingOtherUser) {
+      return;
+    }
+
+    final needsName =
+        _resolvedOtherUserName == null ||
+        _resolvedOtherUserName!.trim().isEmpty;
+    final needsImage =
+        _resolvedOtherUserImage == null ||
+        _resolvedOtherUserImage!.trim().isEmpty;
+    final needsPhone =
+        _resolvedOtherUserPhone == null ||
+        _resolvedOtherUserPhone!.trim().isEmpty;
+
+    if (!needsName && !needsImage && !needsPhone) {
+      return;
+    }
+
+    final currentUserId = _currentUserIdOrNull();
+    if (currentUserId == null) {
+      return;
+    }
+
+    _isHydratingOtherUser = true;
+
+    try {
+      final job = await ref.read(jobRepositoryProvider).getJob(widget.jobId);
+      if (!mounted || job == null) return;
+
+      final otherParty = job.customerId == currentUserId
+          ? job.technician
+          : job.customer;
+
+      if (otherParty == null) return;
+
+      setState(() {
+        _resolvedOtherUserName ??= otherParty['full_name']?.toString();
+        _resolvedOtherUserImage ??= otherParty['profile_image_url']?.toString();
+        _resolvedOtherUserPhone ??= otherParty['phone']?.toString();
+      });
+    } finally {
+      _isHydratingOtherUser = false;
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final needsOtherUserHydration =
+        (_resolvedOtherUserName == null ||
+            _resolvedOtherUserName!.trim().isEmpty) ||
+        (_resolvedOtherUserImage == null ||
+            _resolvedOtherUserImage!.trim().isEmpty) ||
+        (_resolvedOtherUserPhone == null ||
+            _resolvedOtherUserPhone!.trim().isEmpty);
+    if (needsOtherUserHydration && !_isHydratingOtherUser) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _hydrateOtherUserDetails();
+        }
+      });
+    }
+
     final chatState = ref.watch(chatControllerProvider(widget.jobId));
-    final currentUserId = Supabase.instance.client.auth.currentUser?.id;
+    final currentUserId = _currentUserIdOrNull();
+    final chatError = chatState.asError?.error;
+    final isCommunicationBlocked = _isCommunicationBlocked(chatError);
+    final canSendMessages = chatState.hasValue;
 
     // Auto scroll when new messages arrive
     ref.listen(chatControllerProvider(widget.jobId), (previous, next) {
@@ -88,17 +192,34 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         title: Row(
           children: [
             // Other user avatar
-            CircleAvatar(
-              radius: 18,
-              backgroundImage: widget.otherUserImage != null
-                  ? NetworkImage(widget.otherUserImage!)
-                  : null,
-              child: widget.otherUserImage == null
-                  ? Text(
-                      (widget.otherUserName ?? '?')[0].toUpperCase(),
-                      style: const TextStyle(fontSize: 14),
-                    )
-                  : null,
+            Builder(
+              builder: (context) {
+                final avatarUrl = widget.otherUserImage?.trim();
+                final resolvedAvatarUrl = _resolvedOtherUserImage?.trim();
+                final effectiveAvatarUrl =
+                    avatarUrl != null && avatarUrl.isNotEmpty
+                    ? avatarUrl
+                    : (resolvedAvatarUrl != null &&
+                          resolvedAvatarUrl.isNotEmpty)
+                    ? resolvedAvatarUrl
+                    : null;
+                final hasAvatar = effectiveAvatarUrl != null;
+                return CircleAvatar(
+                  radius: 18,
+                  backgroundImage: hasAvatar
+                      ? NetworkImage(effectiveAvatarUrl)
+                      : null,
+                  child: !hasAvatar
+                      ? Text(
+                          (_resolvedOtherUserName ??
+                                  widget.otherUserName ??
+                                  '?')[0]
+                              .toUpperCase(),
+                          style: const TextStyle(fontSize: 14),
+                        )
+                      : null,
+                );
+              },
             ),
             const SizedBox(width: 12),
             // Name and status
@@ -107,7 +228,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    widget.otherUserName ?? 'محادثة',
+                    _resolvedOtherUserName ?? widget.otherUserName ?? 'محادثة',
                     style: const TextStyle(fontSize: 16),
                   ),
                   Text(
@@ -124,60 +245,39 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         ),
         actions: [
           // Phone call action
-          IconButton(
-            icon: const Icon(Icons.phone_outlined),
-            onPressed: () async {
-              final messenger = ScaffoldMessenger.of(context);
+          if (!isCommunicationBlocked)
+            IconButton(
+              icon: const Icon(Icons.phone_outlined),
+              onPressed: () async {
+                final messenger = ScaffoldMessenger.of(context);
 
-              // Get phone number from job data
-              try {
-                final jobData = await Supabase.instance.client
-                    .from('jobs')
-                    .select(
-                      'customer:customer_id(phone), technician:technician_id(phone)',
-                    )
-                    .eq('id', widget.jobId)
-                    .single();
+                try {
+                  final phoneNumber = await _resolveOtherUserPhone();
 
-                // Determine which phone to call based on current user
-                final currentUser = Supabase.instance.client.auth.currentUser;
-                String? phoneNumber;
-
-                if (currentUser != null) {
-                  // If customer, call technician; if technician, call customer
-                  final customer = jobData['customer'];
-                  final technician = jobData['technician'];
-
-                  // Check user type from the job data to determine phone
-                  if (customer != null && customer['phone'] != null) {
-                    phoneNumber = technician?['phone'] as String?;
-                  } else if (technician != null) {
-                    phoneNumber = customer?['phone'] as String?;
-                  }
-                }
-
-                if (phoneNumber != null) {
-                  final uri = Uri.parse('tel:$phoneNumber');
-                  if (await canLaunchUrl(uri)) {
-                    await launchUrl(uri);
+                  if (phoneNumber != null) {
+                    final uri = Uri.parse('tel:$phoneNumber');
+                    if (await canLaunchUrl(uri)) {
+                      await launchUrl(uri);
+                    } else {
+                      if (!mounted) return;
+                      messenger.showSnackBar(
+                        const SnackBar(content: Text('فشل فتح تطبيق الهاتف')),
+                      );
+                    }
                   } else {
                     if (!mounted) return;
                     messenger.showSnackBar(
-                      const SnackBar(content: Text('فشل فتح تطبيق الهاتف')),
+                      const SnackBar(content: Text('رقم الهاتف غير متوفر')),
                     );
                   }
-                } else {
+                } catch (e) {
                   if (!mounted) return;
                   messenger.showSnackBar(
-                    const SnackBar(content: Text('رقم الهاتف غير متوفر')),
+                    SnackBar(content: Text(ErrorHandler.getMessage(e))),
                   );
                 }
-              } catch (e) {
-                if (!mounted) return;
-                messenger.showSnackBar(SnackBar(content: Text('حدث خطأ: $e')));
-              }
-            },
-          ),
+              },
+            ),
         ],
       ),
       body: Column(
@@ -190,20 +290,26 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(
-                      Icons.error_outline,
+                    Icon(
+                      isCommunicationBlocked
+                          ? Icons.lock_outline
+                          : Icons.error_outline,
                       size: 48,
-                      color: Colors.red,
+                      color: isCommunicationBlocked
+                          ? Colors.orange.shade700
+                          : Colors.red,
                     ),
                     const SizedBox(height: 16),
-                    Text('حدث خطأ: $error'),
-                    const SizedBox(height: 16),
-                    ElevatedButton(
-                      onPressed: () => ref
-                          .read(chatControllerProvider(widget.jobId).notifier)
-                          .refresh(),
-                      child: const Text('إعادة المحاولة'),
-                    ),
+                    Text(ErrorHandler.getMessage(error)),
+                    if (!isCommunicationBlocked) ...[
+                      const SizedBox(height: 16),
+                      ElevatedButton(
+                        onPressed: () => ref
+                            .read(chatControllerProvider(widget.jobId).notifier)
+                            .refresh(),
+                        child: const Text('إعادة المحاولة'),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -270,10 +376,31 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           ),
 
           // Input field
-          ChatInput(onSend: _handleSend, isLoading: _isSending),
+          if (canSendMessages)
+            ChatInput(onSend: _handleSend, isLoading: _isSending),
         ],
       ),
     );
+  }
+
+  bool _isCommunicationBlocked(dynamic error) {
+    if (error == null) return false;
+
+    if (error is DioException) {
+      return ApiError.fromDioException(error).code ==
+          'COMMUNICATION_NOT_AVAILABLE';
+    }
+
+    return ErrorHandler.getMessage(error) ==
+        ErrorMessages.fromApiCode('COMMUNICATION_NOT_AVAILABLE');
+  }
+
+  String? _currentUserIdOrNull() {
+    try {
+      return Supabase.instance.client.auth.currentUser?.id;
+    } catch (_) {
+      return null;
+    }
   }
 
   bool _shouldShowDateSeparator(DateTime previous, DateTime current) {

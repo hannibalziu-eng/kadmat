@@ -5,7 +5,9 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../core/app_theme.dart';
 import '../../../../core/navigation/app_routes.dart';
+import '../../../../core/navigation/job_flow_redirects.dart';
 import '../../../auth/data/auth_repository.dart';
+import '../../../jobs/data/job_repository.dart';
 import '../../data/notification_repository.dart';
 
 class NotificationsScreen extends ConsumerWidget {
@@ -157,8 +159,15 @@ class _NotificationItem extends ConsumerWidget {
           return;
         }
 
+        final job = await ref.read(jobRepositoryProvider).getJob(dataJobId);
+        final route = customerRouteForJobStatus(
+          status: job?.status ?? '',
+          jobId: dataJobId,
+        ) ??
+            AppRoutes.buildCustomerSearchingPath(dataJobId);
+
         if (context.mounted) {
-          context.push(AppRoutes.buildCustomerSearchingPath(dataJobId));
+          context.push(route);
         }
       },
       child: Container(

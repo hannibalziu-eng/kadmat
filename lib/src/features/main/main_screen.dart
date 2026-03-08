@@ -113,33 +113,41 @@ class _MainScreenState extends ConsumerState<MainScreen> {
 
   Widget _buildNavItem(int index, IconData icon, String label) {
     final isSelected = _currentIndex == index;
-    return GestureDetector(
-      onTap: () => setState(() => _currentIndex = index),
-      behavior: HitTestBehavior.opaque,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-                icon,
-                color: isSelected
-                    ? Theme.of(context).primaryColor
-                    : Colors.grey,
-                size: 24.s,
-              )
-              .animate(target: isSelected ? 1 : 0)
-              .scale(begin: const Offset(1, 1), end: const Offset(1.2, 1.2))
-              .tint(color: Theme.of(context).primaryColor),
-          SizedBox(height: 4.h),
-          if (isSelected)
-            Container(
-              width: 4.w,
-              height: 4.w,
-              decoration: BoxDecoration(
-                color: Theme.of(context).primaryColor,
-                shape: BoxShape.circle,
-              ),
-            ).animate().fadeIn().scale(),
-        ],
+    return Semantics(
+      button: true,
+      label: label,
+      selected: isSelected,
+      child: Tooltip(
+        message: label,
+        child: GestureDetector(
+          onTap: () => setState(() => _currentIndex = index),
+          behavior: HitTestBehavior.opaque,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                    icon,
+                    color: isSelected
+                        ? Theme.of(context).primaryColor
+                        : Colors.grey,
+                    size: 24.s,
+                  )
+                  .animate(target: isSelected ? 1 : 0)
+                  .scale(begin: const Offset(1, 1), end: const Offset(1.2, 1.2))
+                  .tint(color: Theme.of(context).primaryColor),
+              SizedBox(height: 4.h),
+              if (isSelected)
+                Container(
+                  width: 4.w,
+                  height: 4.w,
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).primaryColor,
+                    shape: BoxShape.circle,
+                  ),
+                ).animate().fadeIn().scale(),
+            ],
+          ),
+        ),
       ),
     );
   }

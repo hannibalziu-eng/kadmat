@@ -27,3 +27,27 @@ String? customerRouteForJobStatus({
       return null;
   }
 }
+
+/// Maps job status to technician flow route.
+/// Returns null when no redirection is needed for the current status.
+String? technicianRouteForJobStatus({
+  required String status,
+  required String jobId,
+}) {
+  final normalized = JobStatus.normalize(status);
+
+  switch (normalized) {
+    case JobStatus.accepted:
+    case JobStatus.pricePending:
+      return AppRoutes.buildTechnicianSetPricePath(jobId);
+    case JobStatus.onTheWay:
+    case JobStatus.arrived:
+    case JobStatus.inProgress:
+    case JobStatus.pendingConfirm:
+    case JobStatus.completed:
+    case JobStatus.rated:
+      return AppRoutes.buildTechnicianJobDetailPath(jobId);
+    default:
+      return null;
+  }
+}

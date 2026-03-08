@@ -1,4 +1,26 @@
-import { supabase } from '../config/supabase.js';
+import { supabaseAdmin } from '../config/supabase.js';
+
+function buildNotificationsPayload({ notifications, count, page, limit }) {
+    const total = count || 0;
+    const currentPage = page || 1;
+    const totalPages = Math.ceil(total / limit) || 0;
+
+    return {
+        success: true,
+        data: {
+            notifications,
+            count: notifications.length,
+            total,
+            page: currentPage,
+            totalPages,
+        },
+        notifications,
+        count: notifications.length,
+        total,
+        page: currentPage,
+        totalPages,
+    };
+}
 
 /**
  * Get user's notifications with pagination
@@ -12,7 +34,7 @@ export const getNotifications = async (req, res) => {
         const limitNum = Math.min(parseInt(limit, 10) || 20, 50);
         const offset = (pageNum - 1) * limitNum;
 
-        let query = supabase
+        let query = supabaseAdmin
             .from('notifications')
             .select('*', { count: 'exact' })
             .eq('user_id', userId)
@@ -27,18 +49,18 @@ export const getNotifications = async (req, res) => {
 
         if (error) throw error;
 
-        res.json({
-            success: true,
-            count: notifications.length,
-            total: count,
-            page: pageNum,
-            totalPages: Math.ceil((count || 0) / limitNum),
-            notifications
-        });
+        return res.json(
+            buildNotificationsPayload({
+                notifications: notifications || [],
+                count,
+                page: pageNum,
+                limit: limitNum,
+            })
+        );
 
     } catch (error) {
         console.error('Get Notifications Error:', error);
-        res.status(500).json({ success: false, message: 'Server error', error: error.message });
+        return res.status(500).json({ success: false, message: 'Server error', error: error.message });
     }
 };
 
@@ -49,7 +71,7 @@ export const getUnreadCount = async (req, res) => {
     try {
         const userId = req.user.id;
 
-        const { count, error } = await supabase
+        const { count, error } = await supabaseAdmin
             .from('notifications')
             .select('*', { count: 'exact', head: true })
             .eq('user_id', userId)
@@ -57,11 +79,18 @@ export const getUnreadCount = async (req, res) => {
 
         if (error) throw error;
 
-        res.json({ success: true, unread_count: count || 0 });
+        const unreadCount = count || 0;
+        return res.json({
+            success: true,
+            data: {
+                unread_count: unreadCount,
+            },
+            unread_count: unreadCount,
+        });
 
     } catch (error) {
         console.error('Get Unread Count Error:', error);
-        res.status(500).json({ success: false, message: 'Server error', error: error.message });
+        return res.status(500).json({ success: false, message: 'Server error', error: error.message });
     }
 };
 
@@ -73,7 +102,7 @@ export const markAsRead = async (req, res) => {
         const userId = req.user.id;
         const { id } = req.params;
 
-        const { error } = await supabase
+        const { error } = await supabaseAdmin
             .from('notifications')
             .update({ is_read: true })
             .eq('id', id)
@@ -81,11 +110,11 @@ export const markAsRead = async (req, res) => {
 
         if (error) throw error;
 
-        res.json({ success: true, message: 'تم تحديث الإشعار' });
+        return res.json({ success: true, message: 'تم تحديث الإشعار' });
 
     } catch (error) {
         console.error('Mark As Read Error:', error);
-        res.status(500).json({ success: false, message: 'Server error', error: error.message });
+        return res.status(500).json({ success: false, message: 'Server error', error: error.message });
     }
 };
 
@@ -96,7 +125,7 @@ export const markAllAsRead = async (req, res) => {
     try {
         const userId = req.user.id;
 
-        const { error } = await supabase
+        const { error } = await supabaseAdmin
             .from('notifications')
             .update({ is_read: true })
             .eq('user_id', userId)
@@ -104,11 +133,11 @@ export const markAllAsRead = async (req, res) => {
 
         if (error) throw error;
 
-        res.json({ success: true, message: 'تم تحديث جميع الإشعارات' });
+        return res.json({ success: true, message: 'تم تحديث جميع الإشعارات' });
 
     } catch (error) {
         console.error('Mark All As Read Error:', error);
-        res.status(500).json({ success: false, message: 'Server error', error: error.message });
+        return res.status(500).json({ success: false, message: 'Server error', error: error.message });
     }
 };
 
@@ -120,7 +149,7 @@ export const deleteNotification = async (req, res) => {
         const userId = req.user.id;
         const { id } = req.params;
 
-        const { error } = await supabase
+        const { error } = await supabaseAdmin
             .from('notifications')
             .delete()
             .eq('id', id)
@@ -128,11 +157,11 @@ export const deleteNotification = async (req, res) => {
 
         if (error) throw error;
 
-        res.json({ success: true, message: 'تم حذف الإشعار' });
+        return res.json({ success: true, message: 'تم حذف الإشعار' });
 
     } catch (error) {
         console.error('Delete Notification Error:', error);
-        res.status(500).json({ success: false, message: 'Server error', error: error.message });
+        return res.status(500).json({ success: false, message: 'Server error', error: error.message });
     }
 };
 
@@ -148,17 +177,17 @@ export const updateFCMToken = async (req, res) => {
             return res.status(400).json({ success: false, message: 'FCM Token is required' });
         }
 
-        const { error } = await supabase
+        const { error } = await supabaseAdmin
             .from('users')
             .update({ fcm_token: fcmToken })
             .eq('id', userId);
 
         if (error) throw error;
 
-        res.json({ success: true, message: 'Token updated successfully' });
+        return res.json({ success: true, message: 'Token updated successfully' });
 
     } catch (error) {
         console.error('Update FCM Token Error:', error);
-        res.status(500).json({ success: false, message: 'Server error', error: error.message });
+        return res.status(500).json({ success: false, message: 'Server error', error: error.message });
     }
 };

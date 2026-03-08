@@ -2,6 +2,44 @@ import { supabaseAdmin } from '../config/supabase.js';
 import Joi from 'joi';
 import { responseFormatter, ERROR_CODES, HTTP_STATUS } from '../utils/responseFormatter.js';
 
+const LEGACY_PORTFOLIO_TITLE_PREFIX = '__TITLE__:';
+
+function encodeLegacyPortfolioDescription(title, description) {
+    const normalizedTitle = title?.trim();
+    const normalizedDescription = description?.trim();
+
+    if (!normalizedTitle) {
+        return normalizedDescription || null;
+    }
+
+    if (!normalizedDescription) {
+        return `${LEGACY_PORTFOLIO_TITLE_PREFIX}${normalizedTitle}`;
+    }
+
+    return `${LEGACY_PORTFOLIO_TITLE_PREFIX}${normalizedTitle}\n${normalizedDescription}`;
+}
+
+function normalizePortfolioItem(item) {
+    if (!item || typeof item !== 'object') return item;
+
+    const normalized = { ...item };
+    const title = typeof normalized.title === 'string' ? normalized.title.trim() : '';
+    const description =
+        typeof normalized.description === 'string'
+            ? normalized.description.trim()
+            : '';
+
+    if (title || !description.startsWith(LEGACY_PORTFOLIO_TITLE_PREFIX)) {
+        return normalized;
+    }
+
+    const body = description.slice(LEGACY_PORTFOLIO_TITLE_PREFIX.length);
+    const [legacyTitle, ...descriptionLines] = body.split('\n');
+    normalized.title = legacyTitle.trim() || null;
+    normalized.description = descriptionLines.join('\n').trim() || null;
+    return normalized;
+}
+
 export const updateLocation = async (req, res) => {
     try {
         const { latitude, longitude } = req.body;
@@ -131,7 +169,7 @@ export const getTechnicianProfile = async (req, res) => {
         // 1. Fetch Technician Basic Info
         const { data: technician, error: userError } = await supabaseAdmin
             .from('users')
-            .select('id, full_name, profile_image_url, rating, created_at, user_type, service:service_id(name_ar)')
+            .select('id, full_name, profile_image_url, rating, created_at, user_type, title, bio, address, location, service:service_id(name_ar)')
             .eq('id', id)
             .eq('user_type', 'technician')
             .single();
@@ -184,12 +222,13 @@ export const getTechnicianProfile = async (req, res) => {
 
         const profileData = {
             ...technician,
+            location: technician.address || technician.location || null,
             stats: {
                 completedJobs: completedJobsCount || 0,
                 rating: technician.rating || 5.0,
                 totalReviews: reviews ? reviews.length : 0 // Should ideally be a count query
             },
-            portfolio: portfolio || [],
+            portfolio: (portfolio || []).map(normalizePortfolioItem),
             reviews: reviews || [],
             specialization: technician.service?.name_ar || 'فني خدمات عامة'
         };
@@ -211,6 +250,7 @@ export const updateProfile = async (req, res) => {
     try {
         const { full_name, title, bio, location } = req.body;
         const userId = req.user.id;
+        const displayLocation = typeof location === 'string' ? location.trim() : location;
 
         // Validation
         const schema = Joi.object({
@@ -236,7 +276,7 @@ export const updateProfile = async (req, res) => {
                 full_name,
                 title,
                 bio,
-                location // Assuming simple string for display location, or handle geography separately if needed
+                address: displayLocation || null
             })
             .eq('id', userId)
             .select()
@@ -244,7 +284,15 @@ export const updateProfile = async (req, res) => {
 
         if (dbError) throw dbError;
 
-        res.json(responseFormatter.success(data, 'Profile updated successfully'));
+        res.json(
+            responseFormatter.success(
+                {
+                    ...data,
+                    location: data.address || data.location || null
+                },
+                'Profile updated successfully'
+            )
+        );
     } catch (error) {
         console.error('Update profile error:', error);
         const formatted = responseFormatter.error(
@@ -278,7 +326,7 @@ export const addPortfolioWork = async (req, res) => {
             return res.status(formatted.statusCode).json(formatted.response);
         }
 
-        const { data, error: dbError } = await supabaseAdmin
+        let { data, error: dbError } = await supabaseAdmin
             .from('technician_portfolio')
             .insert({
                 technician_id: userId,
@@ -289,6 +337,26 @@ export const addPortfolioWork = async (req, res) => {
             })
             .select()
             .single();
+
+        if (
+            dbError?.code === 'PGRST204' &&
+            dbError?.message?.includes("'title' column")
+        ) {
+            ({ data, error: dbError } = await supabaseAdmin
+                .from('technician_portfolio')
+                .insert({
+                    technician_id: userId,
+                    description: encodeLegacyPortfolioDescription(title, description),
+                    image_url,
+                    project_date: completion_date
+                })
+                .select()
+                .single());
+
+            if (!dbError && data) {
+                data = normalizePortfolioItem(data);
+            }
+        }
 
         if (dbError) throw dbError;
 

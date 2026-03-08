@@ -1,0 +1,53 @@
+name: Notification Contract Audit
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/migrations/26_notification_segmentation_contract.sql"
+      - "backend/migrations/27_backfill_notification_audience_and_category.sql"
+      - "backend/src/constants/notificationContract.js"
+      - "backend/src/services/notificationOrchestrator.js"
+      - "backend/src/services/jobService.js"
+      - "backend/src/services/jobSearchService.js"
+      - "backend/src/jobs/jobExpiryScheduler.js"
+      - "backend/src/controllers/notificationController.js"
+      - "backend/scripts/audit-notification-contract.js"
+      - "backend/package.json"
+      - ".github/workflows/notification_contract_audit.yml"
+  schedule:
+    - cron: "45 * * * *"
+  workflow_dispatch:
+
+jobs:
+  audit-notification-contract:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./backend
+
+    steps:
+      - name: Validate required secrets
+        run: |
+          if [ -z "${{ secrets.SUPABASE_URL }}" ] || [ -z "${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" ]; then
+            echo "::error::Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY repository secrets."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js 18.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18.x
+          cache: "npm"
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run notification contract audit
+        run: npm run audit:notification-contract
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}

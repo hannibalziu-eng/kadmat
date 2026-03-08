@@ -32,6 +32,24 @@ class _CustomerPaymentProcessingScreenState
   bool get _isOnlineMethodSelected =>
       _onlineMethods.contains(_selectedPaymentMethod);
 
+  List<({String id, String label, IconData icon})> get _availableMethods {
+    if (_supportsOnlinePayments) {
+      return const [
+        (id: 'apple_pay', label: 'Apple Pay', icon: Icons.apple),
+        (
+          id: 'credit_card',
+          label: 'بطاقة مدى / ائتمان',
+          icon: Icons.credit_card,
+        ),
+        (id: 'cash', label: 'نقداً (تم التسليم للفني)', icon: Icons.money),
+      ];
+    }
+
+    return const [
+      (id: 'cash', label: 'نقداً (تم التسليم للفني)', icon: Icons.money),
+    ];
+  }
+
   @override
   void initState() {
     super.initState();
@@ -164,30 +182,14 @@ class _CustomerPaymentProcessingScreenState
               ),
             ),
             SizedBox(height: 16.h),
-            _buildPaymentMethodTile(
-              'apple_pay',
-              'Apple Pay',
-              Icons.apple,
-              enabled: _supportsOnlinePayments,
-            ),
-            SizedBox(height: 12.h),
-            _buildPaymentMethodTile(
-              'credit_card',
-              'بطاقة مدى / ائتمان',
-              Icons.credit_card,
-              enabled: _supportsOnlinePayments,
-            ),
-            SizedBox(height: 12.h),
-            _buildPaymentMethodTile(
-              'cash',
-              'نقداً (تم التسليم للفني)',
-              Icons.money,
-            ),
-            if (!_supportsOnlinePayments) ...[
+            for (final method in _availableMethods) ...[
+              _buildPaymentMethodTile(method.id, method.label, method.icon),
               SizedBox(height: 12.h),
+            ],
+            if (!_supportsOnlinePayments) ...[
               Container(
                 width: double.infinity,
-                padding: EdgeInsets.all(12.w),
+                padding: EdgeInsets.all(16.w),
                 decoration: BoxDecoration(
                   color: Colors.orange.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(10.r),
@@ -195,13 +197,28 @@ class _CustomerPaymentProcessingScreenState
                     color: Colors.orange.withValues(alpha: 0.35),
                   ),
                 ),
-                child: Text(
-                  'الدفع الإلكتروني غير مفعّل حالياً في هذه النسخة.',
-                  style: TextStyle(
-                    color: Colors.orange.shade200,
-                    fontSize: 12.fz,
-                    fontWeight: FontWeight.w600,
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'الدفع الإلكتروني مؤجل في هذه النسخة',
+                      style: TextStyle(
+                        color: Colors.orange.shade200,
+                        fontSize: 13.fz,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    SizedBox(height: 6.h),
+                    Text(
+                      'حالياً يتم إكمال الطلب عبر تأكيد التسليم النقدي فقط. سنضيف طرق الدفع الإلكترونية لاحقاً عندما تكون جاهزة تشغيلياً.',
+                      style: TextStyle(
+                        color: Colors.orange.shade100,
+                        fontSize: 12.fz,
+                        height: 1.45,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -225,7 +242,7 @@ class _CustomerPaymentProcessingScreenState
                     ? const CircularProgressIndicator(color: Colors.white)
                     : Text(
                         _selectedPaymentMethod == 'cash'
-                            ? 'تأكيد التسليم'
+                            ? 'تأكيد التسليم النقدي'
                             : 'تأكيد دفع ${amount.toStringAsFixed(2)} ريال',
                         style: TextStyle(
                           fontSize: 18.fz,
@@ -253,22 +270,15 @@ class _CustomerPaymentProcessingScreenState
     );
   }
 
-  Widget _buildPaymentMethodTile(
-    String id,
-    String label,
-    IconData icon, {
-    bool enabled = true,
-  }) {
+  Widget _buildPaymentMethodTile(String id, String label, IconData icon) {
     final isSelected = _selectedPaymentMethod == id;
 
     return GestureDetector(
-      onTap: enabled ? () => setState(() => _selectedPaymentMethod = id) : null,
+      onTap: () => setState(() => _selectedPaymentMethod = id),
       child: Container(
         padding: EdgeInsets.all(16.w),
         decoration: BoxDecoration(
-          color: !enabled
-              ? Colors.white.withValues(alpha: 0.03)
-              : isSelected
+          color: isSelected
               ? AppTheme.primaryColor.withValues(alpha: 0.1)
               : Colors.white.withValues(alpha: 0.05),
           borderRadius: BorderRadius.circular(12.r),
@@ -281,32 +291,19 @@ class _CustomerPaymentProcessingScreenState
           children: [
             Icon(
               icon,
-              color: !enabled
-                  ? Colors.white38
-                  : isSelected
-                  ? AppTheme.primaryColor
-                  : Colors.white70,
+              color: isSelected ? AppTheme.primaryColor : Colors.white70,
             ),
             SizedBox(width: 16.w),
             Text(
               label,
               style: TextStyle(
-                color: enabled ? Colors.white : Colors.white54,
+                color: Colors.white,
                 fontSize: 16.fz,
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
               ),
             ),
             const Spacer(),
-            if (!enabled)
-              Text(
-                'غير متاح',
-                style: TextStyle(
-                  color: Colors.orange.shade200,
-                  fontSize: 12.fz,
-                  fontWeight: FontWeight.w600,
-                ),
-              )
-            else if (isSelected)
+            if (isSelected)
               Icon(Icons.check_circle, color: AppTheme.primaryColor),
           ],
         ),

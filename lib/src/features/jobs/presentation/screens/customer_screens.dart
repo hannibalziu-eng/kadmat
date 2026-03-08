@@ -11,10 +11,13 @@ import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/navigation/job_flow_redirects.dart';
 import '../../../../core/widgets/kadmat_toast.dart';
 import '../../../../core/utils/error_handler.dart';
+import '../../../../core/utils/service_name_formatter.dart';
+import '../../../../core/utils/technician_summary.dart';
 import '../../data/job_repository.dart';
 import '../../domain/job.dart';
 import '../../domain/job_status.dart';
 import '../widgets/job_widgets.dart';
+import '../widgets/technician_offer_identity.dart';
 
 /// Customer Searching Screen - Shows animated search while finding technician
 class CustomerSearchingScreen extends ConsumerStatefulWidget {
@@ -142,8 +145,7 @@ class _CustomerSearchingScreenState
     final lat = job.lat;
     final lng = job.lng;
     final searchRadius = (job.searchRadius ?? 3000).toDouble();
-    final serviceName =
-        (job.service?['name_ar'] ?? job.service?['name'] ?? 'خدمة').toString();
+    final serviceName = formatServiceDisplayName(job.service);
     final rawExpectedPrice = job.initialPrice ?? job.customerOffer;
     final expectedPrice = (rawExpectedPrice != null && rawExpectedPrice > 0)
         ? rawExpectedPrice
@@ -441,6 +443,7 @@ class _CustomerSearchingScreenState
 
   Widget _buildOfferCard(Map<String, dynamic> offer, int index) {
     final tech = (offer['technician'] as Map<String, dynamic>?) ?? const {};
+    final technician = TechnicianSummary.fromMap(tech);
     final technicianId = ((offer['technician_id'] ?? tech['id']) ?? '')
         .toString()
         .trim();
@@ -470,46 +473,15 @@ class _CustomerSearchingScreenState
               CircleAvatar(
                 radius: 22.r,
                 backgroundColor: Colors.white10,
-                backgroundImage: tech['profile_image_url'] != null
-                    ? NetworkImage(tech['profile_image_url'].toString())
+                backgroundImage: technician.profileImageUrl != null
+                    ? NetworkImage(technician.profileImageUrl!)
                     : null,
-                child: tech['profile_image_url'] == null
+                child: technician.profileImageUrl == null
                     ? Icon(Icons.person, color: Colors.white, size: 20.s)
                     : null,
               ),
               SizedBox(width: 10.w),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      (tech['full_name'] ?? 'فني').toString(),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 15.fz,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
-                      ),
-                    ),
-                    SizedBox(height: 3.h),
-                    Row(
-                      children: [
-                        Icon(Icons.star, color: Colors.amber, size: 14.s),
-                        SizedBox(width: 4.w),
-                        Text(
-                          '${(tech['rating'] as num?)?.toDouble() ?? 5.0}',
-                          style: TextStyle(
-                            color: Colors.white70,
-                            fontSize: 12.fz,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
+              Expanded(child: TechnicianOfferIdentity(technician: technician)),
               Container(
                 padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 6.h),
                 decoration: BoxDecoration(
@@ -1548,7 +1520,13 @@ class _CustomerCompletedScreenState
                     decoration: AppTheme.glassDecoration(radius: 16.r),
                     child: Column(
                       children: [
-                        _buildRow('الخدمة', _job!.service?['name'] ?? '-'),
+                        _buildRow(
+                          'الخدمة',
+                          formatServiceDisplayName(
+                            _job!.service,
+                            fallback: '-',
+                          ),
+                        ),
                         Divider(color: Colors.white24, height: 24.h),
                         _buildRow(
                           'السعر النهائي',

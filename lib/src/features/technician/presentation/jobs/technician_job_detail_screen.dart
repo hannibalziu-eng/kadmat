@@ -1,18 +1,23 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_scalify/flutter_scalify.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:go_router/go_router.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../../../core/app_theme.dart';
 import '../../../../core/navigation/app_routes.dart';
+import '../../../../core/utils/job_location_formatter.dart';
 import '../../../../core/widgets/kadmat_toast.dart';
 import '../../../../core/widgets/shimmer_skeletons.dart';
 import '../../../../core/services/location/location_service.dart';
 import '../../../jobs/data/job_repository.dart';
 import '../../../jobs/domain/job.dart';
+import '../../../jobs/domain/job_communication_policy.dart';
 
 class TechnicianJobDetailScreen extends ConsumerStatefulWidget {
   final String jobId;
@@ -44,7 +49,9 @@ class _TechnicianJobDetailScreenState
 
   Future<void> _fetchJob() async {
     try {
-      final job = await ref.read(jobRepositoryProvider).getJobById(widget.jobId);
+      final job = await ref
+          .read(jobRepositoryProvider)
+          .getJobById(widget.jobId);
       if (!mounted || job == null) return;
       setState(() => _job = job);
     } catch (_) {
@@ -136,81 +143,7 @@ class _TechnicianJobDetailScreenState
             _buildInfoCard(
               title: 'الموقع',
               icon: Icons.location_on,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    _job!.addressText ?? 'موقع العميل',
-                    style: TextStyle(fontSize: 14.fz, color: Colors.white70),
-                  ),
-                  SizedBox(height: 8.h),
-                  // Mini Map Placeholder
-                  Container(
-                    height: 120.h,
-                    width: double.infinity,
-                    decoration: BoxDecoration(
-                      color: Colors.grey[200],
-                      borderRadius: BorderRadius.circular(12.r),
-                      image: const DecorationImage(
-                        image: AssetImage(
-                          'assets/images/map_placeholder.png',
-                        ), // Ensure this exists or use color
-                        fit: BoxFit.cover,
-                      ),
-                    ),
-                    child: Center(
-                      child: Icon(
-                        Icons.map,
-                        size: 40.s,
-                        color: Theme.of(
-                          context,
-                        ).cardColor.withValues(alpha: 0.95),
-                      ),
-                    ),
-                  ),
-                  SizedBox(height: 12.h),
-                  // Open in Maps Button
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      onPressed: () async {
-                        final url =
-                            'https://www.google.com/maps/search/?api=1&query=${_job!.lat},${_job!.lng}';
-                        if (await canLaunchUrl(Uri.parse(url))) {
-                          await launchUrl(Uri.parse(url));
-                        }
-                      },
-                      icon: const Icon(Icons.map),
-                      label: const Text('فتح في خرائط Google'),
-                      style: OutlinedButton.styleFrom(
-                        padding: EdgeInsets.symmetric(vertical: 12.h),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12.r),
-                        ),
-                      ),
-                    ),
-                  ),
-                  SizedBox(height: 12.h),
-                  // Distance/Time
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.directions_car,
-                        size: 16.s,
-                        color: Colors.grey,
-                      ),
-                      SizedBox(width: 8.w),
-                      Text(
-                        _distanceAndEtaText(currentLocation),
-                        style: TextStyle(
-                          fontSize: 14.fz,
-                          color: Colors.grey[700],
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
+              child: _buildLocationSection(currentLocation),
             ),
             SizedBox(height: 12.h),
 
@@ -303,23 +236,272 @@ class _TechnicianJobDetailScreenState
     );
   }
 
-  String _distanceAndEtaText(Position? currentLocation) {
-    if (currentLocation == null || _job == null) {
-      return 'المسافة غير متاحة حالياً';
-    }
-
-    final meters = Geolocator.distanceBetween(
-      currentLocation.latitude,
-      currentLocation.longitude,
+  Widget _buildLocationSection(Position? currentLocation) {
+    final coordinateText = JobLocationFormatter.formatCoordinates(
       _job!.lat,
       _job!.lng,
     );
+    final distanceLabel = JobLocationFormatter.compactDistanceLabel(
+      currentLat: currentLocation?.latitude,
+      currentLng: currentLocation?.longitude,
+      jobLat: _job!.lat,
+      jobLng: _job!.lng,
+    );
 
-    final km = meters / 1000;
-    // Conservative ETA estimate based on city speed (35 km/h)
-    final etaMinutes = ((km / 35) * 60).ceil().clamp(1, 240);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          _job!.addressText?.trim().isNotEmpty == true
+              ? _job!.addressText!
+              : 'تم تثبيت موقع العميل على الخريطة',
+          style: TextStyle(fontSize: 14.fz, color: Colors.white70),
+        ),
+        SizedBox(height: 10.h),
+        Container(
+          height: 178.h,
+          width: double.infinity,
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16.r),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+          ),
+          child: Stack(
+            children: [
+              FlutterMap(
+                options: MapOptions(
+                  initialCenter: LatLng(_job!.lat, _job!.lng),
+                  initialZoom: 15,
+                  interactionOptions: const InteractionOptions(
+                    flags: InteractiveFlag.none,
+                  ),
+                ),
+                children: [
+                  TileLayer(
+                    urlTemplate:
+                        'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+                    subdomains: const ['a', 'b', 'c', 'd'],
+                    retinaMode: true,
+                    userAgentPackageName: 'com.kadmat.app',
+                  ),
+                  CircleLayer(
+                    circles: [
+                      CircleMarker(
+                        point: LatLng(_job!.lat, _job!.lng),
+                        radius: 80,
+                        useRadiusInMeter: true,
+                        color: AppTheme.primaryColor.withValues(alpha: 0.12),
+                        borderColor: AppTheme.primaryColor.withValues(
+                          alpha: 0.45,
+                        ),
+                        borderStrokeWidth: 2,
+                      ),
+                    ],
+                  ),
+                  MarkerLayer(
+                    markers: [
+                      Marker(
+                        point: LatLng(_job!.lat, _job!.lng),
+                        width: 56.w,
+                        height: 56.h,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: AppTheme.surfaceDark.withValues(alpha: 0.88),
+                            shape: BoxShape.circle,
+                            border: Border.all(color: AppTheme.primaryColor),
+                            boxShadow: const [
+                              BoxShadow(
+                                color: Colors.black45,
+                                blurRadius: 12,
+                                offset: Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: Icon(
+                            Icons.location_on,
+                            color: AppTheme.primaryColor,
+                            size: 28.s,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              PositionedDirectional(
+                top: 12.h,
+                start: 12.w,
+                child: Container(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: 12.w,
+                    vertical: 8.h,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppTheme.surfaceDark.withValues(alpha: 0.92),
+                    borderRadius: BorderRadius.circular(999.r),
+                    border: Border.all(
+                      color: AppTheme.primaryColor.withValues(alpha: 0.35),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.place_outlined,
+                        size: 16.s,
+                        color: AppTheme.primaryColor,
+                      ),
+                      SizedBox(width: 6.w),
+                      Text(
+                        'موقع العميل',
+                        style: TextStyle(
+                          fontSize: 12.fz,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: Container(
+                  padding: EdgeInsets.fromLTRB(12.w, 28.h, 12.w, 12.h),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.bottomCenter,
+                      end: Alignment.topCenter,
+                      colors: [
+                        AppTheme.surfaceDark.withValues(alpha: 0.95),
+                        Colors.transparent,
+                      ],
+                    ),
+                  ),
+                  child: Text(
+                    JobLocationFormatter.distanceAndEtaText(
+                      currentLat: currentLocation?.latitude,
+                      currentLng: currentLocation?.longitude,
+                      jobLat: _job!.lat,
+                      jobLng: _job!.lng,
+                    ),
+                    style: TextStyle(
+                      fontSize: 13.fz,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        SizedBox(height: 12.h),
+        Wrap(
+          spacing: 8.w,
+          runSpacing: 8.h,
+          children: [
+            _buildLocationMetaChip(Icons.pin_drop_outlined, coordinateText),
+            _buildLocationMetaChip(
+              currentLocation == null ? Icons.gps_off : Icons.route,
+              distanceLabel ?? 'فعّل الموقع لحساب المسافة',
+            ),
+          ],
+        ),
+        SizedBox(height: 12.h),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: _openLocationInMaps,
+                icon: const Icon(Icons.map_outlined),
+                label: const Text('فتح في الخرائط'),
+                style: OutlinedButton.styleFrom(
+                  padding: EdgeInsets.symmetric(vertical: 12.h),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12.r),
+                  ),
+                ),
+              ),
+            ),
+            SizedBox(width: 8.w),
+            Expanded(
+              child: TextButton.icon(
+                onPressed: _copyCoordinates,
+                icon: const Icon(Icons.content_copy_outlined),
+                label: const Text('نسخ الإحداثيات'),
+                style: TextButton.styleFrom(
+                  padding: EdgeInsets.symmetric(vertical: 12.h),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
 
-    return 'المسافة التقريبية: ${km.toStringAsFixed(1)} كم (حوالي $etaMinutes دقيقة)';
+  Widget _buildLocationMetaChip(IconData icon, String label) {
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 8.h),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(999.r),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 15.s, color: AppTheme.primaryColor),
+          SizedBox(width: 6.w),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12.fz,
+              color: Colors.white70,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _copyCoordinates() async {
+    if (_job == null) return;
+
+    final coordinateText = JobLocationFormatter.formatCoordinates(
+      _job!.lat,
+      _job!.lng,
+      decimals: 6,
+    );
+    await Clipboard.setData(ClipboardData(text: coordinateText));
+    if (!mounted) return;
+    KadmatToast.showSuccess(
+      context,
+      title: 'تم النسخ',
+      message: 'تم نسخ إحداثيات موقع العميل',
+    );
+  }
+
+  Future<void> _openLocationInMaps() async {
+    if (_job == null) return;
+    final uri = Uri.parse(
+      'https://www.google.com/maps/search/?api=1&query=${_job!.lat},${_job!.lng}',
+    );
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+      return;
+    }
+
+    if (!mounted) return;
+    KadmatToast.showError(
+      context,
+      title: 'تعذر الفتح',
+      message: 'لا يمكن فتح تطبيق الخرائط على هذا الجهاز حالياً',
+    );
   }
 
   Widget _buildStatusBadge() {
@@ -521,7 +703,10 @@ class _TechnicianJobDetailScreenState
               children: [
                 Expanded(
                   child: ElevatedButton.icon(
-                    onPressed: () => _callCustomer(customerPhone),
+                    onPressed:
+                        JobCommunicationPolicy.canUseJobCommunication(_job)
+                        ? () => _callCustomer(customerPhone)
+                        : null,
                     icon: const Icon(Icons.phone),
                     label: const Text('اتصال'),
                     style: ElevatedButton.styleFrom(
@@ -537,15 +722,19 @@ class _TechnicianJobDetailScreenState
                 SizedBox(width: 8.w),
                 Expanded(
                   child: ElevatedButton.icon(
-                    onPressed: () {
-                      context.push(
-                        AppRoutes.buildJobChatPath(widget.jobId),
-                        extra: {
-                          'otherUserName': customerName,
-                          'otherUserImage': customerPhoto,
-                        },
-                      );
-                    },
+                    onPressed:
+                        JobCommunicationPolicy.canUseJobCommunication(_job)
+                        ? () {
+                            context.push(
+                              AppRoutes.buildJobChatPath(widget.jobId),
+                              extra: {
+                                'otherUserName': customerName,
+                                'otherUserImage': customerPhoto,
+                                'otherUserPhone': customerPhone,
+                              },
+                            );
+                          }
+                        : null,
                     icon: const Icon(Icons.chat),
                     label: const Text('مراسلة'),
                     style: ElevatedButton.styleFrom(
@@ -560,6 +749,13 @@ class _TechnicianJobDetailScreenState
                 ),
               ],
             ),
+            if (!JobCommunicationPolicy.canUseJobCommunication(_job)) ...[
+              SizedBox(height: 8.h),
+              Text(
+                JobCommunicationPolicy.unavailableMessage,
+                style: TextStyle(fontSize: 12.fz, color: Colors.white60),
+              ),
+            ],
           ],
 
           // Phone number display
@@ -1082,7 +1278,9 @@ class _TechnicianJobDetailScreenState
         backgroundColor: Colors.teal,
         foregroundColor: Colors.white,
         padding: EdgeInsets.symmetric(vertical: 16.h),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12.r),
+        ),
       ),
     );
   }
@@ -1101,7 +1299,9 @@ class _TechnicianJobDetailScreenState
         backgroundColor: Colors.blue,
         foregroundColor: Colors.white,
         padding: EdgeInsets.symmetric(vertical: 16.h),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12.r),
+        ),
       ),
     );
   }

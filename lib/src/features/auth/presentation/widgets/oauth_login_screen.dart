@@ -5,19 +5,25 @@ import '../../../../core/auth/oauth_service.dart';
 class OAuthLoginScreen extends ConsumerWidget {
   const OAuthLoginScreen({super.key});
 
+  void _showError(BuildContext context, String message) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final oAuthService = ref.watch(oAuthServiceProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Sign In with Social')),
+      appBar: AppBar(title: const Text('تسجيل الدخول الاجتماعي')),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             const Text(
-              'Continue with',
+              'اختر مزود تسجيل الدخول',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 24),
@@ -27,18 +33,16 @@ class OAuthLoginScreen extends ConsumerWidget {
                   final success = await oAuthService.signInWithGoogle();
                   if (!context.mounted) return;
                   if (success) {
-                    // Navigate to home or appropriate screen
                     Navigator.of(context).pop(true);
                   } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Google sign in failed')),
-                    );
+                    _showError(context, 'تعذر تسجيل الدخول عبر Google.');
                   }
                 } catch (e) {
                   if (!context.mounted) return;
-                  ScaffoldMessenger.of(
+                  _showError(
                     context,
-                  ).showSnackBar(SnackBar(content: Text('Error: $e')));
+                    'حدث خطأ أثناء تسجيل الدخول عبر Google. حاول مرة أخرى.',
+                  );
                 }
               },
               icon: const Icon(Icons.g_mobiledata_sharp, color: Colors.red),
@@ -56,15 +60,14 @@ class OAuthLoginScreen extends ConsumerWidget {
                   if (success) {
                     Navigator.of(context).pop(true);
                   } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Apple sign in failed')),
-                    );
+                    _showError(context, 'تعذر تسجيل الدخول عبر Apple.');
                   }
                 } catch (e) {
                   if (!context.mounted) return;
-                  ScaffoldMessenger.of(
+                  _showError(
                     context,
-                  ).showSnackBar(SnackBar(content: Text('Error: $e')));
+                    'حدث خطأ أثناء تسجيل الدخول عبر Apple. حاول مرة أخرى.',
+                  );
                 }
               },
               icon: const Icon(Icons.phone_iphone, color: Colors.black),
@@ -82,15 +85,14 @@ class OAuthLoginScreen extends ConsumerWidget {
                   if (success) {
                     Navigator.of(context).pop(true);
                   } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Facebook sign in failed')),
-                    );
+                    _showError(context, 'تعذر تسجيل الدخول عبر Facebook.');
                   }
                 } catch (e) {
                   if (!context.mounted) return;
-                  ScaffoldMessenger.of(
+                  _showError(
                     context,
-                  ).showSnackBar(SnackBar(content: Text('Error: $e')));
+                    'حدث خطأ أثناء تسجيل الدخول عبر Facebook. حاول مرة أخرى.',
+                  );
                 }
               },
               icon: const Icon(Icons.facebook, color: Colors.blue),
@@ -98,6 +100,12 @@ class OAuthLoginScreen extends ConsumerWidget {
               style: ElevatedButton.styleFrom(
                 minimumSize: const Size(double.infinity, 50),
               ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'سيتم فتح موفر تسجيل الدخول الخارجي لإكمال العملية ثم إعادتك إلى التطبيق.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey),
             ),
           ],
         ),

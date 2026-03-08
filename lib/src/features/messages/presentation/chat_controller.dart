@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import '../../../core/utils/error_handler.dart';
 import '../data/messages_repository.dart';
 import '../domain/message.dart';
 
@@ -11,7 +13,6 @@ part 'chat_controller.g.dart';
 class ChatController extends _$ChatController {
   StreamSubscription<List<Message>>? _subscription;
   String? _jobId;
-  String? _otherPartyId;
 
   @override
   AsyncValue<List<Message>> build(String jobId) {
@@ -33,9 +34,6 @@ class ChatController extends _$ChatController {
     final repo = ref.read(messagesRepositoryProvider);
 
     try {
-      // Get other party ID for sending messages
-      _otherPartyId = await repo.getOtherPartyId(_jobId!);
-
       // Load initial messages
       final messages = await repo.getMessages(_jobId!);
       state = AsyncValue.data(messages);
@@ -62,24 +60,21 @@ class ChatController extends _$ChatController {
   }
 
   /// Send a message
-  Future<bool> sendMessage(String content) async {
-    if (_jobId == null || _otherPartyId == null) {
-      return false;
+  Future<String?> sendMessage(String content) async {
+    if (_jobId == null) {
+      return 'تعذر تحديد المحادثة الحالية';
     }
 
-    if (content.trim().isEmpty) return false;
+    if (content.trim().isEmpty) return 'محتوى الرسالة مطلوب';
 
     try {
       final repo = ref.read(messagesRepositoryProvider);
-      await repo.sendMessage(
-        jobId: _jobId!,
-        content: content.trim(),
-        receiverId: _otherPartyId!,
-      );
-      return true;
+      await repo.sendMessage(jobId: _jobId!, content: content.trim());
+      return null;
+    } on DioException catch (e) {
+      return ErrorHandler.getMessage(e);
     } catch (e) {
-      // Could show error to user here
-      return false;
+      return ErrorHandler.getMessage(e);
     }
   }
 

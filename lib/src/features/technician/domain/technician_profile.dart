@@ -52,7 +52,7 @@ class TechnicianProfile {
       specialization: (json['specialization'] as String?)?.trim(),
       title: (json['title'] as String?)?.trim(), // Added
       bio: (json['bio'] as String?)?.trim(), // Added
-      location: (json['location'] as String?)?.trim(), // Added
+      location: _displayLocation(json['location']),
       rating: (json['rating'] as num?)?.toDouble() ?? 5.0,
       createdAt: createdAt,
       stats: ProfileStats.fromJson(
@@ -68,6 +68,16 @@ class TechnicianProfile {
     if (raw == null || raw.isEmpty) return null;
     final uri = Uri.tryParse(raw);
     if (uri == null || !uri.hasScheme || !uri.hasAuthority) return null;
+    return raw;
+  }
+
+  static String? _displayLocation(Object? value) {
+    final raw = value?.toString().trim();
+    if (raw == null || raw.isEmpty) return null;
+    final normalized = raw.toUpperCase();
+    if (normalized.contains('POINT(') || normalized.contains('SRID=')) {
+      return null;
+    }
     return raw;
   }
 }
@@ -99,6 +109,7 @@ class ProfileStats {
 }
 
 class PortfolioItem {
+  static const _legacyTitlePrefix = '__TITLE__:';
   final String id;
   final String imageUrl;
   final String? title; // Added
@@ -115,14 +126,39 @@ class PortfolioItem {
 
   factory PortfolioItem.fromJson(Map<String, dynamic> json) {
     final projectDateRaw = json['project_date']?.toString();
+    final normalized = _normalizeLegacyFields(
+      title: (json['title'] as String?)?.trim(),
+      description: (json['description'] as String?)?.trim(),
+    );
     return PortfolioItem(
       id: (json['id'] ?? '').toString(),
       imageUrl: (json['image_url'] ?? '').toString(),
-      title: (json['title'] as String?)?.trim(), // Added
-      description: (json['description'] as String?)?.trim(),
+      title: normalized.title,
+      description: normalized.description,
       projectDate: projectDateRaw == null
           ? null
           : DateTime.tryParse(projectDateRaw),
+    );
+  }
+
+  static ({String? title, String? description}) _normalizeLegacyFields({
+    String? title,
+    String? description,
+  }) {
+    if (title != null && title.isNotEmpty) {
+      return (title: title, description: description);
+    }
+    if (description == null || !description.startsWith(_legacyTitlePrefix)) {
+      return (title: title, description: description);
+    }
+
+    final body = description.substring(_legacyTitlePrefix.length);
+    final lines = body.split('\n');
+    final legacyTitle = lines.first.trim();
+    final legacyDescription = lines.skip(1).join('\n').trim();
+    return (
+      title: legacyTitle.isEmpty ? null : legacyTitle,
+      description: legacyDescription.isEmpty ? null : legacyDescription,
     );
   }
 }

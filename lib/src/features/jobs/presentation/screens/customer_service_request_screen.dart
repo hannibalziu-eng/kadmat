@@ -1,20 +1,25 @@
 import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_scalify/flutter_scalify.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-
-import '../../../../core/navigation/app_routes.dart';
 
 import '../../../../core/app_theme.dart';
+import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/providers/photo_upload_provider.dart';
+import '../../../../core/utils/error_handler.dart';
+import '../../../home/data/service_repository.dart';
+import '../../../home/domain/service.dart';
 import '../../data/job_repository.dart';
 
 class CustomerServiceRequestScreen extends ConsumerStatefulWidget {
-  const CustomerServiceRequestScreen({super.key});
+  final String? initialServiceId;
+
+  const CustomerServiceRequestScreen({super.key, this.initialServiceId});
 
   @override
   ConsumerState<CustomerServiceRequestScreen> createState() =>
@@ -27,20 +32,21 @@ class _CustomerServiceRequestScreenState
   final _addressController = TextEditingController();
   final _descriptionController = TextEditingController();
 
-  // State
-  bool _isLoading = false;
-  List<Map<String, dynamic>> _services = [];
+  bool _isSubmitting = false;
+  bool _isLoadingServices = false;
+  bool _isLocating = false;
+  List<Service> _services = [];
   String? _selectedServiceId;
   final List<XFile> _photos = [];
-
-  // Dummy location for now (Riyadh)
-  final double _lat = 24.7136;
-  final double _lng = 46.6753;
+  double? _lat;
+  double? _lng;
+  String? _locationHint;
 
   @override
   void initState() {
     super.initState();
     _loadServices();
+    _resolveLocation();
   }
 
   @override
@@ -51,43 +57,78 @@ class _CustomerServiceRequestScreenState
   }
 
   Future<void> _loadServices() async {
-    setState(() => _isLoading = true);
+    setState(() => _isLoadingServices = true);
     try {
-      // Direct supabase call as we don't have ServiceRepository yet
-      final data = await Supabase.instance.client
-          .from('services')
-          .select('id, name')
-          .order('name');
+      final services = await ref.read(serviceRepositoryProvider).getServices();
+      if (!mounted) return;
+      setState(() {
+        _services = services.where((service) => service.isActive).toList();
+        if (widget.initialServiceId != null &&
+            _services.any((service) => service.id == widget.initialServiceId)) {
+          _selectedServiceId = widget.initialServiceId;
+        }
+        _isLoadingServices = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _isLoadingServices = false);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(ErrorHandler.getMessage(error))));
+    }
+  }
 
-      if (mounted) {
-        setState(() {
-          _services = List<Map<String, dynamic>>.from(data);
-          _isLoading = false;
-        });
+  Future<void> _resolveLocation() async {
+    setState(() => _isLocating = true);
+    try {
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        throw Exception('خدمة الموقع غير مفعلة على الجهاز');
       }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isLoading = false);
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('فشل تحميل الخدمات: $e')));
+
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
       }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        throw Exception('يجب السماح بالوصول إلى الموقع لتحديد مكان الخدمة');
+      }
+
+      final lastKnown = await Geolocator.getLastKnownPosition();
+      final position =
+          lastKnown ??
+          await Geolocator.getCurrentPosition(
+            locationSettings: const LocationSettings(
+              accuracy: LocationAccuracy.high,
+            ),
+          );
+
+      if (!mounted) return;
+      setState(() {
+        _lat = position.latitude;
+        _lng = position.longitude;
+        _locationHint =
+            'تم تحديد الموقع الحالي (${position.latitude.toStringAsFixed(5)}, ${position.longitude.toStringAsFixed(5)})';
+        _isLocating = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _isLocating = false;
+        _locationHint = ErrorHandler.getMessage(error);
+      });
     }
   }
 
   Future<void> _pickPhoto() async {
     try {
-      // Using the service via a provider or direct logic if provider not exposed
-      // Assuming PhotoUploadService has pickPhotos helper
       final picker = ImagePicker();
-      final XFile? image = await picker.pickImage(source: ImageSource.gallery);
-
+      final image = await picker.pickImage(source: ImageSource.gallery);
       if (image != null) {
-        setState(() {
-          _photos.add(image);
-        });
+        setState(() => _photos.add(image));
       }
-    } catch (e) {
+    } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
@@ -103,77 +144,51 @@ class _CustomerServiceRequestScreenState
       ).showSnackBar(const SnackBar(content: Text('الرجاء اختيار الخدمة')));
       return;
     }
+    if (_lat == null || _lng == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('يجب تحديد موقعك الحالي قبل إرسال الطلب')),
+      );
+      return;
+    }
 
-    setState(() => _isLoading = true);
+    setState(() => _isSubmitting = true);
 
     try {
       List<String>? imageUrls;
-
-      // 1. Upload Photos if any
       if (_photos.isNotEmpty) {
-        // Note: Assuming photoUploadServiceProvider exists or I need to create it.
-        // Based on read files, I saw 'photo_upload_service.dart' but not 'photo_upload_provider.dart'.
-        // I'll check imports later. Leveraging direct repo access if needed.
-        // Actually jobRepository has _photoService.
-        // But better to use the service directly.
-        // I'll assume functionality for now.
-
-        // Temporary fix: I'll use the service instance created here if provider missing,
-        // but prefer provider.
-      }
-
-      // 2. Upload photos via a helper (since I can't easily access repo's private service)
-      // Or I can use JobRepository if I expose upload method?
-      // JobRepository.uploadPreServicePhotos takes jobId. Here we don't have jobId yet.
-      // So I should upload strictly via PhotoUploadService.
-
-      // Let's rely on `photoUploadServiceProvider` being available or I'll create it.
-      // For now I'll instantiate it manually if provider fails.
-
-      final photoService = ref.read(photoUploadServiceProvider);
-
-      // START UPLOAD LOGIC
-      if (_photos.isNotEmpty) {
-        // Only upload if photos exist
+        final photoService = ref.read(photoUploadServiceProvider);
         imageUrls = await photoService.uploadMultiplePhotos(
           _photos,
           'requests/${DateTime.now().millisecondsSinceEpoch}',
         );
       }
 
-      // 3. Create Job
       final job = await ref
           .read(jobRepositoryProvider)
           .createJob(
             serviceId: _selectedServiceId!,
-            lat: _lat,
-            lng: _lng,
-            addressText: _addressController.text,
-            initialPrice: 0, // Customer doesn't set price, standard flow?
-            // Prompt says: "Customer fills: Service type...".
-            // Does customer set price? Prompt: "Tech accepts & sets price".
-            // So initialStatus is 'pending', price 0 or null.
-            description: _descriptionController.text,
+            lat: _lat!,
+            lng: _lng!,
+            addressText: _addressController.text.trim(),
+            initialPrice: 0,
+            description: _descriptionController.text.trim(),
             images: imageUrls,
           );
 
-      if (job != null && mounted) {
-        // Navigate to Tracking or Searching Screen
-        // Prompt says: "Save to Supabase... Broadcast notification... Custommer tracking?"
-        // I'll navigate to My Jobs or a Success screen.
-        context.go(AppRoutes.buildCustomerSearchingPath(job.id));
-      } else {
+      if (!mounted) return;
+      if (job == null) {
         throw Exception('فشل إنشاء الطلب');
       }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('حدث خطأ: $e')));
-      }
+
+      context.go(AppRoutes.buildCustomerSearchingPath(job.id));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(ErrorHandler.getMessage(error))));
     } finally {
       if (mounted) {
-        setState(() => _isLoading = false);
+        setState(() => _isSubmitting = false);
       }
     }
   }
@@ -187,7 +202,6 @@ class _CustomerServiceRequestScreenState
         child: ListView(
           padding: EdgeInsets.all(16.w),
           children: [
-            // Service Dropdown
             Text(
               'نوع الخدمة',
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16.fz),
@@ -197,13 +211,13 @@ class _CustomerServiceRequestScreenState
               initialValue: _selectedServiceId,
               items: _services
                   .map(
-                    (s) => DropdownMenuItem(
-                      value: s['id'] as String,
-                      child: Text(s['name'] as String),
+                    (service) => DropdownMenuItem(
+                      value: service.id,
+                      child: Text(service.nameAr ?? service.name),
                     ),
                   )
                   .toList(),
-              onChanged: (val) => setState(() => _selectedServiceId = val),
+              onChanged: (value) => setState(() => _selectedServiceId = value),
               decoration: InputDecoration(
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12.r),
@@ -211,14 +225,11 @@ class _CustomerServiceRequestScreenState
                 filled: true,
                 fillColor: Colors.grey[50],
               ),
-              hint: _isLoading
-                  ? const Text('جاري التحميل...')
+              hint: _isLoadingServices
+                  ? const Text('جاري تحميل الخدمات...')
                   : const Text('اختر الخدمة'),
             ),
-
             SizedBox(height: 16.h),
-
-            // Link to Map/Location
             Text(
               'الموقع',
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16.fz),
@@ -233,12 +244,53 @@ class _CustomerServiceRequestScreenState
                 ),
                 prefixIcon: const Icon(Icons.location_on),
               ),
-              validator: (val) => val == null || val.isEmpty ? 'مطلوب' : null,
+              validator: (value) =>
+                  value == null || value.trim().isEmpty ? 'مطلوب' : null,
             ),
-
+            SizedBox(height: 12.h),
+            Container(
+              padding: EdgeInsets.all(12.w),
+              decoration: BoxDecoration(
+                color: Theme.of(context).cardColor,
+                borderRadius: BorderRadius.circular(12.r),
+                border: Border.all(color: Colors.grey.shade300),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        _lat != null && _lng != null
+                            ? Icons.check_circle_outline
+                            : Icons.my_location,
+                        color: _lat != null && _lng != null
+                            ? Colors.green
+                            : Theme.of(context).primaryColor,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _locationHint ??
+                              'يتم استخدام موقعك الحالي بدلاً من أي موقع افتراضي.',
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 12.h),
+                  OutlinedButton.icon(
+                    onPressed: _isLocating ? null : _resolveLocation,
+                    icon: const Icon(Icons.gps_fixed),
+                    label: Text(
+                      _isLocating
+                          ? 'جاري تحديد الموقع...'
+                          : 'تحديث موقعي الحالي',
+                    ),
+                  ),
+                ],
+              ),
+            ),
             SizedBox(height: 16.h),
-
-            // Description
             Text(
               'وصف المشكلة',
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16.fz),
@@ -253,12 +305,10 @@ class _CustomerServiceRequestScreenState
                   borderRadius: BorderRadius.circular(12.r),
                 ),
               ),
-              validator: (val) => val == null || val.isEmpty ? 'مطلوب' : null,
+              validator: (value) =>
+                  value == null || value.trim().isEmpty ? 'مطلوب' : null,
             ),
-
             SizedBox(height: 16.h),
-
-            // Photos
             Text(
               'صور للمشكلة (اختياري)',
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16.fz),
@@ -327,14 +377,11 @@ class _CustomerServiceRequestScreenState
                 },
               ),
             ),
-
             SizedBox(height: 32.h),
-
-            // Submit Button
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: _isLoading ? null : _submitRequest,
+                onPressed: _isSubmitting ? null : _submitRequest,
                 style: ElevatedButton.styleFrom(
                   padding: EdgeInsets.symmetric(vertical: 16.h),
                   backgroundColor: AppTheme.primaryColor,
@@ -342,7 +389,7 @@ class _CustomerServiceRequestScreenState
                     borderRadius: BorderRadius.circular(12.r),
                   ),
                 ),
-                child: _isLoading
+                child: _isSubmitting
                     ? const CircularProgressIndicator(color: Colors.white)
                     : Text(
                         'إرسال الطلب',

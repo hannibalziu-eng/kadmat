@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:intl/intl.dart' as intl;
 
 import '../../jobs/domain/job.dart';
+import '../../jobs/domain/job_communication_policy.dart';
 import '../../jobs/data/job_repository.dart';
 import '../../../core/navigation/app_routes.dart';
 
@@ -486,7 +487,9 @@ class _TechnicianPriceInputScreenState
                 color: Colors.green.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(12.r),
                 child: InkWell(
-                  onTap: () => _callCustomer(phone),
+                  onTap: JobCommunicationPolicy.canUseJobCommunication(_job)
+                      ? () => _callCustomer(phone)
+                      : null,
                   borderRadius: BorderRadius.circular(12.r),
                   child: Padding(
                     padding: EdgeInsets.all(12.w),
@@ -514,15 +517,20 @@ class _TechnicianPriceInputScreenState
               color: Colors.blue.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12.r),
               child: InkWell(
-                onTap: () {
-                  context.push(
-                    AppRoutes.buildJobChatPath(widget.orderId),
-                    extra: {
-                      'otherUserName': _job?.customer?['full_name'] ?? 'العميل',
-                      'otherUserImage': _job?.customer?['profile_image_url'],
-                    },
-                  );
-                },
+                onTap: JobCommunicationPolicy.canUseJobCommunication(_job)
+                    ? () {
+                        context.push(
+                          AppRoutes.buildJobChatPath(widget.orderId),
+                          extra: {
+                            'otherUserName':
+                                _job?.customer?['full_name'] ?? 'العميل',
+                            'otherUserImage':
+                                _job?.customer?['profile_image_url'],
+                            'otherUserPhone': phone,
+                          },
+                        );
+                      }
+                    : null,
                 borderRadius: BorderRadius.circular(12.r),
                 child: Padding(
                   padding: EdgeInsets.all(12.w),

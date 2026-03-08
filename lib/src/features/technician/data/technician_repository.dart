@@ -126,7 +126,7 @@ class TechnicianRepository {
         final user = await supabase
             .from('users')
             .select(
-              'id, full_name, profile_image_url, rating, created_at, service:service_id(name_ar)',
+              'id, full_name, profile_image_url, rating, created_at, title, bio, address, location, service:service_id(name_ar)',
             )
             .eq('id', technicianId)
             .eq('user_type', 'technician')
@@ -209,6 +209,7 @@ class TechnicianRepository {
 
         final mapped = {
           ...user,
+          'location': user['address'] ?? user['location'],
           'specialization': specialization,
           'stats': {
             'completedJobs': completedJobs,

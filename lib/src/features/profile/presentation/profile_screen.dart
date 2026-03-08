@@ -5,6 +5,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/navigation/app_routes.dart';
 import '../../auth/data/auth_repository.dart';
+import '../../wallet/presentation/wallet_controller.dart';
 import 'edit_profile_screen.dart';
 import 'account_security_screen.dart';
 import 'favorite_services_screen.dart';
@@ -19,6 +20,9 @@ class ProfileScreen extends ConsumerWidget {
 
     final userProfile = authRepo.userProfile;
     final fullName = userProfile?['full_name'] ?? 'مستخدم';
+    final profileImageUrl = userProfile?['profile_image_url']?.toString();
+    final phone = userProfile?['phone']?.toString();
+    final walletAsync = isGuest ? null : ref.watch(myWalletProvider);
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -67,13 +71,16 @@ class ProfileScreen extends ConsumerWidget {
                       ),
                       child: CircleAvatar(
                         radius: 50.r,
-                        backgroundImage: isGuest
-                            ? null
-                            : const NetworkImage(
-                                'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400',
-                              ),
+                        backgroundImage:
+                            !isGuest &&
+                                profileImageUrl != null &&
+                                profileImageUrl.isNotEmpty
+                            ? NetworkImage(profileImageUrl)
+                            : null,
                         backgroundColor: Colors.grey[200],
                         child: isGuest
+                            ? Icon(Icons.person, size: 50.s, color: Colors.grey)
+                            : profileImageUrl == null || profileImageUrl.isEmpty
                             ? Icon(Icons.person, size: 50.s, color: Colors.grey)
                             : null,
                       ),
@@ -109,7 +116,9 @@ class ProfileScreen extends ConsumerWidget {
                 Text(
                   isGuest
                       ? 'سجل دخولك للاستفادة من كامل الميزات'
-                      : 'مرحباً بعودتك!',
+                      : phone != null && phone.isNotEmpty
+                      ? 'رقم الهاتف: $phone'
+                      : 'بيانات حسابك الحالية',
                   style: TextStyle(
                     fontSize: 14.fz,
                     color: Theme.of(context).textTheme.bodySmall?.color,
@@ -176,7 +185,8 @@ class ProfileScreen extends ConsumerWidget {
                             _buildProfileOption(
                               context,
                               title: 'أمان الحساب',
-                              subtitle: 'تغيير كلمة المرور وتفعيل 2FA',
+                              subtitle:
+                                  'تغيير كلمة المرور ومتابعة حالة مزايا الأمان',
                               icon: Icons.security,
                               iconColor: Colors.green,
                               iconBgColor: Colors.green.withValues(alpha: 0.1),
@@ -192,7 +202,7 @@ class ProfileScreen extends ConsumerWidget {
                             _buildProfileOption(
                               context,
                               title: 'المحفظة',
-                              subtitle: 'رصيدك الحالي: 350.00 ر.س',
+                              subtitle: _walletSubtitle(walletAsync),
                               icon: Icons.account_balance_wallet_outlined,
                               iconColor: Colors.blue,
                               iconBgColor: Colors.blue.withValues(alpha: 0.1),
@@ -226,6 +236,19 @@ class ProfileScreen extends ConsumerWidget {
           ],
         ),
       ),
+    );
+  }
+
+  String _walletSubtitle(AsyncValue<dynamic>? walletAsync) {
+    if (walletAsync == null) {
+      return 'افتح المحفظة لمعرفة الرصيد';
+    }
+
+    return walletAsync.when(
+      data: (wallet) =>
+          'رصيدك الحالي: ${wallet.balance.toStringAsFixed(2)} ${wallet.currency}',
+      loading: () => 'جاري تحميل الرصيد...',
+      error: (_, _) => 'تعذر تحميل الرصيد الآن',
     );
   }
 

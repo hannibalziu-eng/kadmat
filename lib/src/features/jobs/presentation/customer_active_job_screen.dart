@@ -3,13 +3,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_scalify/flutter_scalify.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../core/app_theme.dart';
 import '../../../core/navigation/app_routes.dart';
 import '../../../core/widgets/kadmat_toast.dart';
 import '../../../core/utils/error_handler.dart';
+import '../../../core/utils/service_name_formatter.dart';
 import '../../../core/widgets/shimmer_skeletons.dart';
 import '../data/job_repository.dart';
 import '../domain/job.dart';
+import '../domain/job_communication_policy.dart';
 import '../domain/job_status.dart';
 
 class CustomerActiveJobScreen extends ConsumerStatefulWidget {
@@ -66,7 +69,7 @@ class _CustomerActiveJobScreenState
     return Scaffold(
       backgroundColor: AppTheme.backgroundDark,
       appBar: AppBar(
-        title: Text(_job!.service?['name'] ?? 'طلبك'),
+        title: Text(formatServiceDisplayName(_job!.service, fallback: 'طلبك')),
         centerTitle: true,
         backgroundColor: Colors.transparent,
       ),
@@ -104,6 +107,13 @@ class _CustomerActiveJobScreenState
           return _buildTechnicianFoundState();
         }
         return Center(child: Text('حالة غير معروفة: $status'));
+    }
+  }
+
+  Future<void> _callTechnician(String phone) async {
+    final uri = Uri.parse('tel:$phone');
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri);
     }
   }
 
@@ -429,9 +439,10 @@ class _CustomerActiveJobScreenState
               children: [
                 Expanded(
                   child: ElevatedButton.icon(
-                    onPressed: () {
-                      debugPrint('📞 Call $techPhone');
-                    },
+                    onPressed:
+                        JobCommunicationPolicy.canUseJobCommunication(_job)
+                        ? () => _callTechnician(techPhone)
+                        : null,
                     icon: const Icon(Icons.phone),
                     label: const Text('اتصل'),
                     style: ElevatedButton.styleFrom(
@@ -447,15 +458,21 @@ class _CustomerActiveJobScreenState
                 SizedBox(width: 8.w),
                 Expanded(
                   child: ElevatedButton.icon(
-                    onPressed: () {
-                      context.push(
-                        AppRoutes.buildJobChatPath(widget.jobId),
-                        extra: {
-                          'otherUserId': _job!.technicianId,
-                          'otherUserName': techName,
-                        },
-                      );
-                    },
+                    onPressed:
+                        JobCommunicationPolicy.canUseJobCommunication(_job)
+                        ? () {
+                            context.push(
+                              AppRoutes.buildJobChatPath(widget.jobId),
+                              extra: {
+                                'otherUserId': _job!.technicianId,
+                                'otherUserName': techName,
+                                'otherUserImage':
+                                    _job!.technician?['profile_image_url'],
+                                'otherUserPhone': techPhone,
+                              },
+                            );
+                          }
+                        : null,
                     icon: const Icon(Icons.chat),
                     label: const Text('مراسلة'),
                     style: ElevatedButton.styleFrom(
@@ -470,6 +487,13 @@ class _CustomerActiveJobScreenState
                 ),
               ],
             ),
+            if (!JobCommunicationPolicy.canUseJobCommunication(_job)) ...[
+              SizedBox(height: 8.h),
+              Text(
+                JobCommunicationPolicy.unavailableMessage,
+                style: TextStyle(fontSize: 12.fz, color: Colors.white60),
+              ),
+            ],
             SizedBox(height: 8.h),
             SizedBox(
               width: double.infinity,
@@ -582,7 +606,7 @@ class _CustomerActiveJobScreenState
             child: ElevatedButton.icon(
               onPressed: () {
                 context.push(
-                  AppRoutes.buildTrackingPath(widget.jobId),
+                  AppRoutes.buildCustomerInProgressPath(widget.jobId),
                   extra: {
                     'technicianId': _job!.technicianId,
                     'lat': _job!.lat,

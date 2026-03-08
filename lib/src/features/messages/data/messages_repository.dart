@@ -1,197 +1,199 @@
+import 'dart:async';
+
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../../../core/api/api_error.dart';
+import '../../../core/api/api_client.dart';
+import '../../../core/api/endpoints.dart';
+import '../../../core/utils/error_messages.dart';
+import '../domain/conversation_thread.dart';
 import '../domain/message.dart';
 
 part 'messages_repository.g.dart';
 
-/// Repository for handling chat messages between customers and technicians
 class MessagesRepository {
-  final SupabaseClient _client;
+  MessagesRepository(this._client, this._supabase);
 
-  MessagesRepository(this._client);
+  final Dio _client;
+  final SupabaseClient _supabase;
 
-  /// Get all messages for a specific job
   Future<List<Message>> getMessages(String jobId) async {
-    final response = await _client
-        .from('messages')
-        .select('''
-          id,
-          job_id,
-          sender_id,
-          receiver_id,
-          content,
-          is_read,
-          created_at,
-          read_at,
-          sender:users!sender_id(id, full_name, profile_image_url)
-        ''')
-        .eq('job_id', jobId)
-        .order('created_at', ascending: true);
-
-    return (response as List).map((json) => Message.fromJson(json)).toList();
+    try {
+      final response = await _client.get(Endpoints.messagesForJob(jobId));
+      final data = response.data['data'] as List? ?? const [];
+      return data
+          .map(
+            (json) => Message.fromJson(
+              json is Map<String, dynamic>
+                  ? json
+                  : Map<String, dynamic>.from(json as Map),
+            ),
+          )
+          .toList();
+    } on DioException catch (e) {
+      throw _toUserFacingException(e);
+    }
   }
 
-  /// Send a new message
   Future<Message> sendMessage({
     required String jobId,
     required String content,
-    required String receiverId,
+    String? receiverId,
   }) async {
-    final senderId = _client.auth.currentUser?.id;
-    if (senderId == null) throw Exception('يجب تسجيل الدخول أولاً');
-
-    final response = await _client
-        .from('messages')
-        .insert({
-          'job_id': jobId,
-          'sender_id': senderId,
-          'receiver_id': receiverId,
-          'content': content,
-        })
-        .select('''
-      id,
-      job_id,
-      sender_id,
-      receiver_id,
-      content,
-      is_read,
-      created_at,
-      sender:users!sender_id(id, full_name, profile_image_url)
-    ''')
-        .single();
-
-    return Message.fromJson(response);
+    try {
+      final response = await _client.post(
+        Endpoints.messagesForJob(jobId),
+        data: {'content': content},
+      );
+      final data = response.data['data'];
+      return Message.fromJson(
+        data is Map<String, dynamic> ? data : Map<String, dynamic>.from(data),
+      );
+    } on DioException catch (e) {
+      throw _toUserFacingException(e);
+    }
   }
 
-  /// Subscribe to real-time messages for a job
-  Stream<List<Message>> watchMessages(String jobId) {
-    return _client
-        .from('messages')
-        .stream(primaryKey: ['id'])
-        .eq('job_id', jobId)
-        .order('created_at', ascending: true)
-        .map((data) => data.map((json) => Message.fromJson(json)).toList());
+  Stream<List<Message>> watchMessages(String jobId) async* {
+    yield await getMessages(jobId);
+    while (true) {
+      await Future<void>.delayed(const Duration(seconds: 3));
+      yield await getMessages(jobId);
+    }
   }
 
-  /// Mark all messages in a job as read for current user
   Future<int> markAsRead(String jobId) async {
-    final userId = _client.auth.currentUser?.id;
-    if (userId == null) return 0;
-
-    final result = await _client.rpc(
-      'mark_messages_as_read',
-      params: {'p_job_id': jobId, 'p_user_id': userId},
-    );
-
-    return result as int? ?? 0;
+    try {
+      final response = await _client.patch(Endpoints.markMessagesRead(jobId));
+      final payload = response.data['data'];
+      if (payload is Map<String, dynamic>) {
+        return (payload['updated_count'] as num?)?.toInt() ?? 0;
+      }
+      if (payload is Map) {
+        return (payload['updated_count'] as num?)?.toInt() ?? 0;
+      }
+      return 0;
+    } on DioException catch (e) {
+      throw _toUserFacingException(e);
+    }
   }
 
-  /// Get total unread message count for current user
   Future<int> getUnreadCount() async {
-    final userId = _client.auth.currentUser?.id;
-    if (userId == null) return 0;
-
-    final result = await _client.rpc(
-      'get_unread_count',
-      params: {'p_user_id': userId},
-    );
-
-    return result as int? ?? 0;
+    try {
+      final response = await _client.get(Endpoints.messageUnreadCount);
+      final payload = response.data['data'];
+      if (payload is Map<String, dynamic>) {
+        return (payload['total'] as num?)?.toInt() ?? 0;
+      }
+      if (payload is Map) {
+        return (payload['total'] as num?)?.toInt() ?? 0;
+      }
+      return 0;
+    } on DioException catch (e) {
+      throw _toUserFacingException(e);
+    }
   }
 
-  /// Get unread counts grouped by job
   Future<List<UnreadCountByJob>> getUnreadCountByJob() async {
-    final userId = _client.auth.currentUser?.id;
-    if (userId == null) return [];
+    try {
+      final response = await _client.get(Endpoints.messageUnreadCount);
+      final payload = response.data['data'];
+      final byJob = payload is Map<String, dynamic>
+          ? payload['by_job'] as List? ?? const []
+          : payload is Map
+          ? payload['by_job'] as List? ?? const []
+          : const [];
 
-    final result = await _client.rpc(
-      'get_unread_count_by_job',
-      params: {'p_user_id': userId},
-    );
+      return byJob
+          .map(
+            (json) => UnreadCountByJob.fromJson(
+              json is Map<String, dynamic>
+                  ? json
+                  : Map<String, dynamic>.from(json as Map),
+            ),
+          )
+          .toList();
+    } on DioException catch (e) {
+      throw _toUserFacingException(e);
+    }
+  }
 
-    return (result as List)
-        .map((json) => UnreadCountByJob.fromJson(json))
+  Future<List<ConversationThread>> getConversationThreads() async {
+    try {
+      final response = await _client.get(Endpoints.messageConversations);
+      final data = response.data['data'] as List? ?? const [];
+      return data
+          .map(
+            (json) => ConversationThread.fromJson(
+              json is Map<String, dynamic>
+                  ? json
+                  : Map<String, dynamic>.from(json as Map),
+            ),
+          )
+          .toList();
+    } on DioException catch (e) {
+      throw _toUserFacingException(e);
+    }
+  }
+
+  Future<List<Conversation>> getConversations() async {
+    final currentUserId = _supabase.auth.currentUser?.id;
+    final threads = await getConversationThreads();
+
+    return threads
+        .map(
+          (thread) => Conversation(
+            jobId: thread.jobId,
+            status: thread.status,
+            serviceName: thread.serviceName,
+            otherUser: thread.otherUser == null
+                ? null
+                : ConversationUser(
+                    id: thread.otherUser!.id,
+                    fullName: thread.otherUser!.fullName,
+                    profileImageUrl: thread.otherUser!.profileImageUrl,
+                  ),
+            unreadCount: thread.unreadCount,
+          ),
+        )
+        .where(
+          (thread) =>
+              currentUserId == null || thread.otherUser?.id != currentUserId,
+        )
         .toList();
   }
 
-  /// Get all conversations (chats) for current user
-  Future<List<Conversation>> getConversations() async {
-    final userId = _client.auth.currentUser?.id;
-    if (userId == null) return [];
-
-    // Get jobs where user is participant and has technician assigned
-    final response = await _client
-        .from('jobs')
-        .select('''
-          id,
-          status,
-          customer:users!customer_id(id, full_name, profile_image_url),
-          technician:users!technician_id(id, full_name, profile_image_url),
-          service:services(id, name)
-        ''')
-        .or('customer_id.eq.$userId,technician_id.eq.$userId')
-        .not('technician_id', 'is', null)
-        .order('created_at', ascending: false);
-
-    // Get unread counts
-    final unreadCounts = await getUnreadCountByJob();
-    final unreadMap = {for (var u in unreadCounts) u.jobId: u.unreadCount};
-
-    return (response as List).map((job) {
-      final customerId = job['customer']?['id'];
-      final otherUser = customerId == userId
-          ? job['technician']
-          : job['customer'];
-
-      return Conversation(
-        jobId: job['id'],
-        status: job['status'],
-        serviceName: job['service']?['name'],
-        otherUser: otherUser != null
-            ? ConversationUser.fromJson(otherUser)
-            : null,
-        unreadCount: unreadMap[job['id']] ?? 0,
-      );
-    }).toList();
-  }
-
-  /// Get the other party's ID for a job (to send message to)
-  Future<String?> getOtherPartyId(String jobId) async {
-    final userId = _client.auth.currentUser?.id;
-    if (userId == null) return null;
-
-    final response = await _client
-        .from('jobs')
-        .select('customer_id, technician_id')
-        .eq('id', jobId)
-        .maybeSingle();
-
-    if (response == null) return null;
-
-    final customerId = response['customer_id'];
-    final technicianId = response['technician_id'];
-
-    // Return the other party
-    if (customerId == userId) return technicianId;
-    if (technicianId == userId) return customerId;
-    return null;
+  Exception _toUserFacingException(DioException error) {
+    final apiError = ApiError.fromDioException(error);
+    return Exception(
+      ErrorMessages.fromApiCode(apiError.code, fallback: apiError.message),
+    );
   }
 }
 
 @Riverpod(keepAlive: true)
 MessagesRepository messagesRepository(Ref ref) {
-  return MessagesRepository(Supabase.instance.client);
+  return MessagesRepository(
+    ref.watch(apiClientProvider),
+    Supabase.instance.client,
+  );
 }
 
-/// Provider for unread message count
+final conversationThreadsProvider =
+    FutureProvider.autoDispose<List<ConversationThread>>((ref) async {
+      final repo = ref.watch(messagesRepositoryProvider);
+      return repo.getConversationThreads();
+    });
+
 @riverpod
 Future<int> unreadMessageCount(Ref ref) async {
   final repo = ref.watch(messagesRepositoryProvider);
   return repo.getUnreadCount();
 }
 
-/// Provider for conversations list
 @riverpod
 Future<List<Conversation>> conversations(Ref ref) async {
   final repo = ref.watch(messagesRepositoryProvider);

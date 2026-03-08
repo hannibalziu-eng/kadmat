@@ -20,7 +20,7 @@ class MFAPromptScreen extends ConsumerWidget {
     final controller = TextEditingController();
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Two-Factor Authentication')),
+      appBar: AppBar(title: const Text('التحقق الثنائي')),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -29,12 +29,12 @@ class MFAPromptScreen extends ConsumerWidget {
             const Icon(Icons.lock_outline, size: 64, color: Colors.blue),
             const SizedBox(height: 24),
             const Text(
-              'Enter your 2FA code',
+              'أدخل رمز التحقق',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
             const Text(
-              'Please enter the code sent to your device',
+              'أدخل الرمز المكوّن من 6 أرقام من تطبيق المصادقة أو جهازك',
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 24),
@@ -44,7 +44,7 @@ class MFAPromptScreen extends ConsumerWidget {
               textAlign: TextAlign.center,
               maxLength: 6,
               decoration: const InputDecoration(
-                labelText: '6-digit code',
+                labelText: 'رمز من 6 أرقام',
                 border: OutlineInputBorder(),
               ),
             ),
@@ -63,17 +63,21 @@ class MFAPromptScreen extends ConsumerWidget {
                   } else {
                     if (!context.mounted) return;
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Invalid 2FA code')),
+                      const SnackBar(content: Text('رمز التحقق غير صحيح')),
                     );
                   }
                 } catch (e) {
                   if (!context.mounted) return;
-                  ScaffoldMessenger.of(
-                    context,
-                  ).showSnackBar(SnackBar(content: Text('Error: $e')));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        'تعذر التحقق من الرمز حالياً. حاول مرة أخرى.',
+                      ),
+                    ),
+                  );
                 }
               },
-              child: const Text('Verify'),
+              child: const Text('تحقق'),
             ),
           ],
         ),
