@@ -5,6 +5,27 @@ on:
   workflow_dispatch:
 
 jobs:
+  detect_mobile_e2e_assets:
+    runs-on: ubuntu-latest
+    outputs:
+      has_integration_tests: ${{ steps.detect.outputs.has_integration_tests }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Detect tracked integration test assets
+        id: detect
+        run: |
+          if [ -f integration_test/comprehensive_test.dart ] \
+            && [ -f integration_test/auth_journey_test.dart ] \
+            && [ -f integration_test/customer_journey_test.dart ] \
+            && [ -f integration_test/technician_journey_test.dart ]; then
+            echo "has_integration_tests=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_integration_tests=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Skipping mobile integration/instrumentation jobs because tracked integration_test assets are missing."
+          fi
+
   unit_and_widget:
     runs-on: ubuntu-latest
     steps:
@@ -15,6 +36,7 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: "3.41.4"
 
       - name: Flutter pub get
         run: flutter pub get
@@ -24,7 +46,8 @@ jobs:
 
   integration_smoke:
     runs-on: ubuntu-latest
-    needs: unit_and_widget
+    needs: [unit_and_widget, detect_mobile_e2e_assets]
+    if: needs.detect_mobile_e2e_assets.outputs.has_integration_tests == 'true'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -33,6 +56,7 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: "3.41.4"
 
       - name: Flutter pub get
         run: flutter pub get
@@ -50,7 +74,8 @@ jobs:
 
   build_android_test_apks:
     runs-on: ubuntu-latest
-    needs: unit_and_widget
+    needs: [unit_and_widget, detect_mobile_e2e_assets]
+    if: needs.detect_mobile_e2e_assets.outputs.has_integration_tests == 'true'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -65,6 +90,7 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: "3.41.4"
 
       - name: Flutter pub get
         run: flutter pub get
@@ -106,8 +132,11 @@ jobs:
 
   firebase_test_lab:
     runs-on: ubuntu-latest
-    needs: build_android_test_apks
-    if: ${{ secrets.GCP_PROJECT_ID != '' && secrets.GCP_SA_KEY != '' }}
+    needs: [build_android_test_apks, detect_mobile_e2e_assets]
+    if: needs.detect_mobile_e2e_assets.outputs.has_integration_tests == 'true'
+    env:
+      GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+      GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
     steps:
       - name: Download APK artifacts
         uses: actions/download-artifact@v4
@@ -115,17 +144,29 @@ jobs:
           name: kadmat-android-test-apks
           path: tmp/apks
 
+      - name: Check Firebase Test Lab secrets
+        run: |
+          if [ -n "${GCP_PROJECT_ID}" ] && [ -n "${GCP_SA_KEY}" ]; then
+            echo "HAS_GCP_SECRETS=true" >> "$GITHUB_ENV"
+          else
+            echo "HAS_GCP_SECRETS=false" >> "$GITHUB_ENV"
+            echo "::warning::Skipping Firebase Test Lab because GCP_PROJECT_ID or GCP_SA_KEY is not configured."
+          fi
+
       - name: Authenticate to Google Cloud
+        if: env.HAS_GCP_SECRETS == 'true'
         uses: google-github-actions/auth@v2
         with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          credentials_json: ${{ env.GCP_SA_KEY }}
 
       - name: Setup gcloud SDK
+        if: env.HAS_GCP_SECRETS == 'true'
         uses: google-github-actions/setup-gcloud@v2
 
       - name: Run Firebase Test Lab instrumentation
+        if: env.HAS_GCP_SECRETS == 'true'
         run: |
-          gcloud config set project "${{ secrets.GCP_PROJECT_ID }}"
+          gcloud config set project "${GCP_PROJECT_ID}"
           gcloud firebase test android run \
             --type instrumentation \
             --app tmp/apks/app-debug.apk \
@@ -134,3 +175,6 @@ jobs:
             --device model=redfin,version=34,locale=en,orientation=portrait \
             --timeout=15m
 
+      - name: Skip Firebase Test Lab when secrets are missing
+        if: env.HAS_GCP_SECRETS != 'true'
+        run: 'echo "Firebase Test Lab skipped: missing GCP_PROJECT_ID/GCP_SA_KEY."'

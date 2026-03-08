@@ -16,6 +16,38 @@ const createJobSchema = Joi.object({
     images: Joi.array().items(Joi.string()).optional()
 });
 
+const nearbyJobsQuerySchema = Joi.object({
+    lat: Joi.number().required(),
+    lng: Joi.number().required(),
+    radius: Joi.number().positive().default(5000),
+    page: Joi.number().integer().min(1).default(1),
+    limit: Joi.number().integer().min(1).max(50).default(20),
+});
+
+const myJobsQuerySchema = Joi.object({
+    status: Joi.string().optional(),
+    page: Joi.number().integer().min(1).default(1),
+    limit: Joi.number().integer().min(1).max(50).default(20),
+});
+
+const submitOfferSchema = Joi.object({
+    price: Joi.number().positive().required(),
+});
+
+const rateJobSchema = Joi.object({
+    rating: Joi.number().integer().min(1).max(5).required(),
+    review: Joi.string().allow('', null).optional(),
+});
+
+function sendValidationError(res, message, details = undefined) {
+    const formatted = responseFormatter.error(
+        ERROR_CODES.VALIDATION_FAILED,
+        message,
+        details ? { statusCode: HTTP_STATUS.BAD_REQUEST, details } : HTTP_STATUS.BAD_REQUEST
+    );
+    return res.status(formatted.statusCode).json(formatted.response);
+}
+
 // 1. Create a New Job
 export const createJob = async (req, res) => {
     try {
@@ -64,15 +96,13 @@ export const createJob = async (req, res) => {
 // 2. Get Nearby Jobs (Query)
 export const getNearbyJobs = async (req, res) => {
     try {
-        const { lat, lng, radius = 5000, page = 1, limit = 20 } = req.query;
-
-        if (!lat || !lng) {
-            const { response, statusCode } = responseFormatter.error(
-                ERROR_CODES.INVALID_INPUT,
-                'Location (lat, lng) is required'
-            );
-            return res.status(statusCode).json(response);
+        const { error, value } = nearbyJobsQuerySchema.validate(req.query);
+        if (error) {
+            const field = error.details?.[0]?.path?.join('.');
+            return sendValidationError(res, error.details[0].message, field ? { field } : undefined);
         }
+
+        const { lat, lng, radius, page, limit } = value;
 
         const pageNum = parseInt(page, 10) || 1;
         const limitNum = Math.min(parseInt(limit, 10) || 20, 50);
@@ -82,7 +112,7 @@ export const getNearbyJobs = async (req, res) => {
 
         const openStatuses = ['pending', 'searching', 'no_technician_found'];
 
-        const { data: jobs, error, count } = await supabase
+        const { data: jobs, error: queryError, count } = await supabase
             .from('jobs')
             .select(`
                 *,
@@ -94,7 +124,7 @@ export const getNearbyJobs = async (req, res) => {
             .order('created_at', { ascending: false })
             .range(offset, offset + limitNum - 1);
 
-        if (error) throw error;
+        if (queryError) throw queryError;
 
         return res.json(
             responseFormatter.successPaginated(jobs, {
@@ -135,7 +165,13 @@ export const acceptJob = async (req, res) => {
 // 3.1. Submit Offer (Technician)
 export const submitOffer = async (req, res) => {
     try {
-        const { price } = req.body;
+        const { error, value } = submitOfferSchema.validate(req.body);
+        if (error) {
+            const field = error.details?.[0]?.path?.join('.');
+            return sendValidationError(res, error.details[0].message, field ? { field } : undefined);
+        }
+
+        const { price } = value;
         const offer = await jobService.submitOffer(req.params.id, req.user.id, price);
         return res.status(HTTP_STATUS.CREATED).json(responseFormatter.success(offer, 'Offer submitted successfully'));
     } catch (error) {
@@ -145,7 +181,10 @@ export const submitOffer = async (req, res) => {
         let code = isInvalidState ? ERROR_CODES.INVALID_STATUS_TRANSITION : ERROR_CODES.INVALID_INPUT;
         let statusCode = isInvalidState ? HTTP_STATUS.CONFLICT : HTTP_STATUS.BAD_REQUEST;
 
-        if (error.code === 'ACTIVE_JOB_LOCKED') {
+        if (error.code === 'JOB_ALREADY_ACCEPTED') {
+            code = ERROR_CODES.JOB_ALREADY_ACCEPTED;
+            statusCode = HTTP_STATUS.CONFLICT;
+        } else if (error.code === 'ACTIVE_JOB_LOCKED') {
             code = ERROR_CODES.ACTIVE_JOB_LOCKED;
             statusCode = HTTP_STATUS.CONFLICT;
             if (error.currentStatus) details.currentStatus = error.currentStatus;
@@ -276,9 +315,15 @@ export const acceptOffer = async (req, res) => {
 // 4. Get My Jobs (Enhanced with full data & pagination)
 export const getMyJobs = async (req, res) => {
     try {
-        const { status, page = 1, limit = 20 } = req.query;
+        const { error, value } = myJobsQuerySchema.validate(req.query);
+        if (error) {
+            const field = error.details?.[0]?.path?.join('.');
+            return sendValidationError(res, error.details[0].message, field ? { field } : undefined);
+        }
+
+        const { status, page, limit } = value;
         const pageNum = parseInt(page, 10) || 1;
-        const limitNum = Math.min(parseInt(limit, 10) || 20, 50);
+        const limitNum = parseInt(limit, 10) || 20;
         const offset = (pageNum - 1) * limitNum;
 
         // Build query with full relations
@@ -299,11 +344,11 @@ export const getMyJobs = async (req, res) => {
         }
 
         // Execute query with pagination
-        const { data: jobs, error, count } = await query
+        const { data: jobs, error: queryError, count } = await query
             .order('created_at', { ascending: false })
             .range(offset, offset + limitNum - 1);
 
-        if (error) throw error;
+        if (queryError) throw queryError;
 
         return res.json(
             responseFormatter.successPaginated(jobs, {
@@ -469,7 +514,13 @@ export const updateTechnicianProgress = async (req, res) => {
 // 8. Rate Job
 export const rateJob = async (req, res) => {
     try {
-        const { rating, review } = req.body;
+        const { error, value } = rateJobSchema.validate(req.body);
+        if (error) {
+            const field = error.details?.[0]?.path?.join('.');
+            return sendValidationError(res, error.details[0].message, field ? { field } : undefined);
+        }
+
+        const { rating, review } = value;
         const job = await jobService.rate(req.params.id, req.user.id, rating, review);
         return res.json(responseFormatter.success(job, 'Rating submitted'));
     } catch (error) {

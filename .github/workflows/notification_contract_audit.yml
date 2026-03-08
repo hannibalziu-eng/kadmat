@@ -27,16 +27,19 @@ jobs:
         working-directory: ./backend
 
     steps:
-      - name: Validate required secrets
-        run: |
-          if [ -z "${{ secrets.SUPABASE_URL }}" ] || [ -z "${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" ]; then
-            echo "::error::Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY repository secrets."
-            exit 1
-          fi
-
       - uses: actions/checkout@v4
 
+      - name: Check required secrets
+        run: |
+          if [ -n "${{ secrets.SUPABASE_URL }}" ] && [ -n "${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" ]; then
+            echo "HAS_SUPABASE_SECRETS=true" >> "$GITHUB_ENV"
+          else
+            echo "HAS_SUPABASE_SECRETS=false" >> "$GITHUB_ENV"
+            echo "::warning::Skipping notification contract audit because SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY is not configured."
+          fi
+
       - name: Use Node.js 18.x
+        if: env.HAS_SUPABASE_SECRETS == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: 18.x
@@ -44,10 +47,16 @@ jobs:
           cache-dependency-path: backend/package-lock.json
 
       - name: Install dependencies
+        if: env.HAS_SUPABASE_SECRETS == 'true'
         run: npm ci
 
       - name: Run notification contract audit
+        if: env.HAS_SUPABASE_SECRETS == 'true'
         run: npm run audit:notification-contract
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+      - name: Skip notification contract audit when secrets are missing
+        if: env.HAS_SUPABASE_SECRETS != 'true'
+        run: 'echo "Notification contract audit skipped: missing SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY."'

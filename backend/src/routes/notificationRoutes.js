@@ -5,9 +5,11 @@ import {
     markAsRead,
     markAllAsRead,
     deleteNotification,
-    updateFCMToken
+    updateFCMToken,
+    trackLifecycle
 } from '../controllers/notificationController.js';
 import { protect } from '../middleware/authMiddleware.js';
+import { asyncHandler } from '../middleware/errorHandler.js';
 
 const router = express.Router();
 
@@ -30,6 +32,9 @@ router.post('/:id/read', markAsRead);
 router.delete('/:id', deleteNotification);
 
 // Update FCM Token
-router.post('/fcm-token', updateFCMToken);
+router.post('/fcm-token', asyncHandler(updateFCMToken));
+
+// Track notification lifecycle telemetry
+router.post('/lifecycle', asyncHandler(trackLifecycle));
 
 export default router;

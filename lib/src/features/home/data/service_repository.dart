@@ -4,6 +4,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/api/endpoints.dart';
+import '../../../core/api/response_utils.dart';
 import '../domain/service.dart';
 
 part 'service_repository.g.dart';
@@ -16,7 +17,7 @@ class ServiceRepository {
   Future<List<Service>> getServices() async {
     try {
       final response = await _client.get(Endpoints.services);
-      final List data = response.data['services'];
+      final List data = responseListField(response.data, 'services');
       return data.map((e) => Service.fromJson(e)).toList();
     } catch (e) {
       // Fallback to Supabase if API fails (e.g. 429 Rate Limit)
@@ -39,7 +40,11 @@ class ServiceRepository {
   Future<Service> getServiceById(String id) async {
     try {
       final response = await _client.get(Endpoints.serviceById(id));
-      return Service.fromJson(response.data['service']);
+      final service = responseObjectField(response.data, 'service');
+      if (service.isEmpty) {
+        throw Exception('Service payload is empty');
+      }
+      return Service.fromJson(service);
     } catch (e) {
       throw Exception('فشل جلب بيانات الخدمة');
     }

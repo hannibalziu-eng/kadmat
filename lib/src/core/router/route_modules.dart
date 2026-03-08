@@ -24,7 +24,6 @@ import '../../features/technician/presentation/jobs/technician_job_detail_screen
 import '../../features/technician/presentation/technician_public_profile_screen.dart';
 import '../../features/technician/presentation/screens/technician_settings_screen.dart';
 import '../../features/technician/presentation/screens/technician_help_screen.dart';
-import '../../features/technician/presentation/wallet/technician_wallet_screen.dart';
 
 // Job & Order Features
 import '../../features/jobs/presentation/screens/customer_job_tracking_screen.dart';
@@ -134,11 +133,6 @@ class RouteModules {
               final bookingId = state.pathParameters['bookingId']!;
               return AppRoutes.buildCustomerInProgressPath(bookingId);
             },
-          ),
-          GoRoute(
-            path: AppRoutes.asChild(AppRoutes.wallet),
-            path: AppRoutes.asChild(AppRoutes.customerWallet),
-            builder: (context, state) => const TechnicianWalletScreen(),
           ),
           GoRoute(
             path: AppRoutes.asChild(AppRoutes.customerWallet),

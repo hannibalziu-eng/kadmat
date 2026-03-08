@@ -67,6 +67,10 @@ class ErrorMessages {
   static const String rateLimited = 'طلبات كثيرة. يرجى المحاولة بعد قليل';
   static const String forbidden = 'ليست لديك صلاحية لتنفيذ هذا الإجراء';
   static const String invalidInput = 'البيانات المدخلة غير صحيحة';
+  static const String backendUnreachable =
+      'الخادم غير متاح حاليًا. يرجى المحاولة بعد قليل';
+  static const String localBackendUnreachable =
+      'الخادم المحلي غير متاح. تأكد من تشغيل واجهة البرمجة المحلية';
 
   // General Errors
   static const String unknownError = 'حدث خطأ غير متوقع';
@@ -182,5 +186,21 @@ class ErrorMessages {
     }
 
     return unknownError;
+  }
+
+  /// Compatibility helper used by network-specific tests and local-debug UX.
+  static String networkFailureMessage({required String url}) {
+    final normalized = url.trim().toLowerCase();
+    if (normalized.isEmpty) {
+      return noInternetConnection;
+    }
+
+    if (normalized.contains('127.0.0.1') ||
+        normalized.contains('localhost') ||
+        normalized.contains('0.0.0.0')) {
+      return localBackendUnreachable;
+    }
+
+    return backendUnreachable;
   }
 }

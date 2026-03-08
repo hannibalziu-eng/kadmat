@@ -1,5 +1,6 @@
 import Joi from 'joi';
 import { supabaseAdmin, supabase } from '../config/supabase.js';
+import { responseFormatter, ERROR_CODES, HTTP_STATUS } from '../utils/responseFormatter.js';
 
 // Validation Schemas
 const registerSchema = Joi.object({
@@ -21,7 +22,14 @@ export const register = async (req, res) => {
     try {
         // 1. Validate Input
         const { error, value } = registerSchema.validate(req.body);
-        if (error) return res.status(400).json({ success: false, message: error.details[0].message });
+        if (error) {
+            const formatted = responseFormatter.error(
+                ERROR_CODES.VALIDATION_FAILED,
+                error.details[0].message,
+                HTTP_STATUS.BAD_REQUEST
+            );
+            return res.status(formatted.statusCode).json(formatted.response);
+        }
 
         const { email, password, phone, full_name, user_type, service_id, document_urls } = value;
 
@@ -41,17 +49,23 @@ export const register = async (req, res) => {
         });
 
         if (authError) {
-            return res.status(400).json({ success: false, message: authError.message });
+            const formatted = responseFormatter.error(
+                ERROR_CODES.INVALID_INPUT,
+                authError.message,
+                HTTP_STATUS.BAD_REQUEST
+            );
+            return res.status(formatted.statusCode).json(formatted.response);
         }
 
-        res.status(201).json({
-            success: true,
-            message: 'User registered successfully',
-            user: {
-                id: authUser.user.id,
-                email: authUser.user.email,
-                user_metadata: authUser.user.user_metadata
-            }
+        const user = {
+            id: authUser.user.id,
+            email: authUser.user.email,
+            user_metadata: authUser.user.user_metadata
+        };
+
+        return res.status(201).json({
+            ...responseFormatter.success({ user }, 'User registered successfully'),
+            user
         });
 
     } catch (error) {
@@ -64,7 +78,14 @@ export const login = async (req, res) => {
     try {
         // 1. Validate Input
         const { error, value } = loginSchema.validate(req.body);
-        if (error) return res.status(400).json({ success: false, message: error.details[0].message });
+        if (error) {
+            const formatted = responseFormatter.error(
+                ERROR_CODES.VALIDATION_FAILED,
+                error.details[0].message,
+                HTTP_STATUS.BAD_REQUEST
+            );
+            return res.status(formatted.statusCode).json(formatted.response);
+        }
 
         const { email, password } = value;
 
@@ -75,7 +96,12 @@ export const login = async (req, res) => {
         });
 
         if (signInError) {
-            return res.status(401).json({ success: false, message: 'Invalid credentials' });
+            const formatted = responseFormatter.error(
+                ERROR_CODES.UNAUTHORIZED,
+                'Invalid credentials',
+                HTTP_STATUS.UNAUTHORIZED
+            );
+            return res.status(formatted.statusCode).json(formatted.response);
         }
 
         // 3. Get User Profile & Wallet Balance
@@ -86,12 +112,21 @@ export const login = async (req, res) => {
             .single();
 
         if (profileError) {
-            return res.status(500).json({ success: false, message: 'Error fetching user profile' });
+            const formatted = responseFormatter.error(
+                ERROR_CODES.DATABASE_ERROR,
+                'Error fetching user profile',
+                HTTP_STATUS.INTERNAL_SERVER_ERROR
+            );
+            return res.status(formatted.statusCode).json(formatted.response);
         }
 
-        res.json({
-            success: true,
-            message: 'Login successful',
+        return res.json({
+            ...responseFormatter.success({
+                token: data.session.access_token,
+                refresh_token: data.session.refresh_token,
+                expires_at: data.session.expires_at,
+                user: userProfile
+            }, 'Login successful'),
             token: data.session.access_token,
             refresh_token: data.session.refresh_token,
             expires_at: data.session.expires_at,
@@ -109,19 +144,32 @@ export const refreshToken = async (req, res) => {
         const { refresh_token } = req.body;
 
         if (!refresh_token) {
-            return res.status(400).json({ success: false, message: 'Refresh token is required' });
+            const formatted = responseFormatter.error(
+                ERROR_CODES.VALIDATION_FAILED,
+                'Refresh token is required',
+                HTTP_STATUS.BAD_REQUEST
+            );
+            return res.status(formatted.statusCode).json(formatted.response);
         }
 
         // Use Supabase to refresh the session
         const { data, error } = await supabase.auth.refreshSession({ refresh_token });
 
         if (error) {
-            return res.status(401).json({ success: false, message: 'Invalid or expired refresh token' });
+            const formatted = responseFormatter.error(
+                ERROR_CODES.UNAUTHORIZED,
+                'Invalid or expired refresh token',
+                HTTP_STATUS.UNAUTHORIZED
+            );
+            return res.status(formatted.statusCode).json(formatted.response);
         }
 
-        // Return new access token and refresh token
-        res.json({
-            success: true,
+        return res.json({
+            ...responseFormatter.success({
+                token: data.session.access_token,
+                refresh_token: data.session.refresh_token,
+                expires_at: data.session.expires_at
+            }),
             token: data.session.access_token,
             refresh_token: data.session.refresh_token,
             expires_at: data.session.expires_at

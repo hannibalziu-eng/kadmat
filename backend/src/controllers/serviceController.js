@@ -11,8 +11,12 @@ export const getServices = async (req, res) => {
 
         if (error) throw error;
 
-        res.json({
+        return res.json({
             success: true,
+            data: {
+                services,
+                count: services.length,
+            },
             count: services.length,
             services
         });
@@ -32,7 +36,7 @@ export const getServiceById = async (req, res) => {
             .from('services')
             .select('*')
             .eq('id', id)
-            .single();
+            .maybeSingle();
 
         if (error) throw error;
 
@@ -40,7 +44,13 @@ export const getServiceById = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Service not found' });
         }
 
-        res.json({ success: true, service });
+        return res.json({
+            success: true,
+            data: {
+                service,
+            },
+            service,
+        });
 
     } catch (error) {
         console.error('Get Service Error:', error);
