@@ -4,7 +4,9 @@ import 'package:flutter_scalify/flutter_scalify.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/app_theme.dart';
 import '../../../../core/constants.dart';
+import '../../../../core/design/kadmat_tokens.dart';
 import '../../../../core/navigation/app_routes.dart';
+import '../../../../core/utils/service_name_formatter.dart';
 import '../../../../core/widgets/kadmat_toast.dart';
 import '../../data/job_repository.dart';
 import '../../domain/job.dart';
@@ -119,154 +121,319 @@ class _CustomerPaymentProcessingScreenState
   @override
   Widget build(BuildContext context) {
     if (_job == null) {
-      return const Scaffold(
-        backgroundColor: AppTheme.backgroundDark,
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     final amount = _job!.finalPrice ?? _job!.technicianPrice ?? 0;
+    final serviceName = formatServiceDisplayName(
+      _job!.service,
+      fallback: 'الخدمة المطلوبة',
+    );
 
     return Scaffold(
-      backgroundColor: AppTheme.backgroundDark,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         title: const Text('الدفع'),
         backgroundColor: Colors.transparent,
         elevation: 0,
       ),
       body: SingleChildScrollView(
-        padding: EdgeInsets.all(24.w),
-        child: Column(
-          children: [
-            Container(
-              padding: EdgeInsets.all(24.w),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    AppTheme.primaryColor,
-                    AppTheme.primaryColor.withValues(alpha: 0.8),
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(20.r),
-              ),
-              child: Column(
-                children: [
-                  Text(
-                    'المبلغ الإجمالي',
-                    style: TextStyle(color: Colors.white70, fontSize: 16.fz),
-                  ),
-                  SizedBox(height: 8.h),
-                  Text(
-                    '${amount.toStringAsFixed(2)} ريال',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 32.fz,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            SizedBox(height: 32.h),
-            Align(
-              alignment: Alignment.centerRight,
-              child: Text(
-                'اختر طريقة الدفع',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 18.fz,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-            SizedBox(height: 16.h),
-            for (final method in _availableMethods) ...[
-              _buildPaymentMethodTile(method.id, method.label, method.icon),
-              SizedBox(height: 12.h),
-            ],
-            if (!_supportsOnlinePayments) ...[
-              Container(
-                width: double.infinity,
-                padding: EdgeInsets.all(16.w),
-                decoration: BoxDecoration(
-                  color: Colors.orange.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(10.r),
-                  border: Border.all(
-                    color: Colors.orange.withValues(alpha: 0.35),
-                  ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'الدفع الإلكتروني مؤجل في هذه النسخة',
-                      style: TextStyle(
-                        color: Colors.orange.shade200,
-                        fontSize: 13.fz,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    SizedBox(height: 6.h),
-                    Text(
-                      'حالياً يتم إكمال الطلب عبر تأكيد التسليم النقدي فقط. سنضيف طرق الدفع الإلكترونية لاحقاً عندما تكون جاهزة تشغيلياً.',
-                      style: TextStyle(
-                        color: Colors.orange.shade100,
-                        fontSize: 12.fz,
-                        height: 1.45,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-            SizedBox(height: 48.h),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed:
-                    _isLoading ||
-                        (_isOnlineMethodSelected && !_supportsOnlinePayments)
-                    ? null
-                    : _processPayment,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green,
-                  padding: EdgeInsets.symmetric(vertical: 16.h),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12.r),
-                  ),
-                ),
-                child: _isLoading
-                    ? const CircularProgressIndicator(color: Colors.white)
-                    : Text(
-                        _selectedPaymentMethod == 'cash'
-                            ? 'تأكيد التسليم النقدي'
-                            : 'تأكيد دفع ${amount.toStringAsFixed(2)} ريال',
+        padding: EdgeInsets.fromLTRB(18.w, 12.h, 18.w, 28.h),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 960),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildHero(serviceName, amount),
+                SizedBox(height: 16.h),
+                _buildSurface(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'اختر طريقة الدفع',
                         style: TextStyle(
+                          color: KadmatColors.lightTextPrimary,
                           fontSize: 18.fz,
-                          fontWeight: FontWeight.bold,
+                          fontWeight: FontWeight.w800,
                         ),
                       ),
-              ),
-            ),
-            SizedBox(height: 16.h),
-            if (_isOnlineMethodSelected && _supportsOnlinePayments)
-              const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.lock, color: Colors.grey, size: 16),
-                  SizedBox(width: 4),
-                  Text(
-                    'عملية الدفع محمية',
-                    style: TextStyle(color: Colors.grey, fontSize: 12),
+                      SizedBox(height: 6.h),
+                      Text(
+                        'أظهرنا هنا فقط الطرق التي يمكن تنفيذها فعليًا في هذه النسخة حتى لا تدخل في خطوة وهمية أو غير مكتملة.',
+                        style: TextStyle(
+                          color: KadmatColors.lightTextSecondary,
+                          fontSize: 12.5.fz,
+                          height: 1.45,
+                        ),
+                      ),
+                      SizedBox(height: 16.h),
+                      for (final method in _availableMethods) ...[
+                        _buildPaymentMethodTile(
+                          method.id,
+                          method.label,
+                          method.icon,
+                        ),
+                        SizedBox(height: 12.h),
+                      ],
+                    ],
+                  ),
+                ),
+                if (!_supportsOnlinePayments) ...[
+                  SizedBox(height: 16.h),
+                  _buildSurface(
+                    child: Container(
+                      width: double.infinity,
+                      padding: EdgeInsets.all(16.w),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(18.r),
+                        border: Border.all(
+                          color: Colors.orange.withValues(alpha: 0.24),
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'الدفع الإلكتروني مؤجل في هذه النسخة',
+                            style: TextStyle(
+                              color: const Color(0xFF935C1B),
+                              fontSize: 13.fz,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          SizedBox(height: 6.h),
+                          Text(
+                            'حالياً يتم إكمال الطلب عبر تأكيد التسليم النقدي فقط. سنضيف طرق الدفع الإلكترونية لاحقاً عندما تكون جاهزة تشغيلياً في السوق المستهدف.',
+                            style: TextStyle(
+                              color: KadmatColors.lightTextSecondary,
+                              fontSize: 12.5.fz,
+                              height: 1.5,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ],
-              ),
-          ],
+                SizedBox(height: 16.h),
+                _buildSurface(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'ماذا سيحدث بعد التأكيد؟',
+                        style: TextStyle(
+                          color: KadmatColors.lightTextPrimary,
+                          fontSize: 18.fz,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      SizedBox(height: 12.h),
+                      _buildBullet(
+                        'سيتم تسجيل طريقة الدفع المعتمدة على الطلب الحالي.',
+                      ),
+                      SizedBox(height: 10.h),
+                      _buildBullet(
+                        'تنتقل مباشرة بعد ذلك إلى خطوة التقييم النهائية.',
+                      ),
+                    ],
+                  ),
+                ),
+                SizedBox(height: 22.h),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed:
+                        _isLoading ||
+                            (_isOnlineMethodSelected &&
+                                !_supportsOnlinePayments)
+                        ? null
+                        : _processPayment,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green,
+                    ),
+                    child: _isLoading
+                        ? const CircularProgressIndicator(color: Colors.white)
+                        : Text(
+                            _selectedPaymentMethod == 'cash'
+                                ? 'تأكيد التسليم النقدي'
+                                : 'تأكيد دفع ${amount.toStringAsFixed(2)} ريال',
+                            style: TextStyle(
+                              fontSize: 18.fz,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                  ),
+                ),
+                SizedBox(height: 16.h),
+                if (_isOnlineMethodSelected && _supportsOnlinePayments)
+                  Center(
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.lock_outline_rounded,
+                          color: KadmatColors.lightTextSecondary,
+                          size: 16.s,
+                        ),
+                        SizedBox(width: 4.w),
+                        Text(
+                          'عملية الدفع محمية',
+                          style: TextStyle(
+                            color: KadmatColors.lightTextSecondary,
+                            fontSize: 12.fz,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
         ),
       ),
+    );
+  }
+
+  Widget _buildHero(String serviceName, double amount) {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(18.w),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(30.r),
+        gradient: const LinearGradient(
+          begin: Alignment.topRight,
+          end: Alignment.bottomLeft,
+          colors: [Color(0xFF17313B), Color(0xFF0D1E25)],
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 46.w,
+            height: 46.w,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(18.r),
+            ),
+            child: Icon(
+              Icons.payments_rounded,
+              color: Colors.white,
+              size: 22.s,
+            ),
+          ),
+          SizedBox(height: 14.h),
+          Text(
+            'خطوة الدفع',
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.72),
+              fontSize: 12.fz,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          SizedBox(height: 4.h),
+          Text(
+            'أكمل الطلب بطريقة واضحة',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 24.fz,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          SizedBox(height: 8.h),
+          Text(
+            'اختر الطريقة المتاحة، أكد العملية، ثم انتقل مباشرة إلى التقييم النهائي.',
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.74),
+              fontSize: 12.8.fz,
+              height: 1.55,
+            ),
+          ),
+          SizedBox(height: 14.h),
+          Wrap(
+            spacing: 8.w,
+            runSpacing: 8.h,
+            children: [
+              _buildHeroPill(Icons.work_outline_rounded, serviceName),
+              _buildHeroPill(
+                Icons.attach_money_rounded,
+                '${amount.toStringAsFixed(0)} ر.س',
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeroPill(IconData icon, String label) {
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 7.h),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(14.r),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: Colors.white, size: 15.s),
+          SizedBox(width: 6.w),
+          Text(
+            label,
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 11.5.fz,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSurface({required Widget child}) {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(18.w),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24.r),
+        border: Border.all(color: KadmatColors.lightBorder),
+      ),
+      child: child,
+    );
+  }
+
+  Widget _buildBullet(String text) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 8.w,
+          height: 8.w,
+          margin: EdgeInsets.only(top: 6.h),
+          decoration: const BoxDecoration(
+            color: AppTheme.primaryColor,
+            shape: BoxShape.circle,
+          ),
+        ),
+        SizedBox(width: 10.w),
+        Expanded(
+          child: Text(
+            text,
+            style: TextStyle(
+              color: KadmatColors.lightTextSecondary,
+              fontSize: 12.8.fz,
+              height: 1.5,
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -280,31 +447,36 @@ class _CustomerPaymentProcessingScreenState
         decoration: BoxDecoration(
           color: isSelected
               ? AppTheme.primaryColor.withValues(alpha: 0.1)
-              : Colors.white.withValues(alpha: 0.05),
-          borderRadius: BorderRadius.circular(12.r),
+              : KadmatColors.lightSurface,
+          borderRadius: BorderRadius.circular(16.r),
           border: Border.all(
-            color: isSelected ? AppTheme.primaryColor : Colors.transparent,
-            width: 2,
+            color: isSelected
+                ? AppTheme.primaryColor
+                : KadmatColors.lightBorder,
+            width: isSelected ? 2 : 1,
           ),
         ),
         child: Row(
           children: [
             Icon(
               icon,
-              color: isSelected ? AppTheme.primaryColor : Colors.white70,
+              color: isSelected
+                  ? AppTheme.primaryColor
+                  : KadmatColors.lightTextSecondary,
             ),
             SizedBox(width: 16.w),
-            Text(
-              label,
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 16.fz,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  color: KadmatColors.lightTextPrimary,
+                  fontSize: 15.fz,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                ),
               ),
             ),
-            const Spacer(),
             if (isSelected)
-              Icon(Icons.check_circle, color: AppTheme.primaryColor),
+              Icon(Icons.check_circle_rounded, color: AppTheme.primaryColor),
           ],
         ),
       ),

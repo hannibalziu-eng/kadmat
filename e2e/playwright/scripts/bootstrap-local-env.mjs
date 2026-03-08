@@ -29,6 +29,15 @@ async function postJson(url, body) {
   return { response, payload };
 }
 
+function getPayloadMessage(payload) {
+  return (
+    payload?.message ||
+    payload?.error?.message ||
+    payload?.error?.details ||
+    ''
+  );
+}
+
 async function ensureUser({ email, password, userType, serviceId }) {
   const registerBody = {
     email,
@@ -42,7 +51,7 @@ async function ensureUser({ email, password, userType, serviceId }) {
   const { response, payload } = await postJson(`${apiBase}/auth/register`, registerBody);
 
   if (!response.ok) {
-    const message = payload?.message || '';
+    const message = getPayloadMessage(payload);
     const isDuplicate = /already|exists|registered|duplicate|taken/i.test(message);
     if (!isDuplicate) {
       throw new Error(`Failed to ensure ${userType} user (${email}): ${response.status} ${JSON.stringify(payload)}`);

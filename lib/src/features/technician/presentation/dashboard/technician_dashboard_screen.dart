@@ -8,6 +8,7 @@ import 'package:geolocator/geolocator.dart' show Position;
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/app_theme.dart';
+import '../../../../core/design/kadmat_tokens.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/utils/logger_service.dart';
@@ -49,8 +50,6 @@ class _TechnicianDashboardScreenState
 
   ProviderSubscription<AsyncValue<TechnicianDispatchFeed>>?
   _dispatchFeedSubscription;
-  bool _hasPrimedNearbyJobs = false;
-  int _lastVisibleNearbyJobsCount = 0;
   List<Job> _cachedNearbyJobs = const <Job>[];
   final Set<String> _telemetryLoggedJobs = <String>{};
   _NearbySortMode _nearbySortMode = _NearbySortMode.newest;
@@ -89,33 +88,6 @@ class _TechnicianDashboardScreenState
                 final visibleJobs = feed.visibleJobs;
                 _trackDispatchTelemetry(visibleJobs);
 
-                if (_hasPrimedNearbyJobs &&
-                    _isOnline &&
-                    visibleJobs.length > _lastVisibleNearbyJobsCount &&
-                    mounted) {
-                  ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Row(
-                        children: [
-                          const Icon(
-                            Icons.notifications_active,
-                            color: Colors.white,
-                          ),
-                          SizedBox(width: 8.w),
-                          const Text('🔔 يوجد طلب جديد بالقرب منك!'),
-                        ],
-                      ),
-                      backgroundColor: Colors.green,
-                      behavior: SnackBarBehavior.floating,
-                      margin: EdgeInsets.all(16.w),
-                      duration: const Duration(seconds: 4),
-                    ),
-                  );
-                }
-
-                _hasPrimedNearbyJobs = true;
-                _lastVisibleNearbyJobsCount = visibleJobs.length;
                 _cachedNearbyJobs = visibleJobs;
               },
             );
@@ -305,6 +277,8 @@ class _TechnicianDashboardScreenState
     final unreadNotifications = ref.watch(liveUnreadNotificationsCountProvider);
     final dispatchFeedAsync = ref.watch(technicianDispatchFeedProvider);
     final location = dispatchFeedAsync.valueOrNull?.location;
+    final nearbyJobsCount =
+        dispatchFeedAsync.valueOrNull?.visibleJobs.length ?? 0;
 
     if (location != null) {
       debugPrint(
@@ -384,106 +358,96 @@ class _TechnicianDashboardScreenState
           physics:
               const AlwaysScrollableScrollPhysics(), // Ensure scroll even if content is short
           padding: EdgeInsets.all(16.w),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // New Requests Section (Top Priority)
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 1180),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'طلبات جديدة قريبة',
-                    style: TextStyle(
-                      fontSize: 18.fz,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: () {
+                  _buildDashboardHero(
+                    userName: userName,
+                    nearbyJobsCount: nearbyJobsCount,
+                    unreadNotifications: unreadNotifications,
+                    location: location,
+                  ).animate().fadeIn(delay: 180.ms).slideY(begin: 0.06),
+                  SizedBox(height: 18.h),
+                  _buildSectionHeader(
+                    title: 'طلبات قريبة الآن',
+                    subtitle:
+                        'راجع الطلبات الأحدث حولك ثم قدّم عرضك أو افتح القائمة الكاملة.',
+                    actionLabel: 'عرض الكل',
+                    onAction: () {
                       ref.read(technicianTabIndexProvider.notifier).state = 1;
                     },
-                    child: const Text('عرض الكل'),
+                  ).animate().fadeIn(delay: 300.ms),
+                  if (unreadNotifications > 0) ...[
+                    SizedBox(height: 8.h),
+                    _buildRealtimeNoticeCard(
+                      message:
+                          'لديك $unreadNotifications إشعارات جديدة. افتح أيقونة الجرس للمراجعة.',
+                    ),
+                  ],
+                  SizedBox(height: 8.h),
+                  _buildSortControls(location),
+                  SizedBox(height: 8.h),
+                  _buildDispatchTelemetryCard(),
+                  SizedBox(height: 12.h),
+
+                  // Real-time jobs list
+                  dispatchFeedAsync.when(
+                    data: (feed) {
+                      return _buildNearbyJobsListSection(
+                        sourceJobs: feed.visibleJobs,
+                        currentLocation: location,
+                      );
+                    },
+                    loading: () {
+                      if (_cachedNearbyJobs.isNotEmpty) {
+                        return _buildNearbyJobsListSection(
+                          sourceJobs: _cachedNearbyJobs,
+                          currentLocation: location,
+                          noticeMessage: 'جاري تحديث البيانات الحية...',
+                        );
+                      }
+
+                      return const ListSkeleton(
+                        itemCount: 2,
+                        itemHeight: 120,
+                        shrinkWrap: true,
+                        physics: NeverScrollableScrollPhysics(),
+                      );
+                    },
+                    error: (err, _) {
+                      if (_cachedNearbyJobs.isNotEmpty) {
+                        return _buildNearbyJobsListSection(
+                          sourceJobs: _cachedNearbyJobs,
+                          currentLocation: location,
+                          noticeMessage:
+                              'تعذر التحديث اللحظي مؤقتاً. يتم عرض آخر بيانات متاحة.',
+                          noticeWarning: true,
+                        );
+                      }
+
+                      return _buildErrorCard(err.toString());
+                    },
                   ),
+
+                  SizedBox(height: 24.h),
+
+                  _buildSectionHeader(
+                    title: 'أداء الحساب',
+                    subtitle:
+                        'ملخص سريع عن نشاطك الحالي، الأعمال المكتملة، واستقبال الطلبات.',
+                  ).animate().fadeIn(delay: 220.ms),
+                  SizedBox(height: 10.h),
+                  LocationStatusIndicator(
+                    isOnline: _isOnline,
+                  ).animate().fadeIn(delay: 200.ms),
+                  SizedBox(height: 16.h),
+                  const TechnicianStatsGrid(),
                 ],
-              ).animate().fadeIn(delay: 300.ms),
-              if (unreadNotifications > 0) ...[
-                SizedBox(height: 8.h),
-                _buildRealtimeNoticeCard(
-                  message:
-                      'لديك $unreadNotifications إشعارات جديدة. افتح أيقونة الجرس للمراجعة.',
-                ),
-              ],
-              SizedBox(height: 8.h),
-              _buildSortControls(location),
-              SizedBox(height: 8.h),
-              _buildDispatchTelemetryCard(),
-              SizedBox(height: 12.h),
-
-              // Real-time jobs list
-              dispatchFeedAsync.when(
-                data: (feed) {
-                  return _buildNearbyJobsListSection(
-                    sourceJobs: feed.visibleJobs,
-                    currentLocation: location,
-                  );
-                },
-                loading: () {
-                  if (_cachedNearbyJobs.isNotEmpty) {
-                    return _buildNearbyJobsListSection(
-                      sourceJobs: _cachedNearbyJobs,
-                      currentLocation: location,
-                      noticeMessage: 'جاري تحديث البيانات الحية...',
-                    );
-                  }
-
-                  return const ListSkeleton(
-                    itemCount: 2,
-                    itemHeight: 120,
-                    shrinkWrap: true,
-                    physics: NeverScrollableScrollPhysics(),
-                  );
-                },
-                error: (err, _) {
-                  if (_cachedNearbyJobs.isNotEmpty) {
-                    return _buildNearbyJobsListSection(
-                      sourceJobs: _cachedNearbyJobs,
-                      currentLocation: location,
-                      noticeMessage:
-                          'تعذر التحديث اللحظي مؤقتاً. يتم عرض آخر بيانات متاحة.',
-                      noticeWarning: true,
-                    );
-                  }
-
-                  return _buildErrorCard(err.toString());
-                },
               ),
-
-              SizedBox(height: 24.h),
-
-              // Dashboard Data Under Requests
-              Text(
-                'مرحباً، $userName 👋',
-                style: TextStyle(
-                  fontSize: 22.fz,
-                  fontWeight: FontWeight.bold,
-                  color: Theme.of(context).textTheme.bodyLarge?.color,
-                ),
-              ).animate().fadeIn().slideX(),
-              SizedBox(height: 6.h),
-              Text(
-                _isOnline ? 'أنت متصل الآن وتستقبل الطلبات' : 'أنت غير متصل',
-                style: TextStyle(
-                  fontSize: 14.fz,
-                  color: _isOnline ? Colors.green : Colors.grey,
-                ),
-              ).animate().fadeIn().slideX(delay: 100.ms),
-              SizedBox(height: 8.h),
-              LocationStatusIndicator(
-                isOnline: _isOnline,
-              ).animate().fadeIn(delay: 200.ms),
-              SizedBox(height: 16.h),
-              const TechnicianStatsGrid(),
-            ],
+            ),
           ),
         ),
       ),
@@ -535,6 +499,219 @@ class _TechnicianDashboardScreenState
             ),
         ],
       ),
+    );
+  }
+
+  Widget _buildDashboardHero({
+    required String userName,
+    required int nearbyJobsCount,
+    required int unreadNotifications,
+    required Position? location,
+  }) {
+    final locationLabel = location == null
+        ? 'في انتظار تحديد الموقع'
+        : '${location.latitude.toStringAsFixed(3)}, ${location.longitude.toStringAsFixed(3)}';
+
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(20.w),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(28.r),
+        gradient: const LinearGradient(
+          begin: Alignment.topRight,
+          end: Alignment.bottomLeft,
+          colors: [Color(0xFF19323C), Color(0xFF0D1E26)],
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 48.w,
+                height: 48.w,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(16.r),
+                ),
+                child: Icon(
+                  _isOnline ? Icons.radar_rounded : Icons.pause_circle_outline,
+                  color: Colors.white,
+                  size: 22.s,
+                ),
+              ),
+              SizedBox(width: 12.w),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'مرحباً، $userName',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 22.fz,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    SizedBox(height: 4.h),
+                    Text(
+                      _isOnline
+                          ? 'أنت متصل الآن وتستقبل الطلبات في محيطك.'
+                          : 'فعّل حالة الاتصال حتى تبدأ باستقبال الطلبات الجديدة.',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.72),
+                        fontSize: 12.5.fz,
+                        height: 1.55,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 16.h),
+          Wrap(
+            spacing: 8.w,
+            runSpacing: 8.h,
+            children: [
+              _buildHeroPill(
+                icon: Icons.explore_outlined,
+                label: locationLabel,
+              ),
+              _buildHeroPill(
+                icon: Icons.notifications_none_rounded,
+                label: unreadNotifications > 0
+                    ? '$unreadNotifications إشعارات تحتاج مراجعة'
+                    : 'لا توجد إشعارات جديدة',
+              ),
+            ],
+          ),
+          SizedBox(height: 16.h),
+          Row(
+            children: [
+              Expanded(
+                child: _buildHeroMetric(
+                  label: 'طلبات قريبة',
+                  value: '$nearbyJobsCount',
+                  accent: KadmatColors.brandAccent,
+                ),
+              ),
+              SizedBox(width: 8.w),
+              Expanded(
+                child: _buildHeroMetric(
+                  label: 'الحالة',
+                  value: _isOnline ? 'متصل' : 'غير متصل',
+                  accent: _isOnline
+                      ? KadmatColors.stateSuccess
+                      : KadmatColors.stateWarning,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeroPill({required IconData icon, required String label}) {
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(999.r),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: Colors.white.withValues(alpha: 0.84), size: 16.s),
+          SizedBox(width: 6.w),
+          Text(
+            label,
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.78),
+              fontSize: 11.5.fz,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeroMetric({
+    required String label,
+    required String value,
+    required Color accent,
+  }) {
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 12.h),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(18.r),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 8.w,
+            height: 8.w,
+            decoration: BoxDecoration(color: accent, shape: BoxShape.circle),
+          ),
+          SizedBox(height: 10.h),
+          Text(
+            value,
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 20.fz,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          SizedBox(height: 4.h),
+          Text(
+            label,
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.72),
+              fontSize: 11.5.fz,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSectionHeader({
+    required String title,
+    required String subtitle,
+    String? actionLabel,
+    VoidCallback? onAction,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: TextStyle(fontSize: 20.fz, fontWeight: FontWeight.w800),
+              ),
+              SizedBox(height: 4.h),
+              Text(
+                subtitle,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: KadmatColors.lightTextSecondary,
+                  height: 1.55,
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (actionLabel != null && onAction != null)
+          TextButton(onPressed: onAction, child: Text(actionLabel)),
+      ],
     );
   }
 

@@ -8,10 +8,11 @@ import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
-import '../../../../core/app_theme.dart';
+import '../../../../core/design/kadmat_tokens.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/providers/photo_upload_provider.dart';
 import '../../../../core/utils/error_handler.dart';
+import '../../../../core/widgets/kadmat_components.dart';
 import '../../../home/data/service_repository.dart';
 import '../../../home/domain/service.dart';
 import '../../data/job_repository.dart';
@@ -41,6 +42,15 @@ class _CustomerServiceRequestScreenState
   double? _lat;
   double? _lng;
   String? _locationHint;
+
+  Service? get _selectedService {
+    final selectedId = _selectedServiceId;
+    if (selectedId == null) return null;
+    for (final service in _services) {
+      if (service.id == selectedId) return service;
+    }
+    return null;
+  }
 
   @override
   void initState() {
@@ -195,213 +205,443 @@ class _CustomerServiceRequestScreenState
 
   @override
   Widget build(BuildContext context) {
+    final selectedService = _selectedService;
+
     return Scaffold(
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(title: const Text('طلب خدمة جديدة')),
-      body: Form(
-        key: _formKey,
-        child: ListView(
-          padding: EdgeInsets.all(16.w),
-          children: [
-            Text(
-              'نوع الخدمة',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16.fz),
-            ),
-            SizedBox(height: 8.h),
-            DropdownButtonFormField<String>(
-              initialValue: _selectedServiceId,
-              items: _services
-                  .map(
-                    (service) => DropdownMenuItem(
-                      value: service.id,
-                      child: Text(service.nameAr ?? service.name),
+      body: SafeArea(
+        child: Form(
+          key: _formKey,
+          child: ListView(
+            padding: EdgeInsets.fromLTRB(18.w, 12.h, 18.w, 28.h),
+            children: [
+              _RequestHeroCard(selectedService: selectedService),
+              SizedBox(height: 18.h),
+              _SectionContainer(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const KadmatSectionHeader(
+                      title: '1. اختر الخدمة',
+                      subtitle:
+                          'ابدأ بتحديد نوع الخدمة المطلوبة حتى نعرض طلبك للفنيين المناسبين.',
                     ),
-                  )
-                  .toList(),
-              onChanged: (value) => setState(() => _selectedServiceId = value),
-              decoration: InputDecoration(
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12.r),
-                ),
-                filled: true,
-                fillColor: Colors.grey[50],
-              ),
-              hint: _isLoadingServices
-                  ? const Text('جاري تحميل الخدمات...')
-                  : const Text('اختر الخدمة'),
-            ),
-            SizedBox(height: 16.h),
-            Text(
-              'الموقع',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16.fz),
-            ),
-            SizedBox(height: 8.h),
-            TextFormField(
-              controller: _addressController,
-              decoration: InputDecoration(
-                hintText: 'وصف الموقع (مثال: حي العليا، شارع التحلية)',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12.r),
-                ),
-                prefixIcon: const Icon(Icons.location_on),
-              ),
-              validator: (value) =>
-                  value == null || value.trim().isEmpty ? 'مطلوب' : null,
-            ),
-            SizedBox(height: 12.h),
-            Container(
-              padding: EdgeInsets.all(12.w),
-              decoration: BoxDecoration(
-                color: Theme.of(context).cardColor,
-                borderRadius: BorderRadius.circular(12.r),
-                border: Border.all(color: Colors.grey.shade300),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(
-                        _lat != null && _lng != null
-                            ? Icons.check_circle_outline
-                            : Icons.my_location,
-                        color: _lat != null && _lng != null
-                            ? Colors.green
-                            : Theme.of(context).primaryColor,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          _locationHint ??
-                              'يتم استخدام موقعك الحالي بدلاً من أي موقع افتراضي.',
-                        ),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: 12.h),
-                  OutlinedButton.icon(
-                    onPressed: _isLocating ? null : _resolveLocation,
-                    icon: const Icon(Icons.gps_fixed),
-                    label: Text(
-                      _isLocating
-                          ? 'جاري تحديد الموقع...'
-                          : 'تحديث موقعي الحالي',
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            SizedBox(height: 16.h),
-            Text(
-              'وصف المشكلة',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16.fz),
-            ),
-            SizedBox(height: 8.h),
-            TextFormField(
-              controller: _descriptionController,
-              maxLines: 4,
-              decoration: InputDecoration(
-                hintText: 'اشرح المشكلة بالتفصيل...',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12.r),
-                ),
-              ),
-              validator: (value) =>
-                  value == null || value.trim().isEmpty ? 'مطلوب' : null,
-            ),
-            SizedBox(height: 16.h),
-            Text(
-              'صور للمشكلة (اختياري)',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16.fz),
-            ),
-            SizedBox(height: 8.h),
-            SizedBox(
-              height: 100.h,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                itemCount: _photos.length + 1,
-                separatorBuilder: (_, __) => SizedBox(width: 8.w),
-                itemBuilder: (context, index) {
-                  if (index == _photos.length) {
-                    return GestureDetector(
-                      onTap: _pickPhoto,
-                      child: Container(
-                        width: 100.h,
+                    SizedBox(height: 14.h),
+                    if (_isLoadingServices)
+                      Container(
+                        width: double.infinity,
+                        padding: EdgeInsets.all(18.w),
                         decoration: BoxDecoration(
-                          color: Colors.grey[200],
-                          borderRadius: BorderRadius.circular(12.r),
-                          border: Border.all(color: Colors.grey[400]!),
+                          color: Theme.of(context).scaffoldBackgroundColor,
+                          borderRadius: BorderRadius.circular(18.r),
                         ),
-                        child: Icon(Icons.add_a_photo, color: Colors.grey[600]),
-                      ),
-                    );
-                  }
-                  return Stack(
-                    children: [
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(12.r),
-                        child: kIsWeb
-                            ? Image.network(
-                                _photos[index].path,
-                                width: 100.h,
-                                height: 100.h,
-                                fit: BoxFit.cover,
-                              )
-                            : Image.file(
-                                File(_photos[index].path),
-                                width: 100.h,
-                                height: 100.h,
-                                fit: BoxFit.cover,
+                        child: const Center(
+                          child: CircularProgressIndicator.adaptive(),
+                        ),
+                      )
+                    else
+                      Wrap(
+                        spacing: 10.w,
+                        runSpacing: 10.h,
+                        children: _services
+                            .map(
+                              (service) => _ServiceOptionChip(
+                                label: service.nameAr ?? service.name,
+                                isSelected: _selectedServiceId == service.id,
+                                onTap: () => setState(
+                                  () => _selectedServiceId = service.id,
+                                ),
                               ),
+                            )
+                            .toList(),
                       ),
-                      Positioned(
-                        top: 4,
-                        right: 4,
-                        child: GestureDetector(
-                          onTap: () => setState(() => _photos.removeAt(index)),
-                          child: Container(
-                            decoration: const BoxDecoration(
-                              color: Colors.red,
-                              shape: BoxShape.circle,
-                            ),
-                            padding: EdgeInsets.all(4.w),
-                            child: Icon(
-                              Icons.close,
-                              size: 16.s,
-                              color: Colors.white,
-                            ),
-                          ),
+                    if (_services.isEmpty && !_isLoadingServices) ...[
+                      SizedBox(height: 10.h),
+                      Text(
+                        'لا توجد خدمات متاحة الآن.',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: KadmatColors.lightTextSecondary,
                         ),
                       ),
                     ],
-                  );
-                },
-              ),
-            ),
-            SizedBox(height: 32.h),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: _isSubmitting ? null : _submitRequest,
-                style: ElevatedButton.styleFrom(
-                  padding: EdgeInsets.symmetric(vertical: 16.h),
-                  backgroundColor: AppTheme.primaryColor,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12.r),
-                  ),
+                  ],
                 ),
-                child: _isSubmitting
-                    ? const CircularProgressIndicator(color: Colors.white)
-                    : Text(
-                        'إرسال الطلب',
-                        style: TextStyle(
-                          fontSize: 18.fz,
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
               ),
+              SizedBox(height: 16.h),
+              _SectionContainer(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const KadmatSectionHeader(
+                      title: '2. حدّد الموقع',
+                      subtitle:
+                          'اكتب عنوانًا واضحًا وتأكد من تحديث موقعك الحالي قبل إرسال الطلب.',
+                    ),
+                    SizedBox(height: 14.h),
+                    TextFormField(
+                      controller: _addressController,
+                      decoration: InputDecoration(
+                        hintText:
+                            'مثال: بن عاشور، شارع النصر، قرب صيدلية الربيع',
+                        prefixIcon: const Icon(Icons.location_on_outlined),
+                      ),
+                      validator: (value) =>
+                          value == null || value.trim().isEmpty
+                          ? 'مطلوب'
+                          : null,
+                    ),
+                    SizedBox(height: 12.h),
+                    Container(
+                      width: double.infinity,
+                      padding: EdgeInsets.all(16.w),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).scaffoldBackgroundColor,
+                        borderRadius: BorderRadius.circular(18.r),
+                        border: Border.all(color: KadmatColors.lightBorder),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Container(
+                                width: 36.w,
+                                height: 36.w,
+                                decoration: BoxDecoration(
+                                  color:
+                                      (_lat != null && _lng != null
+                                              ? KadmatColors.stateSuccess
+                                              : KadmatColors.brandAccent)
+                                          .withValues(alpha: 0.16),
+                                  borderRadius: BorderRadius.circular(12.r),
+                                ),
+                                child: Icon(
+                                  _lat != null && _lng != null
+                                      ? Icons.check_circle_outline_rounded
+                                      : Icons.my_location_rounded,
+                                  color: _lat != null && _lng != null
+                                      ? KadmatColors.stateSuccess
+                                      : KadmatColors.brandSecondary,
+                                  size: 18.s,
+                                ),
+                              ),
+                              SizedBox(width: 10.w),
+                              Expanded(
+                                child: Text(
+                                  _locationHint ??
+                                      'سنستخدم موقعك الحالي بدل أي موقع افتراضي أو ثابت.',
+                                  style: Theme.of(context).textTheme.bodyMedium
+                                      ?.copyWith(height: 1.55),
+                                ),
+                              ),
+                            ],
+                          ),
+                          SizedBox(height: 14.h),
+                          KadmatSecondaryButton(
+                            label: _isLocating
+                                ? 'جاري تحديد الموقع...'
+                                : 'تحديث موقعي الحالي',
+                            icon: Icons.gps_fixed_rounded,
+                            onPressed: _isLocating ? null : _resolveLocation,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(height: 16.h),
+              _SectionContainer(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const KadmatSectionHeader(
+                      title: '3. اشرح المشكلة',
+                      subtitle:
+                          'كلما كان الوصف أوضح، كانت العروض أدق والرد أسرع.',
+                    ),
+                    SizedBox(height: 14.h),
+                    TextFormField(
+                      controller: _descriptionController,
+                      maxLines: 5,
+                      decoration: const InputDecoration(
+                        hintText:
+                            'اشرح المشكلة، متى بدأت، وهل هناك تفاصيل مهمة يجب أن يعرفها الفني...',
+                      ),
+                      validator: (value) =>
+                          value == null || value.trim().isEmpty
+                          ? 'مطلوب'
+                          : null,
+                    ),
+                    SizedBox(height: 16.h),
+                    const KadmatSectionHeader(
+                      title: 'صور توضيحية',
+                      subtitle:
+                          'اختيارية، لكنها تساعد الفني على فهم الحالة قبل الوصول.',
+                    ),
+                    SizedBox(height: 12.h),
+                    SizedBox(
+                      height: 108.h,
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: _photos.length + 1,
+                        separatorBuilder: (_, __) => SizedBox(width: 10.w),
+                        itemBuilder: (context, index) {
+                          if (index == _photos.length) {
+                            return GestureDetector(
+                              onTap: _pickPhoto,
+                              child: Container(
+                                width: 108.h,
+                                decoration: BoxDecoration(
+                                  color: Theme.of(
+                                    context,
+                                  ).scaffoldBackgroundColor,
+                                  borderRadius: BorderRadius.circular(18.r),
+                                  border: Border.all(
+                                    color: KadmatColors.lightBorder,
+                                  ),
+                                ),
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.add_a_photo_outlined,
+                                      color: KadmatColors.brandSecondary,
+                                      size: 26.s,
+                                    ),
+                                    SizedBox(height: 8.h),
+                                    Text(
+                                      'إضافة صورة',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodySmall
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          }
+                          return Stack(
+                            children: [
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(18.r),
+                                child: kIsWeb
+                                    ? Image.network(
+                                        _photos[index].path,
+                                        width: 108.h,
+                                        height: 108.h,
+                                        fit: BoxFit.cover,
+                                      )
+                                    : Image.file(
+                                        File(_photos[index].path),
+                                        width: 108.h,
+                                        height: 108.h,
+                                        fit: BoxFit.cover,
+                                      ),
+                              ),
+                              Positioned(
+                                top: 6,
+                                right: 6,
+                                child: GestureDetector(
+                                  onTap: () =>
+                                      setState(() => _photos.removeAt(index)),
+                                  child: Container(
+                                    decoration: const BoxDecoration(
+                                      color: KadmatColors.stateError,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    padding: EdgeInsets.all(4.w),
+                                    child: Icon(
+                                      Icons.close,
+                                      size: 16.s,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(height: 20.h),
+              Container(
+                padding: EdgeInsets.all(18.w),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(24.r),
+                  border: Border.all(color: KadmatColors.lightBorder),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'جاهز لإرسال الطلب؟',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    SizedBox(height: 6.h),
+                    Text(
+                      'سنعرض طلبك للفنيين القريبين بمجرد الإرسال، ثم يمكنك مراجعة العروض واختيار الأنسب.',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: KadmatColors.lightTextSecondary,
+                        height: 1.55,
+                      ),
+                    ),
+                    SizedBox(height: 14.h),
+                    KadmatPrimaryButton(
+                      label: 'إرسال الطلب',
+                      icon: Icons.send_rounded,
+                      isLoading: _isSubmitting,
+                      onPressed: _isSubmitting ? null : _submitRequest,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RequestHeroCard extends StatelessWidget {
+  const _RequestHeroCard({required this.selectedService});
+
+  final Service? selectedService;
+
+  @override
+  Widget build(BuildContext context) {
+    final serviceName = selectedService?.nameAr ?? selectedService?.name;
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(20.w),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(28.r),
+        gradient: const LinearGradient(
+          begin: Alignment.topRight,
+          end: Alignment.bottomLeft,
+          colors: [Color(0xFF17313B), Color(0xFF0E2128)],
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 46.w,
+            height: 46.w,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(16.r),
             ),
-          ],
+            child: Icon(
+              Icons.handyman_outlined,
+              size: 22.s,
+              color: Colors.white,
+            ),
+          ),
+          SizedBox(height: 14.h),
+          Text(
+            'أرسل طلبك بخطوات واضحة',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 23.fz,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          SizedBox(height: 6.h),
+          Text(
+            serviceName == null
+                ? 'اختر الخدمة، حدّد موقعك، ثم أضف وصفًا واضحًا حتى تصل العروض المناسبة بسرعة.'
+                : 'الخدمة المحددة الآن: $serviceName. أكمل التفاصيل وسنعرض طلبك مباشرة على الفنيين المناسبين.',
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.74),
+              fontSize: 12.5.fz,
+              height: 1.6,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SectionContainer extends StatelessWidget {
+  const _SectionContainer({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(18.w),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24.r),
+        border: Border.all(color: KadmatColors.lightBorder),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.025),
+            blurRadius: 16,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: child,
+    );
+  }
+}
+
+class _ServiceOptionChip extends StatelessWidget {
+  const _ServiceOptionChip({
+    required this.label,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16.r),
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 12.h),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? KadmatColors.brandSecondary
+                : Theme.of(context).scaffoldBackgroundColor,
+            borderRadius: BorderRadius.circular(16.r),
+            border: Border.all(
+              color: isSelected
+                  ? KadmatColors.brandSecondary
+                  : KadmatColors.lightBorder,
+            ),
+          ),
+          child: Text(
+            label,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: isSelected ? Colors.white : KadmatColors.lightTextPrimary,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
         ),
       ),
     );

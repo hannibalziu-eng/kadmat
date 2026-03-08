@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_scalify/flutter_scalify.dart';
-import 'package:flutter_animate/flutter_animate.dart';
+
+import '../../../../core/design/kadmat_tokens.dart';
 import '../../../../core/widgets/empty_state_widget.dart';
+import '../../../../core/widgets/kadmat_components.dart';
 import '../../../../core/widgets/shimmer_skeletons.dart';
 import '../../../wallet/presentation/wallet_controller.dart';
 
@@ -12,225 +14,158 @@ class TechnicianWalletScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final walletAsync = ref.watch(myWalletProvider);
+    final wallet = walletAsync.valueOrNull;
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      appBar: AppBar(title: const Text('المحفظة'), centerTitle: true),
-      body: SingleChildScrollView(
-        padding: EdgeInsets.all(16.w),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Earnings Card
-            walletAsync.when(
-              data: (wallet) => Container(
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: EdgeInsets.fromLTRB(18.w, 12.h, 18.w, 28.h),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _WalletHero(
+                wallet: wallet,
+                onRefresh: () {
+                  ref.invalidate(myWalletProvider);
+                  ref.invalidate(myTransactionsProvider());
+                  ref.invalidate(myWithdrawRequestsProvider());
+                },
+              ),
+              SizedBox(height: 18.h),
+              walletAsync.when(
+                data: (wallet) => Row(
+                  children: [
+                    Expanded(
+                      child: _WalletStatCard(
+                        label: 'القابل للسحب',
+                        value:
+                            '${wallet.balance.toStringAsFixed(2)} ${wallet.currency}',
+                        icon: Icons.account_balance_wallet_outlined,
+                        accent: KadmatColors.stateInfo,
+                      ),
+                    ),
+                    SizedBox(width: 10.w),
+                    Expanded(
+                      child: _WalletStatCard(
+                        label: 'إجمالي الأرباح',
+                        value:
+                            '${wallet.totalEarnings.toStringAsFixed(2)} ${wallet.currency}',
+                        icon: Icons.trending_up_rounded,
+                        accent: KadmatColors.stateSuccess,
+                      ),
+                    ),
+                  ],
+                ),
+                loading: () => const CardSkeleton(height: 168),
+                error: (err, _) => _buildErrorState(
+                  context,
+                  message: _friendlyWalletError(err),
+                  onRetry: () => ref.invalidate(myWalletProvider),
+                ),
+              ),
+              SizedBox(height: 18.h),
+              Row(
+                children: [
+                  Expanded(
+                    child: KadmatPrimaryButton(
+                      label: 'سحب الأرباح',
+                      icon: Icons.account_balance_wallet_outlined,
+                      onPressed: wallet == null
+                          ? null
+                          : () => _showWithdrawDialog(
+                              context,
+                              ref,
+                              wallet.balance,
+                            ),
+                    ),
+                  ),
+                  SizedBox(width: 8.w),
+                  Expanded(
+                    child: KadmatSecondaryButton(
+                      label: 'طلبات السحب',
+                      icon: Icons.receipt_long_outlined,
+                      onPressed: () => _showWithdrawalRequestsSheet(context),
+                    ),
+                  ),
+                ],
+              ),
+              SizedBox(height: 18.h),
+              _ActionStripCard(
+                icon: Icons.receipt_long_rounded,
+                title: 'سجل المعاملات',
+                subtitle: 'راجع كل حركة دخل أو خصم على المحفظة',
+                onTap: () => _showTransactionsSheet(context),
+              ),
+              SizedBox(height: 24.h),
+              KadmatSectionHeader(
+                title: 'أحدث المعاملات',
+                subtitle: 'آخر التحديثات المالية على حسابك المهني.',
+                trailing: TextButton(
+                  onPressed: () => _showTransactionsSheet(context),
+                  child: const Text('عرض الكل'),
+                ),
+              ),
+              SizedBox(height: 14.h),
+              Container(
                 width: double.infinity,
-                padding: EdgeInsets.all(24.w),
+                padding: EdgeInsets.all(18.w),
                 decoration: BoxDecoration(
-                  color: Theme.of(context).cardColor,
-                  borderRadius: BorderRadius.circular(16.r),
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(24.r),
+                  border: Border.all(color: KadmatColors.lightBorder),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.05),
-                      blurRadius: 12.r,
-                      offset: const Offset(0, 4),
+                      color: Colors.black.withValues(alpha: 0.03),
+                      blurRadius: 16,
+                      offset: const Offset(0, 8),
                     ),
                   ],
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'الرصيد القابل للسحب',
-                      style: TextStyle(fontSize: 14.fz, color: Colors.grey),
-                    ),
-                    SizedBox(height: 8.h),
-                    Text(
-                      '${wallet.balance.toStringAsFixed(2)} ${wallet.currency}',
-                      style: TextStyle(
-                        fontSize: 32.fz,
-                        fontWeight: FontWeight.bold,
-                        color: Theme.of(context).textTheme.bodyLarge?.color,
+                child: ref
+                    .watch(myTransactionsProvider())
+                    .when(
+                      data: (transactions) {
+                        if (transactions.isEmpty) {
+                          return const EmptyStateWidget(
+                            title: 'لا توجد معاملات بعد',
+                            subtitle: 'ستظهر هنا سجلات عملياتك المالية',
+                            icon: Icons.receipt_long_rounded,
+                          );
+                        }
+                        return Column(
+                          children: transactions
+                              .take(4)
+                              .map(
+                                (t) => Padding(
+                                  padding: EdgeInsets.only(bottom: 12.h),
+                                  child: _buildTransactionItem(
+                                    context,
+                                    title: t.description ?? t.type,
+                                    date: _formatTransactionDate(t.createdAt),
+                                    amount:
+                                        '${t.amount > 0 ? '+' : ''} ${t.amount.toStringAsFixed(2)}',
+                                    isIncome: t.amount > 0,
+                                  ),
+                                ),
+                              )
+                              .toList(),
+                        );
+                      },
+                      loading: () => const ListSkeleton(
+                        shrinkWrap: true,
+                        physics: NeverScrollableScrollPhysics(),
+                      ),
+                      error: (err, _) => _buildErrorState(
+                        context,
+                        message: _friendlyWalletError(err),
+                        onRetry: () => ref.invalidate(myTransactionsProvider()),
                       ),
                     ),
-                    SizedBox(height: 20.h),
-                    Text(
-                      'إجمالي الأرباح',
-                      style: TextStyle(fontSize: 14.fz, color: Colors.grey),
-                    ),
-                    SizedBox(height: 4.h),
-                    Text(
-                      '${wallet.totalEarnings.toStringAsFixed(2)} ${wallet.currency}',
-                      style: TextStyle(
-                        fontSize: 16.fz,
-                        fontWeight: FontWeight.w600,
-                        color: Theme.of(context).textTheme.bodyLarge?.color,
-                      ),
-                    ),
-                  ],
-                ),
-              ).animate().fadeIn().slideY(begin: 0.2),
-              loading: () => const CardSkeleton(height: 180),
-              error: (err, stack) => _buildErrorState(
-                context,
-                message: _friendlyWalletError(err),
-                onRetry: () => ref.invalidate(myWalletProvider),
               ),
-            ),
-            SizedBox(height: 24.h),
-
-            // Withdraw Button
-            SizedBox(
-              width: double.infinity,
-              height: 50.h,
-              child: ElevatedButton.icon(
-                onPressed: () => _showWithdrawDialog(
-                  context,
-                  ref,
-                  walletAsync.value?.balance ?? 0,
-                ),
-                icon: const Icon(Icons.account_balance_wallet),
-                label: const Text('سحب الأرباح'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Theme.of(context).primaryColor,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12.r),
-                  ),
-                  elevation: 4,
-                  shadowColor: Theme.of(
-                    context,
-                  ).primaryColor.withValues(alpha: 0.3),
-                ),
-              ),
-            ).animate().fadeIn().slideY(begin: 0.2, delay: 100.ms),
-            SizedBox(height: 32.h),
-
-            // Action Items
-            _buildActionItem(
-              context,
-              icon: Icons.receipt_long,
-              title: 'سجل المعاملات',
-              onTap: () => _showTransactionsSheet(context),
-            ).animate().fadeIn().slideX(delay: 200.ms),
-            SizedBox(height: 12.h),
-            _buildActionItem(
-              context,
-              icon: Icons.credit_card,
-              title: 'طلبات السحب',
-              onTap: () => _showWithdrawalRequestsSheet(context),
-            ).animate().fadeIn().slideX(delay: 250.ms),
-            SizedBox(height: 32.h),
-
-            // Recent Transactions Header
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'أحدث المعاملات',
-                  style: TextStyle(
-                    fontSize: 18.fz,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                TextButton(
-                  onPressed: () => _showTransactionsSheet(context),
-                  child: Text('عرض الكل', style: TextStyle(fontSize: 14.fz)),
-                ),
-              ],
-            ).animate().fadeIn(delay: 300.ms),
-            SizedBox(height: 16.h),
-
-            // Transaction List
-            ref
-                .watch(myTransactionsProvider())
-                .when(
-                  data: (transactions) {
-                    if (transactions.isEmpty) {
-                      return const EmptyStateWidget(
-                        title: 'لا توجد معاملات بعد',
-                        subtitle: 'ستظهر هنا سجلات عملياتك المالية',
-                        icon: Icons.receipt_long_rounded,
-                      );
-                    }
-                    return Column(
-                      children: transactions
-                          .map(
-                            (t) => Column(
-                              children: [
-                                _buildTransactionItem(
-                                  context,
-                                  title: t.description ?? t.type,
-                                  date: _formatTransactionDate(t.createdAt),
-                                  amount:
-                                      '${t.amount > 0 ? '+' : ''} ${t.amount.toStringAsFixed(2)}',
-                                  isIncome: t.amount > 0,
-                                ).animate().fadeIn().slideX(),
-                                SizedBox(height: 12.h),
-                              ],
-                            ),
-                          )
-                          .toList(),
-                    );
-                  },
-                  loading: () => const ListSkeleton(
-                    shrinkWrap: true,
-                    physics: NeverScrollableScrollPhysics(),
-                  ),
-                  error: (err, stack) => _buildErrorState(
-                    context,
-                    message: _friendlyWalletError(err),
-                    onRetry: () => ref.invalidate(myTransactionsProvider()),
-                  ),
-                ),
-            SizedBox(height: 80.h), // Bottom nav padding
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildActionItem(
-    BuildContext context, {
-    required IconData icon,
-    required String title,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: EdgeInsets.all(16.w),
-        decoration: BoxDecoration(
-          color: Theme.of(context).cardColor,
-          borderRadius: BorderRadius.circular(12.r),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 8.r,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 40.w,
-              height: 40.h,
-              decoration: BoxDecoration(
-                color: Theme.of(context).scaffoldBackgroundColor,
-                borderRadius: BorderRadius.circular(8.r),
-              ),
-              child: Icon(icon, size: 22.s),
-            ),
-            SizedBox(width: 16.w),
-            Expanded(
-              child: Text(
-                title,
-                style: TextStyle(fontSize: 16.fz, fontWeight: FontWeight.w500),
-              ),
-            ),
-            Icon(Icons.chevron_left, size: 20.s, color: Colors.grey),
-          ],
+              SizedBox(height: 80.h),
+            ],
+          ),
         ),
       ),
     );
@@ -243,30 +178,25 @@ class TechnicianWalletScreen extends ConsumerWidget {
   }) {
     return Container(
       width: double.infinity,
-      padding: EdgeInsets.all(16.w),
+      padding: EdgeInsets.all(18.w),
       decoration: BoxDecoration(
-        color: Colors.orange.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(12.r),
-        border: Border.all(color: Colors.orange.withValues(alpha: 0.35)),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24.r),
+        border: Border.all(color: KadmatColors.lightBorder),
       ),
       child: Row(
         children: [
           Icon(
             Icons.wifi_tethering_error_rounded,
-            color: Colors.orange,
+            color: KadmatColors.stateWarning,
             size: 22.s,
           ),
           SizedBox(width: 10.w),
-          Expanded(
-            child: Text(
-              message,
-              style: TextStyle(fontSize: 13.fz, color: Colors.orange.shade900),
-            ),
-          ),
+          Expanded(child: Text(message)),
           IconButton(
             onPressed: onRetry,
             icon: const Icon(Icons.refresh),
-            color: Colors.orange.shade900,
+            color: KadmatColors.stateWarning,
           ),
         ],
       ),
@@ -293,20 +223,15 @@ class TechnicianWalletScreen extends ConsumerWidget {
     required String amount,
     required bool isIncome,
   }) {
-    final color = isIncome ? Colors.green : Colors.red;
+    final color = isIncome
+        ? KadmatColors.stateSuccess
+        : KadmatColors.stateError;
 
     return Container(
       padding: EdgeInsets.all(16.w),
       decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(12.r),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 8.r,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        color: Theme.of(context).scaffoldBackgroundColor,
+        borderRadius: BorderRadius.circular(18.r),
       ),
       child: Row(
         children: [
@@ -314,40 +239,36 @@ class TechnicianWalletScreen extends ConsumerWidget {
             width: 40.w,
             height: 40.h,
             decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.1),
+              color: color.withValues(alpha: 0.12),
               shape: BoxShape.circle,
             ),
             child: Icon(
-              isIncome ? Icons.north_east : Icons.south_west,
+              isIncome ? Icons.north_east_rounded : Icons.south_west_rounded,
               color: color,
               size: 20.s,
             ),
           ),
-          SizedBox(width: 16.w),
+          SizedBox(width: 14.w),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   title,
-                  style: TextStyle(
-                    fontSize: 16.fz,
-                    fontWeight: FontWeight.w500,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
                 SizedBox(height: 4.h),
-                Text(
-                  date,
-                  style: TextStyle(fontSize: 12.fz, color: Colors.grey),
-                ),
+                Text(date, style: Theme.of(context).textTheme.bodyMedium),
               ],
             ),
           ),
           Text(
             amount,
             style: TextStyle(
-              fontSize: 16.fz,
-              fontWeight: FontWeight.bold,
+              fontSize: 15.fz,
+              fontWeight: FontWeight.w800,
               color: color,
             ),
           ),
@@ -655,5 +576,231 @@ class TechnicianWalletScreen extends ConsumerWidget {
     if (diff.inHours < 24) return 'منذ ${diff.inHours} ساعة';
     if (diff.inDays < 7) return 'منذ ${diff.inDays} يوم';
     return '${date.year}/${date.month.toString().padLeft(2, '0')}/${date.day.toString().padLeft(2, '0')}';
+  }
+}
+
+class _WalletHero extends StatelessWidget {
+  const _WalletHero({required this.wallet, required this.onRefresh});
+
+  final dynamic wallet;
+  final VoidCallback onRefresh;
+
+  @override
+  Widget build(BuildContext context) {
+    final balanceLabel = wallet == null
+        ? 'جاري تحميل الرصيد...'
+        : '${wallet.balance.toStringAsFixed(2)} ${wallet.currency}';
+
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(20.w),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(28.r),
+        gradient: const LinearGradient(
+          begin: Alignment.topRight,
+          end: Alignment.bottomLeft,
+          colors: [Color(0xFF18323C), Color(0xFF102129)],
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'محفظتك المهنية',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 24.fz,
+                        fontWeight: FontWeight.w800,
+                        height: 1.15,
+                      ),
+                    ),
+                    SizedBox(height: 8.h),
+                    Text(
+                      'تابع الرصيد، المعاملات، وطلبات السحب من مكان واحد واضح وسريع.',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.74),
+                        fontSize: 13.fz,
+                        height: 1.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton.filledTonal(
+                onPressed: onRefresh,
+                icon: const Icon(Icons.refresh_rounded),
+                style: IconButton.styleFrom(
+                  backgroundColor: Colors.white.withValues(alpha: 0.14),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18.r),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 18.h),
+          Container(
+            width: double.infinity,
+            padding: EdgeInsets.all(16.w),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(22.r),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'الرصيد الحالي',
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.7),
+                    fontSize: 12.fz,
+                  ),
+                ),
+                SizedBox(height: 4.h),
+                Text(
+                  balanceLabel,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 28.fz,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _WalletStatCard extends StatelessWidget {
+  const _WalletStatCard({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.accent,
+  });
+
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.all(16.w),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22.r),
+        border: Border.all(color: KadmatColors.lightBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 40.w,
+            height: 40.w,
+            decoration: BoxDecoration(
+              color: accent.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(14.r),
+            ),
+            child: Icon(icon, color: accent, size: 18.s),
+          ),
+          SizedBox(height: 12.h),
+          Text(label, style: Theme.of(context).textTheme.bodyMedium),
+          SizedBox(height: 4.h),
+          Text(
+            value,
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ActionStripCard extends StatelessWidget {
+  const _ActionStripCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(24.r),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(24.r),
+        onTap: onTap,
+        child: Container(
+          padding: EdgeInsets.all(16.w),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(24.r),
+            border: Border.all(color: KadmatColors.lightBorder),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 44.w,
+                height: 44.w,
+                decoration: BoxDecoration(
+                  color: KadmatColors.brandAccent,
+                  borderRadius: BorderRadius.circular(16.r),
+                ),
+                child: Icon(
+                  icon,
+                  size: 22.s,
+                  color: KadmatColors.brandSecondary,
+                ),
+              ),
+              SizedBox(width: 14.w),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    SizedBox(height: 4.h),
+                    Text(
+                      subtitle,
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.chevron_left_rounded,
+                size: 22.s,
+                color: KadmatColors.lightTextSecondary,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }

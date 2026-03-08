@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:flutter_scalify/flutter_scalify.dart';
 import 'package:geolocator/geolocator.dart';
-import '../../../core/app_theme.dart';
 import '../../../core/services/location/location_service.dart';
 import '../../../core/services/notification_service.dart';
 import '../../../core/services/fcm_service.dart';
@@ -11,6 +9,7 @@ import 'dart:async';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/navigation/app_routes.dart';
+import '../../../core/widgets/kadmat_shell_navigation.dart';
 import '../../auth/data/auth_repository.dart';
 import '../../notifications/data/notification_repository.dart';
 
@@ -155,119 +154,36 @@ class _TechnicianMainScreenState extends ConsumerState<TechnicianMainScreen> {
           child: _pages[currentIndex],
         ),
       ),
-      bottomNavigationBar: Container(
-        margin: EdgeInsets.all(24.w),
-        height: 70.h,
-        decoration: AppTheme.glassDecoration(
-          radius: 35.r,
-          color: Theme.of(context).cardColor,
-          opacity: 0.85,
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: [
-            _buildNavItem(
-              0,
-              currentIndex,
-              Icons.dashboard_rounded,
-              'الرئيسية',
-              badgeCount: unreadNotifications,
-            ),
-            _buildNavItem(1, currentIndex, Icons.list_alt_rounded, 'الطلبات'),
-            _buildNavItem(
-              2,
-              currentIndex,
-              Icons.account_balance_wallet_rounded,
-              'المحفظة',
-            ),
-            _buildNavItem(
-              3,
-              currentIndex,
-              Icons.person_outline_rounded,
-              'حسابي',
-            ),
-          ],
-        ),
-      ).animate().fadeIn(duration: 600.ms).slideY(begin: 1, end: 0),
-    );
-  }
-
-  Widget _buildNavItem(
-    int index,
-    int currentIndex,
-    IconData icon,
-    String label, {
-    int badgeCount = 0,
-  }) {
-    final isSelected = currentIndex == index;
-    return Semantics(
-      button: true,
-      label: label,
-      selected: isSelected,
-      child: Tooltip(
-        message: label,
-        child: GestureDetector(
-          onTap: () =>
-              ref.read(technicianTabIndexProvider.notifier).state = index,
-          behavior: HitTestBehavior.opaque,
-          child: Stack(
-            clipBehavior: Clip.none,
-            children: [
-              Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                        icon,
-                        color: isSelected
-                            ? Theme.of(context).primaryColor
-                            : Colors.grey,
-                        size: 24.s,
-                      )
-                      .animate(target: isSelected ? 1 : 0)
-                      .scale(
-                        begin: const Offset(1, 1),
-                        end: const Offset(1.2, 1.2),
-                      )
-                      .tint(color: Theme.of(context).primaryColor),
-                  SizedBox(height: 4.h),
-                  if (isSelected)
-                    Container(
-                      width: 4.w,
-                      height: 4.w,
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).primaryColor,
-                        shape: BoxShape.circle,
-                      ),
-                    ).animate().fadeIn().scale(),
-                ],
-              ),
-              if (badgeCount > 0)
-                Positioned(
-                  top: -5,
-                  right: -5,
-                  child: GestureDetector(
-                    onTap: () => context.push(AppRoutes.notifications),
-                    child: Container(
-                      padding: EdgeInsets.all(4.w),
-                      decoration: const BoxDecoration(
-                        color: Colors.red,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Text(
-                        badgeCount > 9 ? '+9' : badgeCount.toString(),
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 10.fz,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-            ],
+      bottomNavigationBar: KadmatShellBottomBar(
+        currentIndex: currentIndex,
+        items: [
+          KadmatShellNavItemData(
+            icon: Icons.dashboard_rounded,
+            label: 'الرئيسية',
+            badgeCount: unreadNotifications,
+            onTap: () =>
+                ref.read(technicianTabIndexProvider.notifier).state = 0,
           ),
-        ),
-      ),
+          KadmatShellNavItemData(
+            icon: Icons.list_alt_rounded,
+            label: 'الطلبات',
+            onTap: () =>
+                ref.read(technicianTabIndexProvider.notifier).state = 1,
+          ),
+          KadmatShellNavItemData(
+            icon: Icons.account_balance_wallet_rounded,
+            label: 'المحفظة',
+            onTap: () =>
+                ref.read(technicianTabIndexProvider.notifier).state = 2,
+          ),
+          KadmatShellNavItemData(
+            icon: Icons.person_outline_rounded,
+            label: 'حسابي',
+            onTap: () =>
+                ref.read(technicianTabIndexProvider.notifier).state = 3,
+          ),
+        ],
+      ).animate().fadeIn(duration: 600.ms).slideY(begin: 1, end: 0),
     );
   }
 }

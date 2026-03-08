@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_scalify/flutter_scalify.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/design/kadmat_tokens.dart';
 import '../../../core/navigation/app_routes.dart';
 import '../../../core/utils/error_handler.dart';
 import '../../../core/utils/service_name_formatter.dart';
+import '../../../core/widgets/kadmat_components.dart';
 import '../../jobs/domain/job_status.dart';
 import '../data/messages_repository.dart';
 import '../domain/conversation_thread.dart';
@@ -17,39 +20,146 @@ class MessagesScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final conversationsAsync = ref.watch(conversationThreadsProvider);
+    final conversations =
+        conversationsAsync.valueOrNull ?? const <ConversationThread>[];
+    final unreadCount = conversations.fold<int>(
+      0,
+      (total, item) => total + item.unreadCount,
+    );
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('الرسائل'),
-        centerTitle: true,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: () => ref.invalidate(conversationThreadsProvider),
+      body: SafeArea(
+        child: Column(
+          children: [
+            Padding(
+              padding: EdgeInsets.fromLTRB(18.w, 12.h, 18.w, 0),
+              child: _MessagesHeader(
+                unreadCount: unreadCount,
+                conversationCount: conversations.length,
+                onRefresh: () => ref.invalidate(conversationThreadsProvider),
+              ),
+            ),
+            Expanded(
+              child: conversationsAsync.when(
+                loading: () =>
+                    const Center(child: CircularProgressIndicator.adaptive()),
+                error: (error, _) => _MessagesErrorState(
+                  message: ErrorHandler.getMessage(error),
+                  onRetry: () => ref.invalidate(conversationThreadsProvider),
+                ),
+                data: (conversations) {
+                  if (conversations.isEmpty) {
+                    return const _MessagesEmptyState();
+                  }
+
+                  return ListView.separated(
+                    padding: EdgeInsets.fromLTRB(18.w, 12.h, 18.w, 28.h),
+                    itemCount: conversations.length,
+                    separatorBuilder: (_, _) => SizedBox(height: 14.h),
+                    itemBuilder: (context, index) {
+                      final conversation = conversations[index];
+                      return _ConversationCard(conversation: conversation);
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MessagesHeader extends StatelessWidget {
+  const _MessagesHeader({
+    required this.unreadCount,
+    required this.conversationCount,
+    required this.onRefresh,
+  });
+
+  final int unreadCount;
+  final int conversationCount;
+  final VoidCallback onRefresh;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(20.w),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(28.r),
+        gradient: const LinearGradient(
+          begin: Alignment.topRight,
+          end: Alignment.bottomLeft,
+          colors: [Color(0xFF123039), Color(0xFF0B1F27)],
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'محادثاتك الفعلية فقط',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 24.fz,
+                        fontWeight: FontWeight.w800,
+                        height: 1.15,
+                      ),
+                    ),
+                    SizedBox(height: 8.h),
+                    Text(
+                      'التواصل يظهر بعد قبول العرض فقط، حتى تبقى المحادثات مرتبطة بطلبات حقيقية ومفيدة للطرفين.',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.74),
+                        fontSize: 13.fz,
+                        height: 1.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(width: 10.w),
+              IconButton.filledTonal(
+                onPressed: onRefresh,
+                icon: const Icon(Icons.refresh_rounded),
+                style: IconButton.styleFrom(
+                  backgroundColor: Colors.white.withValues(alpha: 0.14),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18.r),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 18.h),
+          Row(
+            children: [
+              Expanded(
+                child: _HeaderStatTile(
+                  label: 'محادثات نشطة',
+                  value: '$conversationCount',
+                  icon: Icons.chat_bubble_outline_rounded,
+                ),
+              ),
+              SizedBox(width: 10.w),
+              Expanded(
+                child: _HeaderStatTile(
+                  label: 'غير مقروءة',
+                  value: '$unreadCount',
+                  icon: Icons.mark_chat_unread_outlined,
+                ),
+              ),
+            ],
           ),
         ],
-      ),
-      body: conversationsAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) => _MessagesErrorState(
-          message: ErrorHandler.getMessage(error),
-          onRetry: () => ref.invalidate(conversationThreadsProvider),
-        ),
-        data: (conversations) {
-          if (conversations.isEmpty) {
-            return const _MessagesEmptyState();
-          }
-
-          return ListView.separated(
-            padding: const EdgeInsets.all(16),
-            itemCount: conversations.length,
-            separatorBuilder: (_, _) => const SizedBox(height: 12),
-            itemBuilder: (context, index) {
-              final conversation = conversations[index];
-              return _ConversationCard(conversation: conversation);
-            },
-          );
-        },
       ),
     );
   }
@@ -73,33 +183,26 @@ class _ConversationCard extends StatelessWidget {
     final avatarUrl = conversation.otherUser?.profileImageUrl;
     final hasAvatar = avatarUrl != null && avatarUrl.trim().isNotEmpty;
     final serviceName = formatServiceDisplayName(conversation.serviceName);
+    final statusColor = _statusColor(conversation.status);
 
     return Container(
       decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(16),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24.r),
+        border: Border.all(color: KadmatColors.lightBorder),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
+            color: Colors.black.withValues(alpha: 0.035),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
       child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: () {
-          context.push(
-            AppRoutes.buildJobChatPath(conversation.jobId),
-            extra: {
-              'otherUserName': name,
-              'otherUserImage': conversation.otherUser?.profileImageUrl,
-              'otherUserPhone': phone,
-            },
-          );
-        },
+        borderRadius: BorderRadius.circular(24.r),
+        onTap: () => _openConversation(context, name, phone),
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.all(18.w),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -107,102 +210,100 @@ class _ConversationCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   CircleAvatar(
-                    radius: 24,
+                    radius: 28.r,
+                    backgroundColor: KadmatColors.brandAccent,
                     backgroundImage: hasAvatar ? NetworkImage(avatarUrl) : null,
-                    child: !hasAvatar ? Text(avatarText.toUpperCase()) : null,
+                    child: !hasAvatar
+                        ? Text(
+                            avatarText.toUpperCase(),
+                            style: TextStyle(
+                              color: KadmatColors.brandSecondary,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 18.fz,
+                            ),
+                          )
+                        : null,
                   ),
-                  const SizedBox(width: 12),
+                  SizedBox(width: 12.w),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Expanded(
                               child: Text(
                                 name,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 16,
-                                ),
+                                style: Theme.of(context).textTheme.titleMedium
+                                    ?.copyWith(fontWeight: FontWeight.w800),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
                             if (conversation.unreadCount > 0)
                               Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 4,
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: 8.w,
+                                  vertical: 5.h,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: Theme.of(context).colorScheme.primary,
-                                  borderRadius: BorderRadius.circular(999),
+                                  color: KadmatColors.brandPrimary,
+                                  borderRadius: BorderRadius.circular(999.r),
                                 ),
                                 child: Text(
                                   '${conversation.unreadCount}',
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     color: Colors.white,
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 12,
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 12.fz,
                                   ),
                                 ),
                               ),
                           ],
                         ),
-                        const SizedBox(height: 4),
+                        SizedBox(height: 5.h),
                         Text(
                           subtitle,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: Theme.of(
-                              context,
-                            ).textTheme.bodyMedium?.color,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          crossAxisAlignment: WrapCrossAlignment.center,
-                          children: [
-                            _Pill(
-                              label: serviceName,
-                              color: Theme.of(context).colorScheme.primary,
-                              background: Theme.of(
-                                context,
-                              ).colorScheme.primary.withValues(alpha: 0.12),
-                            ),
-                            _Pill(
-                              label: _statusLabel(conversation.status),
-                              color: _statusColor(conversation.status),
-                              background: _statusColor(
-                                conversation.status,
-                              ).withValues(alpha: 0.12),
-                            ),
-                            if (conversation.lastMessageAt != null)
-                              Text(
-                                _formatTimestamp(conversation.lastMessageAt!),
-                                style: TextStyle(
-                                  color: Theme.of(
-                                    context,
-                                  ).textTheme.bodySmall?.color,
-                                  fontSize: 12,
-                                ),
-                              ),
-                          ],
+                          style: Theme.of(context).textTheme.bodyMedium,
                         ),
                       ],
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
+              SizedBox(height: 14.h),
+              Wrap(
+                spacing: 8.w,
+                runSpacing: 8.h,
+                children: [
+                  _Pill(
+                    label: serviceName,
+                    color: KadmatColors.brandSecondary,
+                    background: KadmatColors.brandAccent,
+                  ),
+                  _Pill(
+                    label: _statusLabel(conversation.status),
+                    color: statusColor,
+                    background: statusColor.withValues(alpha: 0.12),
+                  ),
+                  if (conversation.lastMessageAt != null)
+                    _Pill(
+                      label: _formatTimestamp(conversation.lastMessageAt!),
+                      color: KadmatColors.lightTextSecondary,
+                      background: Theme.of(context).scaffoldBackgroundColor,
+                    ),
+                ],
+              ),
+              SizedBox(height: 16.h),
               Row(
                 children: [
                   Expanded(
-                    child: OutlinedButton.icon(
+                    child: KadmatSecondaryButton(
+                      label: 'اتصال',
+                      icon: Icons.phone_outlined,
                       onPressed: phone == null || phone.isEmpty
                           ? null
                           : () async {
@@ -211,26 +312,14 @@ class _ConversationCard extends StatelessWidget {
                                 await launchUrl(uri);
                               }
                             },
-                      icon: const Icon(Icons.phone_outlined),
-                      label: const Text('اتصال'),
                     ),
                   ),
-                  const SizedBox(width: 8),
+                  SizedBox(width: 8.w),
                   Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: () {
-                        context.push(
-                          AppRoutes.buildJobChatPath(conversation.jobId),
-                          extra: {
-                            'otherUserName': name,
-                            'otherUserImage':
-                                conversation.otherUser?.profileImageUrl,
-                            'otherUserPhone': phone,
-                          },
-                        );
-                      },
-                      icon: const Icon(Icons.chat_bubble_outline),
-                      label: const Text('فتح المحادثة'),
+                    child: KadmatPrimaryButton(
+                      label: 'فتح المحادثة',
+                      icon: Icons.chat_bubble_outline_rounded,
+                      onPressed: () => _openConversation(context, name, phone),
                     ),
                   ),
                 ],
@@ -239,6 +328,17 @@ class _ConversationCard extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+
+  void _openConversation(BuildContext context, String name, String? phone) {
+    context.push(
+      AppRoutes.buildJobChatPath(conversation.jobId),
+      extra: {
+        'otherUserName': name,
+        'otherUserImage': conversation.otherUser?.profileImageUrl,
+        'otherUserPhone': phone,
+      },
     );
   }
 
@@ -269,15 +369,15 @@ class _ConversationCard extends StatelessWidget {
     switch (JobStatus.normalize(status)) {
       case JobStatus.completed:
       case JobStatus.rated:
-        return Colors.green;
+        return KadmatColors.stateSuccess;
       case JobStatus.pendingConfirm:
-        return Colors.orange;
+        return KadmatColors.stateWarning;
       case JobStatus.arrived:
       case JobStatus.inProgress:
       case JobStatus.onTheWay:
-        return Colors.blue;
+        return KadmatColors.stateInfo;
       default:
-        return Colors.grey;
+        return KadmatColors.lightTextSecondary;
     }
   }
 
@@ -307,28 +407,47 @@ class _MessagesEmptyState extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.chat_bubble_outline,
-              size: 64,
-              color: Colors.grey.shade400,
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'لا توجد محادثات متاحة الآن',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'تظهر المحادثات بعد قبول العرض وبدء التواصل مع الفني.',
-              style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
-              textAlign: TextAlign.center,
-            ),
-          ],
+        padding: EdgeInsets.all(24.w),
+        child: Container(
+          width: double.infinity,
+          padding: EdgeInsets.all(24.w),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(28.r),
+            border: Border.all(color: KadmatColors.lightBorder),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 72.w,
+                height: 72.w,
+                decoration: BoxDecoration(
+                  color: KadmatColors.brandAccent,
+                  borderRadius: BorderRadius.circular(24.r),
+                ),
+                child: Icon(
+                  Icons.chat_bubble_outline_rounded,
+                  size: 34.s,
+                  color: KadmatColors.brandSecondary,
+                ),
+              ),
+              SizedBox(height: 16.h),
+              Text(
+                'لا توجد محادثات متاحة الآن',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+                textAlign: TextAlign.center,
+              ),
+              SizedBox(height: 8.h),
+              Text(
+                'تظهر المحادثات بعد قبول العرض وبدء التواصل مع الفني، لذلك تبقى هذه المساحة نظيفة ومتصلة بطلبات حقيقية فقط.',
+                style: Theme.of(context).textTheme.bodyMedium,
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -345,24 +464,96 @@ class _MessagesErrorState extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.error_outline, size: 56, color: Colors.redAccent),
-            const SizedBox(height: 16),
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 15),
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: onRetry,
-              child: const Text('إعادة المحاولة'),
-            ),
-          ],
+        padding: EdgeInsets.all(24.w),
+        child: Container(
+          width: double.infinity,
+          padding: EdgeInsets.all(24.w),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(28.r),
+            border: Border.all(color: KadmatColors.lightBorder),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.error_outline_rounded,
+                size: 56,
+                color: KadmatColors.stateError,
+              ),
+              SizedBox(height: 16.h),
+              Text(
+                message,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+              SizedBox(height: 16.h),
+              KadmatPrimaryButton(
+                label: 'إعادة المحاولة',
+                icon: Icons.refresh_rounded,
+                onPressed: onRetry,
+              ),
+            ],
+          ),
         ),
+      ),
+    );
+  }
+}
+
+class _HeaderStatTile extends StatelessWidget {
+  const _HeaderStatTile({
+    required this.label,
+    required this.value,
+    required this.icon,
+  });
+
+  final String label;
+  final String value;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.all(14.w),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(20.r),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 38.w,
+            height: 38.w,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(14.r),
+            ),
+            child: Icon(icon, color: Colors.white, size: 18.s),
+          ),
+          SizedBox(width: 10.w),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                value,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 18.fz,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              Text(
+                label,
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.72),
+                  fontSize: 12.fz,
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -382,17 +573,17 @@ class _Pill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 7.h),
       decoration: BoxDecoration(
         color: background,
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.circular(999.r),
       ),
       child: Text(
         label,
         style: TextStyle(
           color: color,
-          fontWeight: FontWeight.w600,
-          fontSize: 12,
+          fontWeight: FontWeight.w700,
+          fontSize: 12.fz,
         ),
       ),
     );

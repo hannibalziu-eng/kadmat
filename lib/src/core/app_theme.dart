@@ -45,7 +45,7 @@ class AppTheme {
       useMaterial3: true,
       brightness: Brightness.light,
       primaryColor: primaryColor,
-      scaffoldBackgroundColor: const Color(0xFFF6F8F8),
+      scaffoldBackgroundColor: const Color(0xFFF2F6F7),
       colorScheme: ColorScheme.fromSeed(
         seedColor: primaryColor,
         primary: primaryColor,
@@ -67,6 +67,16 @@ class AppTheme {
         ),
         bodyLarge: TextStyle(fontSize: 16.fz, color: Colors.black87),
         bodyMedium: TextStyle(fontSize: 14.fz, color: Colors.black54),
+        titleLarge: TextStyle(
+          fontSize: 22.fz,
+          fontWeight: FontWeight.w800,
+          color: const Color(0xFF0C171C),
+        ),
+        titleMedium: TextStyle(
+          fontSize: 16.fz,
+          fontWeight: FontWeight.w700,
+          color: const Color(0xFF0C171C),
+        ),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
@@ -95,6 +105,26 @@ class AppTheme {
           ),
           textStyle: TextStyle(fontSize: 16.fz, fontWeight: FontWeight.bold),
         ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: const Color(0xFF0C171C),
+          side: const BorderSide(color: Color(0xFFD6E2E6)),
+          padding: EdgeInsets.symmetric(vertical: 16.h, horizontal: 16.w),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14.r),
+          ),
+          textStyle: TextStyle(fontSize: 15.fz, fontWeight: FontWeight.w700),
+        ),
+      ),
+      cardTheme: CardThemeData(
+        color: Colors.white,
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20.r),
+          side: const BorderSide(color: Color(0xFFDCE5E8)),
+        ),
+        shadowColor: Colors.black.withValues(alpha: 0.04),
       ),
       appBarTheme: AppBarTheme(
         backgroundColor: Colors.transparent,

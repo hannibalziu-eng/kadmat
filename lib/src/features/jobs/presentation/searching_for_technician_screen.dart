@@ -57,7 +57,7 @@ class _SearchingForTechnicianScreenState
   final bool _showingNoTechMessage =
       false; // Show "no tech yet" without blocking
   StreamSubscription? _jobSubscription;
-  // Default location (Riyadh) - will be replaced by actual location
+  bool _hasSearchLocation = false;
   late double _lat;
   late double _lng;
 
@@ -65,8 +65,13 @@ class _SearchingForTechnicianScreenState
   void initState() {
     super.initState();
 
-    _lat = widget.lat ?? 24.7136;
-    _lng = widget.lng ?? 46.6753;
+    _lat = widget.lat ?? 0;
+    _lng = widget.lng ?? 0;
+    _hasSearchLocation =
+        widget.lat != null &&
+        widget.lng != null &&
+        widget.lat != 0 &&
+        widget.lng != 0;
 
     // Pulse animation
     _pulseController = AnimationController(
@@ -118,6 +123,7 @@ class _SearchingForTechnicianScreenState
       debugPrint(
         '🔍 Polling Result: Status=${job.status}, TechID=${job.technicianId}, Navigating=$_navigating',
       );
+      _syncSearchLocationFromJob(job);
 
       final normalizedStatus = JobStatus.normalize(job.status);
       if (normalizedStatus == JobStatus.cancelled && !_handledTerminalState) {
@@ -195,6 +201,7 @@ class _SearchingForTechnicianScreenState
     // Watch Job Status
     _jobSubscription = jobRepo.watchJob(widget.jobId).listen((job) {
       debugPrint('🕵️‍♀️ Job Update -> Status: ${job.status}');
+      _syncSearchLocationFromJob(job);
       final normalizedStatus = JobStatus.normalize(job.status);
 
       if (normalizedStatus == JobStatus.cancelled && !_handledTerminalState) {
@@ -231,6 +238,23 @@ class _SearchingForTechnicianScreenState
         });
       }
     }, onError: (e) => debugPrint('🔴 Offers watch error: $e'));
+  }
+
+  void _syncSearchLocationFromJob(dynamic job) {
+    final double? jobLat = (job.lat as num?)?.toDouble();
+    final double? jobLng = (job.lng as num?)?.toDouble();
+    if (jobLat == null || jobLng == null || jobLat == 0 || jobLng == 0) {
+      return;
+    }
+    if (_hasSearchLocation && _lat == jobLat && _lng == jobLng) {
+      return;
+    }
+    if (!mounted) return;
+    setState(() {
+      _lat = jobLat;
+      _lng = jobLng;
+      _hasSearchLocation = true;
+    });
   }
 
   Future<void> _acceptOffer(String offerId) async {
@@ -440,70 +464,125 @@ class _SearchingForTechnicianScreenState
         Expanded(
           child: Stack(
             children: [
-              // Flutter Map
-              ClipRRect(
-                borderRadius: BorderRadius.circular(24.r),
-                child: Padding(
+              if (_hasSearchLocation)
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(24.r),
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 16.w),
+                    child: FlutterMap(
+                      options: MapOptions(
+                        initialCenter: LatLng(_lat, _lng),
+                        initialZoom: _getZoomForRadius(),
+                        interactionOptions: const InteractionOptions(
+                          flags: InteractiveFlag.none,
+                        ),
+                      ),
+                      children: [
+                        TileLayer(
+                          urlTemplate:
+                              'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+                          subdomains: const ['a', 'b', 'c', 'd'],
+                          retinaMode: true,
+                          userAgentPackageName: 'com.kadmat.app',
+                        ),
+                        CircleLayer(
+                          circles: [
+                            CircleMarker(
+                              point: LatLng(_lat, _lng),
+                              radius: _searchRadius.toDouble(),
+                              useRadiusInMeter: true,
+                              color: AppTheme.primaryColor.withValues(
+                                alpha: 0.1,
+                              ),
+                              borderColor: AppTheme.primaryColor.withValues(
+                                alpha: 0.5,
+                              ),
+                              borderStrokeWidth: 2,
+                            ),
+                            CircleMarker(
+                              point: LatLng(_lat, _lng),
+                              radius: 50,
+                              useRadiusInMeter: true,
+                              color: AppTheme.primaryColor.withValues(
+                                alpha: 0.3,
+                              ),
+                              borderColor: AppTheme.primaryColor,
+                              borderStrokeWidth: 3,
+                            ),
+                          ],
+                        ),
+                        MarkerLayer(
+                          markers: [
+                            Marker(
+                              point: LatLng(_lat, _lng),
+                              width: 60.w,
+                              height: 60.h,
+                              child: _buildPulsingMarker(),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              else
+                Padding(
                   padding: EdgeInsets.symmetric(horizontal: 16.w),
-                  child: FlutterMap(
-                    options: MapOptions(
-                      initialCenter: LatLng(_lat, _lng),
-                      initialZoom: _getZoomForRadius(),
-                      interactionOptions: const InteractionOptions(
-                        flags: InteractiveFlag.none, // Disable interaction
+                  child: Container(
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(24.r),
+                      gradient: const LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [Color(0xFF172A32), Color(0xFF0C1A21)],
+                      ),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.08),
                       ),
                     ),
-                    children: [
-                      // Dark tile layer
-                      TileLayer(
-                        urlTemplate:
-                            'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-                        subdomains: const ['a', 'b', 'c', 'd'],
-                        retinaMode: true,
-                        userAgentPackageName: 'com.kadmat.app',
-                      ),
-                      // Animated search radius circle
-                      CircleLayer(
-                        circles: [
-                          // Outer pulsing circle
-                          CircleMarker(
-                            point: LatLng(_lat, _lng),
-                            radius: _searchRadius.toDouble(),
-                            useRadiusInMeter: true,
-                            color: AppTheme.primaryColor.withValues(alpha: 0.1),
-                            borderColor: AppTheme.primaryColor.withValues(
-                              alpha: 0.5,
+                    padding: EdgeInsets.all(24.w),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          width: 72.w,
+                          height: 72.w,
+                          decoration: BoxDecoration(
+                            color: AppTheme.primaryColor.withValues(
+                              alpha: 0.12,
                             ),
-                            borderStrokeWidth: 2,
+                            shape: BoxShape.circle,
                           ),
-                          // Inner solid circle
-                          CircleMarker(
-                            point: LatLng(_lat, _lng),
-                            radius: 50,
-                            useRadiusInMeter: true,
-                            color: AppTheme.primaryColor.withValues(alpha: 0.3),
-                            borderColor: AppTheme.primaryColor,
-                            borderStrokeWidth: 3,
+                          child: Icon(
+                            Icons.my_location_rounded,
+                            color: AppTheme.primaryColor,
+                            size: 34.s,
                           ),
-                        ],
-                      ),
-                      // Center marker
-                      MarkerLayer(
-                        markers: [
-                          Marker(
-                            point: LatLng(_lat, _lng),
-                            width: 60.w,
-                            height: 60.h,
-                            child: _buildPulsingMarker(),
+                        ),
+                        SizedBox(height: 18.h),
+                        Text(
+                          'جار تثبيت نقطة البحث',
+                          style: TextStyle(
+                            fontSize: 20.fz,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
                           ),
-                        ],
-                      ),
-                    ],
+                        ),
+                        SizedBox(height: 8.h),
+                        Text(
+                          'سيتم تحديث الخريطة تلقائياً بمجرد وصول موقع الطلب الحقيقي. لن نعرض موقعاً افتراضياً أو عشوائياً.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 13.fz,
+                            color: Colors.white70,
+                            height: 1.6,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-
-              // Tier indicator
               PositionedDirectional(
                 top: 16.h,
                 end: 32.w,

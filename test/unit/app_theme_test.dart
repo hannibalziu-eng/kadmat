@@ -40,7 +40,7 @@ void main() {
 
       expect(lightTheme.brightness, Brightness.light);
       expect(lightTheme.primaryColor, AppTheme.primaryColor);
-      expect(lightTheme.scaffoldBackgroundColor, const Color(0xFFF6F8F8));
+      expect(lightTheme.scaffoldBackgroundColor, const Color(0xFFF2F6F7));
     });
 
     test('should have valid dark theme', () {

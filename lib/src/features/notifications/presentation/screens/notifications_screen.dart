@@ -4,6 +4,7 @@ import 'package:flutter_scalify/flutter_scalify.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/app_theme.dart';
+import '../../../../core/design/kadmat_tokens.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/navigation/job_flow_redirects.dart';
 import '../../../auth/data/auth_repository.dart';
@@ -20,13 +21,13 @@ class NotificationsScreen extends ConsumerWidget {
         notificationsAsync.valueOrNull ?? const <NotificationItem>[];
 
     return Scaffold(
-      backgroundColor: AppTheme.backgroundDark,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         title: Text(
           'الإشعارات',
           style: TextStyle(
-            color: Colors.white,
+            color: KadmatColors.lightTextPrimary,
             fontSize: 20.fz,
             fontWeight: FontWeight.bold,
           ),
@@ -35,7 +36,10 @@ class NotificationsScreen extends ConsumerWidget {
         actions: [
           if (notifications.isNotEmpty)
             IconButton(
-              icon: const Icon(Icons.done_all, color: Colors.white70),
+              icon: Icon(
+                Icons.done_all,
+                color: KadmatColors.lightTextSecondary,
+              ),
               tooltip: 'تحديد الكل كمقروء',
               onPressed: () async {
                 try {
@@ -58,7 +62,10 @@ class NotificationsScreen extends ConsumerWidget {
         error: (_, __) => Center(
           child: Text(
             'تعذر تحميل الإشعارات',
-            style: TextStyle(fontSize: 16.fz, color: Colors.white70),
+            style: TextStyle(
+              fontSize: 16.fz,
+              color: KadmatColors.lightTextSecondary,
+            ),
           ),
         ),
         data: (items) {
@@ -70,12 +77,17 @@ class NotificationsScreen extends ConsumerWidget {
                   Icon(
                     Icons.notifications_off,
                     size: 64.s,
-                    color: Colors.white24,
+                    color: KadmatColors.lightTextSecondary.withValues(
+                      alpha: 0.35,
+                    ),
                   ),
                   SizedBox(height: 16.h),
                   Text(
                     'لا توجد إشعارات حالياً',
-                    style: TextStyle(fontSize: 16.fz, color: Colors.white38),
+                    style: TextStyle(
+                      fontSize: 16.fz,
+                      color: KadmatColors.lightTextSecondary,
+                    ),
                   ),
                 ],
               ),
@@ -87,42 +99,47 @@ class NotificationsScreen extends ConsumerWidget {
               ref.invalidate(liveNotificationsProvider);
               await ref.read(liveNotificationsProvider.future);
             },
-            child: ListView.separated(
-              padding: EdgeInsets.all(16.w),
-              itemCount: items.length,
-              separatorBuilder: (context, index) => SizedBox(height: 12.h),
-              itemBuilder: (context, index) {
-                final notification = items[index];
-                return Dismissible(
-                  key: Key(notification.id),
-                  direction: DismissDirection.endToStart,
-                  background: Container(
-                    decoration: BoxDecoration(
-                      color: Colors.red,
-                      borderRadius: BorderRadius.circular(12.r),
-                    ),
-                    alignment: AlignmentDirectional.centerStart,
-                    padding: EdgeInsetsDirectional.only(start: 20.w),
-                    child: const Icon(Icons.delete, color: Colors.white),
-                  ),
-                  confirmDismiss: (_) async {
-                    try {
-                      await ref
-                          .read(notificationRepositoryProvider)
-                          .deleteNotification(notification.id);
-                      return true;
-                    } catch (_) {
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('تعذر حذف الإشعار')),
-                        );
-                      }
-                      return false;
-                    }
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 960),
+                child: ListView.separated(
+                  padding: EdgeInsets.all(16.w),
+                  itemCount: items.length,
+                  separatorBuilder: (context, index) => SizedBox(height: 12.h),
+                  itemBuilder: (context, index) {
+                    final notification = items[index];
+                    return Dismissible(
+                      key: Key(notification.id),
+                      direction: DismissDirection.endToStart,
+                      background: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.red,
+                          borderRadius: BorderRadius.circular(18.r),
+                        ),
+                        alignment: AlignmentDirectional.centerStart,
+                        padding: EdgeInsetsDirectional.only(start: 20.w),
+                        child: const Icon(Icons.delete, color: Colors.white),
+                      ),
+                      confirmDismiss: (_) async {
+                        try {
+                          await ref
+                              .read(notificationRepositoryProvider)
+                              .deleteNotification(notification.id);
+                          return true;
+                        } catch (_) {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('تعذر حذف الإشعار')),
+                            );
+                          }
+                          return false;
+                        }
+                      },
+                      child: _NotificationItem(notification: notification),
+                    );
                   },
-                  child: _NotificationItem(notification: notification),
-                );
-              },
+                ),
+              ),
             ),
           );
         },
@@ -160,10 +177,11 @@ class _NotificationItem extends ConsumerWidget {
         }
 
         final job = await ref.read(jobRepositoryProvider).getJob(dataJobId);
-        final route = customerRouteForJobStatus(
-          status: job?.status ?? '',
-          jobId: dataJobId,
-        ) ??
+        final route =
+            customerRouteForJobStatus(
+              status: job?.status ?? '',
+              jobId: dataJobId,
+            ) ??
             AppRoutes.buildCustomerSearchingPath(dataJobId);
 
         if (context.mounted) {
@@ -173,15 +191,20 @@ class _NotificationItem extends ConsumerWidget {
       child: Container(
         padding: EdgeInsets.all(16.w),
         decoration: BoxDecoration(
-          color: notification.isRead
-              ? Colors.white.withValues(alpha: 0.05)
-              : Colors.white.withValues(alpha: 0.12),
+          color: notification.isRead ? Colors.white : const Color(0xFFF4FAFD),
           borderRadius: BorderRadius.circular(12.r),
           border: Border.all(
             color: notification.isRead
-                ? Colors.transparent
-                : AppTheme.primaryColor.withValues(alpha: 0.5),
+                ? KadmatColors.lightBorder
+                : AppTheme.primaryColor.withValues(alpha: 0.35),
           ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 16,
+              offset: const Offset(0, 8),
+            ),
+          ],
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -209,7 +232,7 @@ class _NotificationItem extends ConsumerWidget {
                       Text(
                         notification.title,
                         style: TextStyle(
-                          color: Colors.white,
+                          color: KadmatColors.lightTextPrimary,
                           fontSize: 16.fz,
                           fontWeight: notification.isRead
                               ? FontWeight.normal
@@ -219,8 +242,9 @@ class _NotificationItem extends ConsumerWidget {
                       Text(
                         _formatTime(notification.createdAt),
                         style: TextStyle(
-                          color: Colors.white38,
+                          color: KadmatColors.lightTextSecondary,
                           fontSize: 12.fz,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ],
@@ -228,23 +252,38 @@ class _NotificationItem extends ConsumerWidget {
                   SizedBox(height: 6.h),
                   Text(
                     notification.body ?? '',
-                    style: TextStyle(color: Colors.white70, fontSize: 14.fz),
+                    style: TextStyle(
+                      color: KadmatColors.lightTextSecondary,
+                      fontSize: 14.fz,
+                      height: 1.5,
+                    ),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
+                  if (!notification.isRead) ...[
+                    SizedBox(height: 10.h),
+                    Container(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 10.w,
+                        vertical: 6.h,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primaryColor.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(12.r),
+                      ),
+                      child: Text(
+                        'جديد',
+                        style: TextStyle(
+                          color: AppTheme.primaryColor,
+                          fontSize: 11.5.fz,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
-            if (!notification.isRead)
-              Container(
-                margin: EdgeInsetsDirectional.only(end: 8.w, top: 4.h),
-                width: 8.w,
-                height: 8.w,
-                decoration: const BoxDecoration(
-                  color: AppTheme.primaryColor,
-                  shape: BoxShape.circle,
-                ),
-              ),
           ],
         ),
       ),
@@ -271,10 +310,14 @@ class _NotificationItem extends ConsumerWidget {
     final now = DateTime.now();
     final difference = now.difference(time);
 
+    if (difference.inMinutes <= 0) {
+      return 'الآن';
+    }
+
     if (difference.inMinutes < 60) {
-      return '${difference.inMinutes} د';
+      return 'منذ ${difference.inMinutes} د';
     } else if (difference.inHours < 24) {
-      return '${difference.inHours} س';
+      return 'منذ ${difference.inHours} س';
     } else {
       return '${time.month}/${time.day}';
     }

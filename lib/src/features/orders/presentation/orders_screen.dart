@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_scalify/flutter_scalify.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/design/kadmat_tokens.dart';
 import '../../../core/navigation/app_routes.dart';
 import '../../../core/navigation/job_flow_redirects.dart';
 import '../../../core/utils/error_handler.dart';
 import '../../../core/utils/service_name_formatter.dart';
+import '../../../core/widgets/kadmat_components.dart';
 import '../../jobs/data/job_repository.dart';
 import '../../jobs/domain/job.dart';
 import '../../jobs/domain/job_communication_policy.dart';
@@ -32,95 +35,238 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
   @override
   Widget build(BuildContext context) {
     final jobsAsync = ref.watch(watchMyJobsRealtimeProvider);
+    final jobs = jobsAsync.valueOrNull ?? const <Job>[];
+    final activeCount = jobs
+        .where(
+          (job) => {
+            JobStatus.pending,
+            JobStatus.searching,
+            JobStatus.accepted,
+            JobStatus.pricePending,
+            JobStatus.onTheWay,
+            JobStatus.arrived,
+            JobStatus.inProgress,
+            JobStatus.pendingConfirm,
+            JobStatus.noTechnicianFound,
+          }.contains(JobStatus.normalize(job.status)),
+        )
+        .length;
+    final completedCount = jobs
+        .where(
+          (job) => {
+            JobStatus.completed,
+            JobStatus.rated,
+          }.contains(JobStatus.normalize(job.status)),
+        )
+        .length;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('طلباتي'),
-        centerTitle: true,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: () => ref.invalidate(watchMyJobsRealtimeProvider),
+      body: SafeArea(
+        child: Column(
+          children: [
+            Padding(
+              padding: EdgeInsets.fromLTRB(18.w, 12.h, 18.w, 0),
+              child: Column(
+                children: [
+                  _buildHeader(
+                    context,
+                    activeCount: activeCount,
+                    completedCount: completedCount,
+                  ),
+                  SizedBox(height: 18.h),
+                  _buildFilterStrip(context),
+                ],
+              ),
+            ),
+            Expanded(
+              child: jobsAsync.when(
+                loading: () =>
+                    const Center(child: CircularProgressIndicator.adaptive()),
+                error: (error, _) => _OrdersErrorState(
+                  message: ErrorHandler.getMessage(error),
+                  onRetry: () => ref.invalidate(watchMyJobsRealtimeProvider),
+                ),
+                data: (jobs) {
+                  final filteredJobs = _applyFilter(jobs);
+                  if (filteredJobs.isEmpty) {
+                    return _OrdersEmptyState(filter: _selectedFilter);
+                  }
+
+                  return RefreshIndicator.adaptive(
+                    onRefresh: () async {
+                      ref.invalidate(watchMyJobsRealtimeProvider);
+                      await Future<void>.delayed(
+                        const Duration(milliseconds: 300),
+                      );
+                    },
+                    child: ListView.separated(
+                      padding: EdgeInsets.fromLTRB(18.w, 8.h, 18.w, 28.h),
+                      itemCount: filteredJobs.length,
+                      separatorBuilder: (_, _) => SizedBox(height: 14.h),
+                      itemBuilder: (context, index) {
+                        final job = filteredJobs[index];
+                        return _OrderCard(
+                          job: job,
+                          onOpen: () => _openJob(job),
+                          onChat:
+                              JobCommunicationPolicy.canUseJobCommunication(job)
+                              ? () => _openChat(job)
+                              : null,
+                          onProfile:
+                              job.technicianId != null &&
+                                  job.technicianId!.trim().isNotEmpty
+                              ? () => context.push(
+                                  AppRoutes.buildTechnicianProfilePath(
+                                    job.technicianId!,
+                                  ),
+                                )
+                              : null,
+                          onRate: _canRate(job)
+                              ? () => context.push(
+                                  AppRoutes.buildCustomerRatePath(job.id),
+                                )
+                              : null,
+                          onCancel: _canCancel(job)
+                              ? () => _cancelJob(job)
+                              : null,
+                        );
+                      },
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeader(
+    BuildContext context, {
+    required int activeCount,
+    required int completedCount,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(20.w),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(28.r),
+        gradient: const LinearGradient(
+          begin: Alignment.topRight,
+          end: Alignment.bottomLeft,
+          colors: [Color(0xFF18323C), Color(0xFF102129)],
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'طلباتك في مكان واحد',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 24.fz,
+                        fontWeight: FontWeight.w800,
+                        height: 1.15,
+                      ),
+                    ),
+                    SizedBox(height: 8.h),
+                    Text(
+                      'تابع حالة كل طلب بسرعة، وافتح الشات أو التقييم من نفس الشاشة بدون تنقل مشتت.',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.74),
+                        fontSize: 13.fz,
+                        height: 1.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(width: 10.w),
+              IconButton.filledTonal(
+                onPressed: () => ref.invalidate(watchMyJobsRealtimeProvider),
+                icon: const Icon(Icons.refresh_rounded),
+                style: IconButton.styleFrom(
+                  backgroundColor: Colors.white.withValues(alpha: 0.14),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18.r),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 18.h),
+          Row(
+            children: [
+              Expanded(
+                child: _HeaderMetricCard(
+                  label: 'قيد المتابعة',
+                  value: '$activeCount',
+                  icon: Icons.route_rounded,
+                ),
+              ),
+              SizedBox(width: 10.w),
+              Expanded(
+                child: _HeaderMetricCard(
+                  label: 'مكتملة',
+                  value: '$completedCount',
+                  icon: Icons.verified_rounded,
+                ),
+              ),
+            ],
           ),
         ],
       ),
-      body: Column(
-        children: [
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Row(
-              children: _filters
-                  .map(
-                    (filter) => Padding(
-                      padding: const EdgeInsetsDirectional.only(end: 8),
-                      child: ChoiceChip(
-                        label: Text(filter),
-                        selected: _selectedFilter == filter,
-                        onSelected: (_) =>
-                            setState(() => _selectedFilter = filter),
-                      ),
-                    ),
-                  )
-                  .toList(),
-            ),
-          ),
-          Expanded(
-            child: jobsAsync.when(
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (error, _) =>
-                  _OrdersErrorState(message: ErrorHandler.getMessage(error)),
-              data: (jobs) {
-                final filteredJobs = _applyFilter(jobs);
-                if (filteredJobs.isEmpty) {
-                  return _OrdersEmptyState(filter: _selectedFilter);
-                }
+    );
+  }
 
-                return RefreshIndicator(
-                  onRefresh: () async {
-                    ref.invalidate(watchMyJobsRealtimeProvider);
-                    await Future<void>.delayed(
-                      const Duration(milliseconds: 300),
-                    );
-                  },
-                  child: ListView.separated(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: filteredJobs.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 12),
-                    itemBuilder: (context, index) {
-                      final job = filteredJobs[index];
-                      return _OrderCard(
-                        job: job,
-                        onOpen: () => _openJob(job),
-                        onChat:
-                            JobCommunicationPolicy.canUseJobCommunication(job)
-                            ? () => _openChat(job)
-                            : null,
-                        onProfile:
-                            job.technicianId != null &&
-                                job.technicianId!.trim().isNotEmpty
-                            ? () => context.push(
-                                AppRoutes.buildTechnicianProfilePath(
-                                  job.technicianId!,
-                                ),
-                              )
-                            : null,
-                        onRate: _canRate(job)
-                            ? () => context.push(
-                                AppRoutes.buildCustomerRatePath(job.id),
-                              )
-                            : null,
-                        onCancel: _canCancel(job)
-                            ? () => _cancelJob(job)
-                            : null,
-                      );
-                    },
-                  ),
-                );
-              },
+  Widget _buildFilterStrip(BuildContext context) {
+    return SizedBox(
+      height: 44.h,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: _filters.length,
+        separatorBuilder: (_, _) => SizedBox(width: 8.w),
+        itemBuilder: (context, index) {
+          final filter = _filters[index];
+          final isSelected = _selectedFilter == filter;
+          return AnimatedContainer(
+            duration: KadmatMotion.medium,
+            decoration: BoxDecoration(
+              color: isSelected ? KadmatColors.brandPrimary : Colors.white,
+              borderRadius: BorderRadius.circular(999.r),
+              border: Border.all(
+                color: isSelected
+                    ? KadmatColors.brandPrimary
+                    : KadmatColors.lightBorder,
+              ),
             ),
-          ),
-        ],
+            child: InkWell(
+              borderRadius: BorderRadius.circular(999.r),
+              onTap: () => setState(() => _selectedFilter = filter),
+              child: Padding(
+                padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 10.h),
+                child: Text(
+                  filter,
+                  style: TextStyle(
+                    color: isSelected
+                        ? Colors.white
+                        : KadmatColors.lightTextPrimary,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13.fz,
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -260,17 +406,19 @@ class _OrderCard extends StatelessWidget {
     final statusColor = _statusColor(status);
     final totalPrice =
         job.finalPrice ?? job.technicianPrice ?? job.initialPrice ?? 0.0;
+    final createdLabel = '${job.createdAt.day}/${job.createdAt.month}';
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(18.w),
       decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(16),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24.r),
+        border: Border.all(color: KadmatColors.lightBorder),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
+            color: Colors.black.withValues(alpha: 0.035),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
@@ -280,59 +428,77 @@ class _OrderCard extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              Container(
+                width: 48.w,
+                height: 48.w,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      KadmatColors.brandAccent,
+                      KadmatColors.brandAccent.withValues(alpha: 0.55),
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(16.r),
+                ),
+                child: Icon(
+                  Icons.build_circle_outlined,
+                  color: KadmatColors.brandSecondary,
+                  size: 22.s,
+                ),
+              ),
+              SizedBox(width: 12.w),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       serviceName,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 16,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
-                    const SizedBox(height: 6),
+                    SizedBox(height: 6.h),
                     Text(
                       technicianName == null || technicianName.trim().isEmpty
                           ? hasAssignedTechnician
                                 ? 'تم تعيين فني'
                                 : 'بانتظار تعيين الفني'
                           : 'الفني: $technicianName',
-                      style: TextStyle(
-                        color: Theme.of(context).textTheme.bodyMedium?.color,
-                      ),
+                      style: Theme.of(context).textTheme.bodyMedium,
                     ),
                   ],
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 6,
-                ),
+                padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 8.h),
                 decoration: BoxDecoration(
                   color: statusColor.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(999),
+                  borderRadius: BorderRadius.circular(999.r),
                 ),
                 child: Text(
                   _statusLabel(status),
                   style: TextStyle(
                     color: statusColor,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 12.fz,
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: 14.h),
           Wrap(
-            spacing: 8,
-            runSpacing: 8,
+            spacing: 8.w,
+            runSpacing: 8.h,
             children: [
               _MetaChip(
-                icon: Icons.receipt_long,
+                icon: Icons.receipt_long_outlined,
                 label:
                     'رقم الطلب: ${job.id.substring(0, job.id.length > 8 ? 8 : job.id.length)}',
+              ),
+              _MetaChip(
+                icon: Icons.event_note_outlined,
+                label: 'تاريخ الإنشاء: $createdLabel',
               ),
               _MetaChip(
                 icon: Icons.payments_outlined,
@@ -341,39 +507,63 @@ class _OrderCard extends StatelessWidget {
             ],
           ),
           if (!JobCommunicationPolicy.canUseJobCommunication(job)) ...[
-            const SizedBox(height: 12),
-            Text(
-              JobCommunicationPolicy.unavailableMessage,
-              style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+            SizedBox(height: 14.h),
+            Container(
+              width: double.infinity,
+              padding: EdgeInsets.all(12.w),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF4E6),
+                borderRadius: BorderRadius.circular(16.r),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.info_outline_rounded,
+                    color: KadmatColors.stateWarning,
+                  ),
+                  SizedBox(width: 10.w),
+                  Expanded(
+                    child: Text(
+                      JobCommunicationPolicy.unavailableMessage,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: const Color(0xFF8A5A15),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
-          const SizedBox(height: 12),
+          SizedBox(height: 16.h),
           Wrap(
-            spacing: 8,
-            runSpacing: 8,
+            spacing: 8.w,
+            runSpacing: 8.h,
             children: [
-              ElevatedButton.icon(
+              KadmatPrimaryButton(
+                label: 'متابعة',
+                icon: Icons.arrow_outward_rounded,
                 onPressed: onOpen,
-                icon: const Icon(Icons.visibility_outlined),
-                label: const Text('متابعة'),
               ),
               if (onChat != null)
-                OutlinedButton.icon(
+                KadmatSecondaryButton(
+                  label: 'مراسلة',
+                  icon: Icons.chat_bubble_outline_rounded,
                   onPressed: onChat,
-                  icon: const Icon(Icons.chat_bubble_outline),
-                  label: const Text('مراسلة'),
                 ),
               if (onProfile != null)
-                OutlinedButton.icon(
+                KadmatSecondaryButton(
+                  label: 'عرض الفني',
+                  icon: Icons.person_outline_rounded,
                   onPressed: onProfile,
-                  icon: const Icon(Icons.person_outline),
-                  label: const Text('عرض الفني'),
                 ),
               if (onRate != null)
-                ElevatedButton.icon(
+                KadmatPrimaryButton(
+                  label: 'تقييم',
+                  icon: Icons.star_outline_rounded,
                   onPressed: onRate,
-                  icon: const Icon(Icons.star_outline),
-                  label: const Text('تقييم'),
+                  backgroundColor: KadmatColors.stateSuccess,
+                  foregroundColor: Colors.white,
                 ),
               if (onCancel != null)
                 TextButton.icon(
@@ -392,17 +582,17 @@ class _OrderCard extends StatelessWidget {
     switch (status) {
       case JobStatus.completed:
       case JobStatus.rated:
-        return Colors.green;
+        return KadmatColors.stateSuccess;
       case JobStatus.pendingConfirm:
-        return Colors.orange;
+        return KadmatColors.stateWarning;
       case JobStatus.cancelled:
-        return Colors.red;
+        return KadmatColors.stateError;
       case JobStatus.onTheWay:
       case JobStatus.arrived:
       case JobStatus.inProgress:
-        return Colors.blue;
+        return KadmatColors.stateInfo;
       default:
-        return Colors.grey;
+        return KadmatColors.lightTextSecondary;
     }
   }
 
@@ -438,6 +628,64 @@ class _OrderCard extends StatelessWidget {
   }
 }
 
+class _HeaderMetricCard extends StatelessWidget {
+  const _HeaderMetricCard({
+    required this.label,
+    required this.value,
+    required this.icon,
+  });
+
+  final String label;
+  final String value;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.all(14.w),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(20.r),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 38.w,
+            height: 38.w,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(14.r),
+            ),
+            child: Icon(icon, color: Colors.white, size: 18.s),
+          ),
+          SizedBox(width: 10.w),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                value,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 18.fz,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              Text(
+                label,
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.72),
+                  fontSize: 12.fz,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _MetaChip extends StatelessWidget {
   const _MetaChip({required this.icon, required this.label});
 
@@ -447,14 +695,18 @@ class _MetaChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 8.h),
       decoration: BoxDecoration(
         color: Theme.of(context).scaffoldBackgroundColor,
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.circular(999.r),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
-        children: [Icon(icon, size: 16), const SizedBox(width: 6), Text(label)],
+        children: [
+          Icon(icon, size: 15.s, color: KadmatColors.lightTextSecondary),
+          SizedBox(width: 6.w),
+          Text(label),
+        ],
       ),
     );
   }
@@ -469,26 +721,55 @@ class _OrdersEmptyState extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.inbox_outlined, size: 64, color: Colors.grey.shade400),
-            const SizedBox(height: 16),
-            Text(
-              filter == 'الكل'
-                  ? 'لا توجد طلبات بعد'
-                  : 'لا توجد طلبات ضمن هذا التصنيف',
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'ستظهر هنا الطلبات الحقيقية التي أنشأتها وحالتها الحالية.',
-              style: TextStyle(color: Colors.grey.shade600),
-              textAlign: TextAlign.center,
-            ),
-          ],
+        padding: EdgeInsets.all(24.w),
+        child: Container(
+          width: double.infinity,
+          padding: EdgeInsets.all(24.w),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(28.r),
+            border: Border.all(color: KadmatColors.lightBorder),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 72.w,
+                height: 72.w,
+                decoration: BoxDecoration(
+                  color: KadmatColors.brandAccent,
+                  borderRadius: BorderRadius.circular(24.r),
+                ),
+                child: Icon(
+                  Icons.inbox_outlined,
+                  size: 34.s,
+                  color: KadmatColors.brandSecondary,
+                ),
+              ),
+              SizedBox(height: 16.h),
+              Text(
+                filter == 'الكل'
+                    ? 'لا توجد طلبات بعد'
+                    : 'لا توجد طلبات ضمن هذا التصنيف',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+                textAlign: TextAlign.center,
+              ),
+              SizedBox(height: 8.h),
+              Text(
+                'ستظهر هنا الطلبات الحقيقية التي أنشأتها وحالتها الحالية بخطوات واضحة وسهلة المتابعة.',
+                style: Theme.of(context).textTheme.bodyMedium,
+                textAlign: TextAlign.center,
+              ),
+              SizedBox(height: 18.h),
+              KadmatPrimaryButton(
+                label: 'إنشاء طلب جديد',
+                icon: Icons.add_rounded,
+                onPressed: () => context.push(AppRoutes.customerCreateRequest),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -496,22 +777,42 @@ class _OrdersEmptyState extends StatelessWidget {
 }
 
 class _OrdersErrorState extends StatelessWidget {
-  const _OrdersErrorState({required this.message});
+  const _OrdersErrorState({required this.message, required this.onRetry});
 
   final String message;
+  final VoidCallback onRetry;
 
   @override
   Widget build(BuildContext context) {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.error_outline, size: 56, color: Colors.redAccent),
-            const SizedBox(height: 16),
-            Text(message, textAlign: TextAlign.center),
-          ],
+        padding: EdgeInsets.all(24.w),
+        child: Container(
+          width: double.infinity,
+          padding: EdgeInsets.all(24.w),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(28.r),
+            border: Border.all(color: KadmatColors.lightBorder),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.error_outline_rounded,
+                size: 56,
+                color: KadmatColors.stateError,
+              ),
+              SizedBox(height: 16.h),
+              Text(message, textAlign: TextAlign.center),
+              SizedBox(height: 16.h),
+              KadmatPrimaryButton(
+                label: 'إعادة المحاولة',
+                icon: Icons.refresh_rounded,
+                onPressed: onRetry,
+              ),
+            ],
+          ),
         ),
       ),
     );

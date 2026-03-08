@@ -5,6 +5,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import 'package:geolocator/geolocator.dart' show Position;
 import '../../../../core/app_theme.dart';
+import '../../../../core/design/kadmat_tokens.dart';
 import '../../../../core/services/location/location_service.dart';
 import '../../../../core/widgets/kadmat_toast.dart';
 import '../../../jobs/presentation/job_controller.dart';
@@ -48,35 +49,55 @@ class _TechnicianRequestsScreenState
 
   @override
   Widget build(BuildContext context) {
+    final dispatchFeed = ref.watch(technicianDispatchFeedProvider).valueOrNull;
+    final myJobs = ref.watch(myJobsProvider).valueOrNull ?? const <Job>[];
+    final newRequestsCount = dispatchFeed?.visibleJobs.length ?? 0;
+    final awaitingCount = myJobs
+        .where((j) => j.status == 'accepted' || j.status == 'price_pending')
+        .length;
+    final inProgressCount = myJobs
+        .where(
+          (j) => [
+            'on_the_way',
+            'arrived',
+            'in_progress',
+            'pending_confirm',
+          ].contains(j.status),
+        )
+        .length;
+
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      appBar: AppBar(
-        title: const Text('الطلبات الواردة'),
-        centerTitle: true,
-        bottom: TabBar(
-          controller: _tabController,
-          indicatorColor: Theme.of(context).primaryColor,
-          indicatorWeight: 2.h,
-          labelColor: Theme.of(context).primaryColor,
-          unselectedLabelColor: Colors.grey,
-          labelStyle: TextStyle(fontSize: 14.fz, fontWeight: FontWeight.bold),
-          unselectedLabelStyle: TextStyle(fontSize: 14.fz),
-          tabs: const [
-            Tab(text: 'طلبات جديدة'),
-            Tab(text: 'بانتظار الموافقة'),
-            Tab(text: 'قيد التنفيذ'),
-            Tab(text: 'مكتملة'),
+      body: SafeArea(
+        child: Column(
+          children: [
+            Padding(
+              padding: EdgeInsets.fromLTRB(18.w, 12.h, 18.w, 12.h),
+              child: Column(
+                children: [
+                  _RequestsHero(
+                    newRequestsCount: newRequestsCount,
+                    awaitingCount: awaitingCount,
+                    inProgressCount: inProgressCount,
+                  ),
+                  SizedBox(height: 14.h),
+                  _RequestsTabBarCard(controller: _tabController),
+                ],
+              ),
+            ),
+            Expanded(
+              child: TabBarView(
+                controller: _tabController,
+                children: [
+                  _buildNewRequestsTab(),
+                  _buildAwaitingApprovalTab(),
+                  _buildInProgressTab(),
+                  _buildCompletedTab(),
+                ],
+              ),
+            ),
           ],
         ),
-      ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          _buildNewRequestsTab(),
-          _buildAwaitingApprovalTab(),
-          _buildInProgressTab(),
-          _buildCompletedTab(),
-        ],
       ),
     );
   }
@@ -1491,6 +1512,210 @@ class _TechnicianRequestsScreenState
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _RequestsHero extends StatelessWidget {
+  const _RequestsHero({
+    required this.newRequestsCount,
+    required this.awaitingCount,
+    required this.inProgressCount,
+  });
+
+  final int newRequestsCount;
+  final int awaitingCount;
+  final int inProgressCount;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(20.w),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(28.r),
+        gradient: const LinearGradient(
+          begin: Alignment.topRight,
+          end: Alignment.bottomLeft,
+          colors: [Color(0xFF18333D), Color(0xFF0E2129)],
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 46.w,
+                height: 46.w,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(16.r),
+                ),
+                child: Icon(
+                  Icons.assignment_turned_in_rounded,
+                  color: Colors.white,
+                  size: 22.s,
+                ),
+              ),
+              SizedBox(width: 12.w),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'إدارة الطلبات',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 22.fz,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    SizedBox(height: 4.h),
+                    Text(
+                      'راجع الطلبات الجديدة، الطلبات المنتظرة، والأعمال الجارية من شاشة واحدة.',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.72),
+                        fontSize: 12.5.fz,
+                        height: 1.55,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 18.h),
+          Row(
+            children: [
+              Expanded(
+                child: _RequestsHeroMetric(
+                  label: 'طلبات جديدة',
+                  value: '$newRequestsCount',
+                  accent: KadmatColors.brandAccent,
+                ),
+              ),
+              SizedBox(width: 8.w),
+              Expanded(
+                child: _RequestsHeroMetric(
+                  label: 'بانتظار العميل',
+                  value: '$awaitingCount',
+                  accent: KadmatColors.stateWarning,
+                ),
+              ),
+              SizedBox(width: 8.w),
+              Expanded(
+                child: _RequestsHeroMetric(
+                  label: 'قيد التنفيذ',
+                  value: '$inProgressCount',
+                  accent: KadmatColors.stateSuccess,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RequestsHeroMetric extends StatelessWidget {
+  const _RequestsHeroMetric({
+    required this.label,
+    required this.value,
+    required this.accent,
+  });
+
+  final String label;
+  final String value;
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 12.h),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(18.r),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 8.w,
+            height: 8.w,
+            decoration: BoxDecoration(color: accent, shape: BoxShape.circle),
+          ),
+          SizedBox(height: 10.h),
+          Text(
+            value,
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 20.fz,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          SizedBox(height: 4.h),
+          Text(
+            label,
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.72),
+              fontSize: 11.5.fz,
+              height: 1.4,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RequestsTabBarCard extends StatelessWidget {
+  const _RequestsTabBarCard({required this.controller});
+
+  final TabController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.all(6.w),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22.r),
+        border: Border.all(color: KadmatColors.lightBorder),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 16,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: TabBar(
+        controller: controller,
+        indicator: BoxDecoration(
+          color: KadmatColors.brandSecondary,
+          borderRadius: BorderRadius.circular(16.r),
+        ),
+        indicatorSize: TabBarIndicatorSize.tab,
+        indicatorPadding: EdgeInsets.zero,
+        dividerColor: Colors.transparent,
+        labelColor: Colors.white,
+        unselectedLabelColor: KadmatColors.lightTextPrimary,
+        labelStyle: TextStyle(fontSize: 12.5.fz, fontWeight: FontWeight.w800),
+        unselectedLabelStyle: TextStyle(
+          fontSize: 12.fz,
+          fontWeight: FontWeight.w600,
+        ),
+        splashBorderRadius: BorderRadius.circular(16.r),
+        tabs: const [
+          Tab(text: 'جديدة'),
+          Tab(text: 'بانتظار'),
+          Tab(text: 'جارية'),
+          Tab(text: 'مكتملة'),
+        ],
       ),
     );
   }

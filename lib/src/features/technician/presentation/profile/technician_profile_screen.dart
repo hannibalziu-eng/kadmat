@@ -1,15 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_scalify/flutter_scalify.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../../../../core/design/kadmat_tokens.dart';
 import '../../../../core/navigation/app_routes.dart';
+import '../../../../core/widgets/kadmat_components.dart';
 import '../../../auth/data/auth_repository.dart';
 import '../../data/technician_repository.dart';
 import '../../domain/technician_profile.dart';
-import 'edit_technician_profile_screen.dart';
 import 'add_portfolio_work_screen.dart';
+import 'edit_technician_profile_screen.dart';
 
 class TechnicianProfileScreen extends ConsumerStatefulWidget {
   const TechnicianProfileScreen({super.key});
@@ -95,7 +97,7 @@ class _TechnicianProfileScreenState
           ScaffoldMessenger.of(
             context,
           ).showSnackBar(const SnackBar(content: Text('تم حذف العمل بنجاح')));
-          _loadProfile(); // Reload to refresh list
+          _loadProfile();
         }
       } catch (e) {
         if (mounted) {
@@ -123,35 +125,54 @@ class _TechnicianProfileScreenState
 
   @override
   Widget build(BuildContext context) {
-    // If loading for the first time
     if (_isLoading && _profile == null) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
-    // If error
     if (_errorMessage != null && _profile == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('ملفي الشخصي')),
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text('فشل تحميل البيانات: $_errorMessage'),
-              const SizedBox(height: 16),
-              ElevatedButton(
-                onPressed: _loadProfile,
-                child: const Text('إعادة المحاولة'),
+        body: SafeArea(
+          child: Center(
+            child: Padding(
+              padding: EdgeInsets.all(24.w),
+              child: Container(
+                width: double.infinity,
+                padding: EdgeInsets.all(24.w),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(28.r),
+                  border: Border.all(color: KadmatColors.lightBorder),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.error_outline_rounded,
+                      size: 56,
+                      color: KadmatColors.stateError,
+                    ),
+                    SizedBox(height: 16.h),
+                    Text(
+                      _errorMessage!,
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                    SizedBox(height: 16.h),
+                    KadmatPrimaryButton(
+                      label: 'إعادة المحاولة',
+                      icon: Icons.refresh_rounded,
+                      onPressed: _loadProfile,
+                    ),
+                  ],
+                ),
               ),
-            ],
+            ),
           ),
         ),
       );
     }
 
-    // If loaded (or loading refresh)
     final profile = _profile!;
-
-    // Fallback values if profile fields are missing
     final fullName = profile.fullName;
     final title = profile.title?.trim().isNotEmpty == true
         ? profile.title!
@@ -163,238 +184,110 @@ class _TechnicianProfileScreenState
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      appBar: AppBar(
-        title: const Text('ملفي الشخصي'),
-        centerTitle: true,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout, color: Colors.red),
-            tooltip: 'تسجيل الخروج',
-            onPressed: _confirmSignOut,
-          ),
-          IconButton(
-            icon: const Icon(Icons.edit),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const EditTechnicianProfileScreen(),
-                ),
-              ).then((_) => _loadProfile());
-            },
-          ),
-        ],
-      ),
       body: RefreshIndicator(
         onRefresh: _loadProfile,
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: EdgeInsets.all(16.w),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Profile Header
-              Row(
-                children: [
-                  Container(
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white, width: 4.w),
-                    ),
-                    child: CircleAvatar(
-                      radius: 48.r,
-                      backgroundColor: Theme.of(context).colorScheme.primary,
-                      backgroundImage: _networkImageOrNull(
-                        profile.profileImageUrl,
+        child: SafeArea(
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: EdgeInsets.fromLTRB(18.w, 12.h, 18.w, 28.h),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _ProfileHero(
+                  fullName: fullName,
+                  title: title,
+                  location: location,
+                  profileImage: _networkImageOrNull(profile.profileImageUrl),
+                  onEdit: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) =>
+                            const EditTechnicianProfileScreen(),
                       ),
-                      child:
-                          _networkImageOrNull(profile.profileImageUrl) == null
-                          ? Icon(Icons.person, color: Colors.white, size: 34.s)
-                          : null,
-                    ),
-                  ),
-                  SizedBox(width: 16.w),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          fullName,
-                          style: TextStyle(
-                            fontSize: 20.fz,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        SizedBox(height: 4.h),
-                        Text(
-                          title,
-                          style: TextStyle(
-                            fontSize: 16.fz,
-                            color: Theme.of(context).primaryColor,
-                          ),
-                        ),
-                        SizedBox(height: 4.h),
-                        Text(
-                          location,
-                          style: TextStyle(fontSize: 12.fz, color: Colors.grey),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ).animate().fadeIn().slideX(),
-
-              SizedBox(height: 24.h),
-
-              // Stats Card
-              Container(
-                padding: EdgeInsets.all(16.w),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).cardColor,
-                  borderRadius: BorderRadius.circular(16.r),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.05),
-                      blurRadius: 8.r,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
+                    ).then((_) => _loadProfile());
+                  },
+                  onSignOut: _confirmSignOut,
                 ),
-                child: Row(
+                SizedBox(height: 18.h),
+                Row(
                   children: [
                     Expanded(
-                      child: Column(
-                        children: [
-                          Text(
-                            '${profile.stats.completedJobs}',
-                            style: TextStyle(
-                              fontSize: 24.fz,
-                              fontWeight: FontWeight.bold,
-                              color: Theme.of(context).primaryColor,
-                            ),
-                          ),
-                          SizedBox(height: 4.h),
-                          Text(
-                            'وظائف مكتملة',
-                            style: TextStyle(
-                              fontSize: 12.fz,
-                              color: Colors.grey,
-                            ),
-                          ),
-                        ],
+                      child: _StatCard(
+                        label: 'وظائف مكتملة',
+                        value: '${profile.stats.completedJobs}',
+                        icon: Icons.verified_outlined,
+                        accent: KadmatColors.stateSuccess,
                       ),
                     ),
+                    SizedBox(width: 10.w),
                     Expanded(
-                      child: Column(
-                        children: [
-                          Text(
-                            profile.stats.rating.toStringAsFixed(1),
-                            style: TextStyle(
-                              fontSize: 24.fz,
-                              fontWeight: FontWeight.bold,
-                              color: Theme.of(context).primaryColor,
-                            ),
-                          ),
-                          SizedBox(height: 4.h),
-                          Text(
-                            'التقييم العام',
-                            style: TextStyle(
-                              fontSize: 12.fz,
-                              color: Colors.grey,
-                            ),
-                          ),
-                        ],
+                      child: _StatCard(
+                        label: 'التقييم العام',
+                        value: profile.stats.rating.toStringAsFixed(1),
+                        icon: Icons.star_outline_rounded,
+                        accent: KadmatColors.stateWarning,
                       ),
                     ),
                   ],
                 ),
-              ).animate().fadeIn().slideY(begin: 0.2, delay: 100.ms),
-              SizedBox(height: 24.h),
-
-              // Bio Section
-              Text(
-                'نبذة شخصية',
-                style: TextStyle(fontSize: 18.fz, fontWeight: FontWeight.bold),
-              ).animate().fadeIn(delay: 200.ms),
-              SizedBox(height: 12.h),
-              Container(
-                width: double.infinity,
-                padding: EdgeInsets.all(16.w),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).cardColor,
-                  borderRadius: BorderRadius.circular(16.r),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.05),
-                      blurRadius: 8.r,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Text(
-                  bio,
-                  style: TextStyle(
-                    fontSize: 14.fz,
-                    height: 1.6,
-                    color: Colors.grey[700],
-                  ),
-                ),
-              ).animate().fadeIn().slideY(begin: 0.2, delay: 250.ms),
-              SizedBox(height: 24.h),
-
-              // Portfolio Section
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'معرض الأعمال',
-                    style: TextStyle(
-                      fontSize: 18.fz,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ).animate().fadeIn(delay: 450.ms),
-              SizedBox(height: 12.h),
-
-              if (profile.portfolio.isEmpty)
-                _buildEmptyPortfolioState()
-              else
-                GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    crossAxisSpacing: 12.w,
-                    mainAxisSpacing: 12.h,
-                    childAspectRatio: 0.8,
-                  ),
-                  itemCount: profile.portfolio.length + 1, // +1 for Add button
-                  itemBuilder: (context, index) {
-                    if (index == profile.portfolio.length) {
-                      return _buildAddNewWorkCard(context);
-                    }
-                    final work = profile.portfolio[index];
-                    return _buildPortfolioItem(
+                SizedBox(height: 18.h),
+                _SectionCard(
+                  title: 'نبذة شخصية',
+                  subtitle:
+                      'هذه النبذة تظهر للعميل في ملفك العام، لذلك اجعلها واضحة ومباشرة.',
+                  child: Text(
+                    bio,
+                    style: Theme.of(
                       context,
-                      id: work.id,
-                      imageUrl: work.imageUrl,
-                      title: work.title ?? 'عمل سابق',
-                      date: work.projectDate != null
-                          ? "${work.projectDate!.year}-${work.projectDate!.month}"
-                          : '',
-                    );
-                  },
-                ).animate().fadeIn(delay: 500.ms),
-
-              if (profile.portfolio.isEmpty)
-                Padding(
-                  padding: EdgeInsets.only(top: 16.h),
-                  child: _buildAddNewWorkCard(context),
+                    ).textTheme.bodyMedium?.copyWith(height: 1.7),
+                  ),
                 ),
-
-              SizedBox(height: 80.h),
-            ],
+                SizedBox(height: 18.h),
+                _SectionCard(
+                  title: 'معرض الأعمال',
+                  subtitle:
+                      'اعرض نماذج فعلية من أعمالك السابقة حتى تزيد الثقة وتحسن قرار العميل.',
+                  child: Column(
+                    children: [
+                      if (profile.portfolio.isEmpty) ...[
+                        _buildEmptyPortfolioState(),
+                        SizedBox(height: 16.h),
+                        _buildAddNewWorkCard(context),
+                      ] else
+                        GridView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          gridDelegate:
+                              SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: 2,
+                                crossAxisSpacing: 12.w,
+                                mainAxisSpacing: 12.h,
+                                childAspectRatio: 0.82,
+                              ),
+                          itemCount: profile.portfolio.length + 1,
+                          itemBuilder: (context, index) {
+                            if (index == profile.portfolio.length) {
+                              return _buildAddNewWorkCard(context);
+                            }
+                            final work = profile.portfolio[index];
+                            return _buildPortfolioItem(
+                              context,
+                              id: work.id,
+                              imageUrl: work.imageUrl,
+                              title: work.title ?? 'عمل سابق',
+                              date: work.projectDate != null
+                                  ? '${work.projectDate!.year}-${work.projectDate!.month}'
+                                  : '',
+                            );
+                          },
+                        ),
+                    ],
+                  ),
+                ),
+                SizedBox(height: 80.h),
+              ],
+            ),
           ),
         ),
       ),
@@ -433,20 +326,20 @@ class _TechnicianProfileScreenState
       width: double.infinity,
       padding: EdgeInsets.all(24.w),
       decoration: BoxDecoration(
-        color: Colors.grey[100],
-        borderRadius: BorderRadius.circular(12.r),
+        color: Theme.of(context).scaffoldBackgroundColor,
+        borderRadius: BorderRadius.circular(20.r),
       ),
       child: Column(
         children: [
           Icon(
             Icons.image_not_supported_outlined,
             size: 48.s,
-            color: Colors.grey,
+            color: KadmatColors.lightTextSecondary,
           ),
           SizedBox(height: 8.h),
           Text(
             'لا توجد أعمال سابقة',
-            style: TextStyle(color: Colors.grey[600]),
+            style: TextStyle(color: KadmatColors.lightTextSecondary),
           ),
         ],
       ),
@@ -464,12 +357,12 @@ class _TechnicianProfileScreenState
         ).then((_) => _loadProfile());
       },
       child: Container(
-        height: 156.h,
+        height: 172.h,
         decoration: BoxDecoration(
-          color: Theme.of(context).cardColor,
-          borderRadius: BorderRadius.circular(16.r),
+          color: Theme.of(context).scaffoldBackgroundColor,
+          borderRadius: BorderRadius.circular(20.r),
           border: Border.all(
-            color: Theme.of(context).primaryColor.withValues(alpha: 0.3),
+            color: KadmatColors.brandPrimary.withValues(alpha: 0.35),
             width: 2.w,
           ),
         ),
@@ -478,23 +371,23 @@ class _TechnicianProfileScreenState
           children: [
             Container(
               padding: EdgeInsets.all(12.w),
-              decoration: BoxDecoration(
-                color: Theme.of(context).primaryColor.withValues(alpha: 0.1),
+              decoration: const BoxDecoration(
+                color: KadmatColors.brandAccent,
                 shape: BoxShape.circle,
               ),
               child: Icon(
-                Icons.add,
+                Icons.add_rounded,
                 size: 24.s,
-                color: Theme.of(context).primaryColor,
+                color: KadmatColors.brandSecondary,
               ),
             ),
-            SizedBox(height: 8.h),
+            SizedBox(height: 10.h),
             Text(
               'إضافة عمل',
               style: TextStyle(
                 fontSize: 13.fz,
-                fontWeight: FontWeight.w600,
-                color: Theme.of(context).primaryColor,
+                fontWeight: FontWeight.w700,
+                color: KadmatColors.brandSecondary,
               ),
             ),
           ],
@@ -512,15 +405,9 @@ class _TechnicianProfileScreenState
   }) {
     return Container(
       decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(16.r),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 8.r,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20.r),
+        border: Border.all(color: KadmatColors.lightBorder),
       ),
       child: Stack(
         children: [
@@ -530,57 +417,256 @@ class _TechnicianProfileScreenState
               Expanded(
                 child: ClipRRect(
                   borderRadius: BorderRadius.vertical(
-                    top: Radius.circular(16.r),
+                    top: Radius.circular(20.r),
                   ),
                   child: Image.network(
                     imageUrl,
                     fit: BoxFit.cover,
                     width: double.infinity,
                     errorBuilder: (context, error, stackTrace) => Container(
-                      color: Colors.grey[300],
-                      child: const Icon(Icons.error),
+                      color: Theme.of(context).scaffoldBackgroundColor,
+                      alignment: Alignment.center,
+                      child: const Icon(Icons.broken_image_outlined),
                     ),
                   ),
                 ),
               ),
               Padding(
-                padding: EdgeInsets.all(8.w),
+                padding: EdgeInsets.all(10.w),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       title,
-                      style: TextStyle(
-                        fontSize: 13.fz,
-                        fontWeight: FontWeight.bold,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    SizedBox(height: 2.h),
-                    Text(
-                      date,
-                      style: TextStyle(fontSize: 10.fz, color: Colors.grey),
-                    ),
+                    SizedBox(height: 4.h),
+                    Text(date, style: Theme.of(context).textTheme.bodySmall),
                   ],
                 ),
               ),
             ],
           ),
           Positioned(
-            top: 4,
-            left: 4,
+            top: 8,
+            left: 8,
             child: CircleAvatar(
-              radius: 14.r,
-              backgroundColor: Colors.white.withValues(alpha: 0.8),
+              radius: 16.r,
+              backgroundColor: Colors.white.withValues(alpha: 0.9),
               child: IconButton(
-                icon: const Icon(Icons.delete, size: 16, color: Colors.red),
+                icon: const Icon(Icons.delete_outline, color: Colors.red),
                 onPressed: () => _confirmDeleteWork(id),
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
+                iconSize: 16,
               ),
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProfileHero extends StatelessWidget {
+  const _ProfileHero({
+    required this.fullName,
+    required this.title,
+    required this.location,
+    required this.profileImage,
+    required this.onEdit,
+    required this.onSignOut,
+  });
+
+  final String fullName;
+  final String title;
+  final String location;
+  final ImageProvider? profileImage;
+  final VoidCallback onEdit;
+  final VoidCallback onSignOut;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(22.w),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(28.r),
+        gradient: const LinearGradient(
+          begin: Alignment.topRight,
+          end: Alignment.bottomLeft,
+          colors: [Color(0xFF19323C), Color(0xFF0E2028)],
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              CircleAvatar(
+                radius: 34.r,
+                backgroundColor: Colors.white.withValues(alpha: 0.12),
+                backgroundImage: profileImage,
+                child: profileImage == null
+                    ? Text(
+                        fullName.characters.first.toUpperCase(),
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 22.fz,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      )
+                    : null,
+              ),
+              SizedBox(width: 14.w),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      fullName,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 24.fz,
+                        fontWeight: FontWeight.w800,
+                        height: 1.15,
+                      ),
+                    ),
+                    SizedBox(height: 8.h),
+                    Text(
+                      '$title\n$location',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.74),
+                        fontSize: 13.fz,
+                        height: 1.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 18.h),
+          Row(
+            children: [
+              Expanded(
+                child: KadmatPrimaryButton(
+                  label: 'تعديل الملف',
+                  icon: Icons.edit_outlined,
+                  onPressed: onEdit,
+                ),
+              ),
+              SizedBox(width: 8.w),
+              Expanded(
+                child: KadmatSecondaryButton(
+                  label: 'تسجيل الخروج',
+                  icon: Icons.logout_rounded,
+                  onPressed: onSignOut,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatCard extends StatelessWidget {
+  const _StatCard({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.accent,
+  });
+
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.all(16.w),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22.r),
+        border: Border.all(color: KadmatColors.lightBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 40.w,
+            height: 40.w,
+            decoration: BoxDecoration(
+              color: accent.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(14.r),
+            ),
+            child: Icon(icon, color: accent, size: 18.s),
+          ),
+          SizedBox(height: 12.h),
+          Text(label, style: Theme.of(context).textTheme.bodyMedium),
+          SizedBox(height: 4.h),
+          Text(
+            value,
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SectionCard extends StatelessWidget {
+  const _SectionCard({
+    required this.title,
+    required this.subtitle,
+    required this.child,
+  });
+
+  final String title;
+  final String subtitle;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(18.w),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24.r),
+        border: Border.all(color: KadmatColors.lightBorder),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 16,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: Theme.of(
+              context,
+            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+          ),
+          SizedBox(height: 6.h),
+          Text(subtitle, style: Theme.of(context).textTheme.bodyMedium),
+          SizedBox(height: 14.h),
+          child,
         ],
       ),
     );

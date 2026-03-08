@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import '../../../core/navigation/app_routes.dart';
+import '../../../core/design/kadmat_tokens.dart';
 import '../../../core/providers/photo_upload_provider.dart';
 import '../../../core/utils/error_handler.dart';
 import '../../../core/widgets/kadmat_components.dart';
@@ -156,341 +157,423 @@ class _TechnicianRegisterScreenState
         Theme.of(context).textTheme.bodySmall?.color ?? Colors.grey;
 
     return Scaffold(
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text(''), // Empty title as per design which has H1 in body
+        title: const Text(''),
         backgroundColor: Colors.transparent,
       ),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24.0),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const Text(
-                  'إنشاء حساب فني جديد',
-                  style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'انضم إلى شبكتنا من الفنيين المحترفين.',
-                  style: TextStyle(fontSize: 16, color: subtitleColor),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 32),
-
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.04),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.08),
-                    ),
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Icon(
-                        Icons.info_outline,
-                        color: Colors.orange,
-                        size: 20,
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          'التسجيل الاجتماعي للفنيين غير متاح حالياً، لأن إنشاء الحساب يتطلب اختيار التخصص ورفع المستندات قبل التفعيل.',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: subtitleColor,
-                            height: 1.5,
-                          ),
+          padding: const EdgeInsets.all(24),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 760),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(24),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(28),
+                        gradient: const LinearGradient(
+                          begin: Alignment.topRight,
+                          end: Alignment.bottomLeft,
+                          colors: [Color(0xFF17313B), Color(0xFF0D1E25)],
                         ),
                       ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 24),
-
-                Row(
-                  children: [
-                    Expanded(
-                      child: Divider(
-                        color: subtitleColor.withValues(alpha: 0.3),
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Text('أو', style: TextStyle(color: subtitleColor)),
-                    ),
-                    Expanded(
-                      child: Divider(
-                        color: subtitleColor.withValues(alpha: 0.3),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 24),
-
-                KadmatTextField(
-                  controller: _nameController,
-                  label: 'الاسم الكامل',
-                  hint: 'أدخل اسمك الكامل',
-                  prefixIcon: Icons.person_outline,
-                  validator: (value) =>
-                      value?.isEmpty ?? true ? 'الرجاء إدخال الاسم' : null,
-                ),
-                const SizedBox(height: 16),
-
-                KadmatTextField(
-                  controller: _emailController,
-                  label: 'البريد الإلكتروني',
-                  hint: 'example@mail.com',
-                  prefixIcon: Icons.email_outlined,
-                  keyboardType: TextInputType.emailAddress,
-                  validator: (value) => value?.isEmpty ?? true
-                      ? 'الرجاء إدخال البريد الإلكتروني'
-                      : null,
-                ),
-                const SizedBox(height: 16),
-
-                KadmatTextField(
-                  controller: _phoneController,
-                  label: 'رقم الهاتف',
-                  hint: '+966 5xxxxxxxx',
-                  prefixIcon: Icons.phone_android,
-                  keyboardType: TextInputType.phone,
-                  validator: (value) =>
-                      value?.isEmpty ?? true ? 'الرجاء إدخال رقم الهاتف' : null,
-                ),
-                const SizedBox(height: 16),
-
-                KadmatTextField(
-                  controller: _passwordController,
-                  label: 'كلمة المرور',
-                  hint: '********',
-                  prefixIcon: Icons.lock_outline,
-                  obscureText: true,
-                  validator: (value) => value?.isEmpty ?? true
-                      ? 'الرجاء إدخال كلمة المرور'
-                      : null,
-                ),
-                const SizedBox(height: 16),
-
-                KadmatTextField(
-                  controller: _confirmPasswordController,
-                  label: 'تأكيد كلمة المرور',
-                  hint: '********',
-                  prefixIcon: Icons.lock_outline,
-                  obscureText: true,
-                  validator: (value) {
-                    if (value != _passwordController.text) {
-                      return 'كلمات المرور غير متطابقة';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
-
-                // Specialty
-                _buildLabel('مجال التخصص'),
-                Consumer(
-                  builder: (context, ref, child) {
-                    final servicesAsync = ref.watch(activeServicesProvider);
-
-                    return servicesAsync.when(
-                      data: (services) {
-                        return DropdownButtonFormField<String>(
-                          initialValue: _selectedService,
-                          decoration: const InputDecoration(
-                            hintText: 'اختر تخصصك',
-                          ),
-                          items: services.map((service) {
-                            final name =
-                                service['name_ar'] as String? ??
-                                service['name'] as String;
-                            return DropdownMenuItem<String>(
-                              value: service['id'] as String,
-                              child: Text(name),
-                            );
-                          }).toList(),
-                          onChanged: (String? newValue) {
-                            setState(() {
-                              _selectedService = newValue;
-                            });
-                          },
-                          validator: (value) =>
-                              value == null ? 'الرجاء اختيار التخصص' : null,
-                        );
-                      },
-                      loading: () =>
-                          const Center(child: CircularProgressIndicator()),
-                      error: (err, stack) => Text(
-                        ErrorHandler.getMessage(err),
-                        style: const TextStyle(color: Colors.redAccent),
-                      ),
-                    );
-                  },
-                ),
-                const SizedBox(height: 16),
-
-                // Documents Upload Area
-                _buildLabel('المستندات المطلوبة (الهوية، الشهادات)'),
-
-                // File List
-                if (_selectedDocuments.isNotEmpty)
-                  Container(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    height: 100,
-                    child: ListView.separated(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: _selectedDocuments.length,
-                      separatorBuilder: (context, index) =>
-                          const SizedBox(width: 8),
-                      itemBuilder: (context, index) {
-                        final file = _selectedDocuments[index];
-                        return Stack(
-                          children: [
-                            Container(
-                              width: 100,
-                              height: 100,
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              clipBehavior: Clip.antiAlias,
-                              child: kIsWeb
-                                  ? Image.network(
-                                      file.path,
-                                      fit: BoxFit.cover,
-                                      errorBuilder:
-                                          (context, error, stackTrace) =>
-                                              const Center(
-                                                child: Icon(
-                                                  Icons.insert_drive_file,
-                                                ),
-                                              ),
-                                    )
-                                  : Image.file(
-                                      File(file.path),
-                                      fit: BoxFit.cover,
-                                      errorBuilder:
-                                          (context, error, stackTrace) =>
-                                              const Center(
-                                                child: Icon(
-                                                  Icons.insert_drive_file,
-                                                ),
-                                              ),
-                                    ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            width: 54,
+                            height: 54,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(18),
                             ),
-                            Positioned(
-                              top: 4,
-                              right: 4,
-                              child: GestureDetector(
-                                onTap: () => _removeDocument(index),
-                                child: Container(
-                                  padding: const EdgeInsets.all(4),
-                                  decoration: const BoxDecoration(
-                                    color: Colors.red,
-                                    shape: BoxShape.circle,
+                            child: const Icon(
+                              Icons.badge_outlined,
+                              color: Colors.white,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          const Text(
+                            'إنشاء حساب فني جديد',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 24,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'أكمل بياناتك الأساسية، اختر تخصصك، وارفع المستندات المطلوبة حتى يصبح حسابك جاهزًا للمراجعة والتفعيل.',
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.74),
+                              fontSize: 13,
+                              height: 1.6,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    Container(
+                      padding: const EdgeInsets.all(18),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(color: KadmatColors.lightBorder),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.04),
+                            blurRadius: 18,
+                            offset: const Offset(0, 10),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: Colors.orange.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: Colors.orange.withValues(alpha: 0.18),
+                              ),
+                            ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Icon(
+                                  Icons.info_outline,
+                                  color: Colors.orange,
+                                  size: 20,
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    'لا يوجد تسجيل اجتماعي للفنيين في هذه المرحلة لأن الحساب يحتاج تخصصًا ومستندات قبل التفعيل.',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: subtitleColor,
+                                      height: 1.5,
+                                    ),
                                   ),
-                                  child: const Icon(
-                                    Icons.close,
-                                    size: 16,
-                                    color: Colors.white,
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+                          KadmatTextField(
+                            controller: _nameController,
+                            label: 'الاسم الكامل',
+                            hint: 'أدخل اسمك الكامل',
+                            prefixIcon: Icons.person_outline,
+                            validator: (value) => value?.isEmpty ?? true
+                                ? 'الرجاء إدخال الاسم'
+                                : null,
+                          ),
+                          const SizedBox(height: 16),
+                          KadmatTextField(
+                            controller: _emailController,
+                            label: 'البريد الإلكتروني',
+                            hint: 'example@mail.com',
+                            prefixIcon: Icons.email_outlined,
+                            keyboardType: TextInputType.emailAddress,
+                            validator: (value) => value?.isEmpty ?? true
+                                ? 'الرجاء إدخال البريد الإلكتروني'
+                                : null,
+                          ),
+                          const SizedBox(height: 16),
+                          KadmatTextField(
+                            controller: _phoneController,
+                            label: 'رقم الهاتف',
+                            hint: '+966 5xxxxxxxx',
+                            prefixIcon: Icons.phone_android,
+                            keyboardType: TextInputType.phone,
+                            validator: (value) => value?.isEmpty ?? true
+                                ? 'الرجاء إدخال رقم الهاتف'
+                                : null,
+                          ),
+                          const SizedBox(height: 16),
+                          KadmatTextField(
+                            controller: _passwordController,
+                            label: 'كلمة المرور',
+                            hint: '********',
+                            prefixIcon: Icons.lock_outline,
+                            obscureText: true,
+                            validator: (value) => value?.isEmpty ?? true
+                                ? 'الرجاء إدخال كلمة المرور'
+                                : null,
+                          ),
+                          const SizedBox(height: 16),
+                          KadmatTextField(
+                            controller: _confirmPasswordController,
+                            label: 'تأكيد كلمة المرور',
+                            hint: '********',
+                            prefixIcon: Icons.lock_outline,
+                            obscureText: true,
+                            validator: (value) {
+                              if (value != _passwordController.text) {
+                                return 'كلمات المرور غير متطابقة';
+                              }
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 18),
+                          _buildLabel('مجال التخصص'),
+                          Consumer(
+                            builder: (context, ref, child) {
+                              final servicesAsync = ref.watch(
+                                activeServicesProvider,
+                              );
+
+                              return servicesAsync.when(
+                                data: (services) {
+                                  return DropdownButtonFormField<String>(
+                                    initialValue: _selectedService,
+                                    decoration: const InputDecoration(
+                                      hintText: 'اختر تخصصك',
+                                    ),
+                                    items: services.map((service) {
+                                      final name =
+                                          service['name_ar'] as String? ??
+                                          service['name'] as String;
+                                      return DropdownMenuItem<String>(
+                                        value: service['id'] as String,
+                                        child: Text(name),
+                                      );
+                                    }).toList(),
+                                    onChanged: (String? newValue) {
+                                      setState(() {
+                                        _selectedService = newValue;
+                                      });
+                                    },
+                                    validator: (value) => value == null
+                                        ? 'الرجاء اختيار التخصص'
+                                        : null,
+                                  );
+                                },
+                                loading: () => const Center(
+                                  child: CircularProgressIndicator(),
+                                ),
+                                error: (err, stack) => Text(
+                                  ErrorHandler.getMessage(err),
+                                  style: const TextStyle(
+                                    color: Colors.redAccent,
                                   ),
+                                ),
+                              );
+                            },
+                          ),
+                          const SizedBox(height: 18),
+                          _buildLabel('المستندات المطلوبة (الهوية، الشهادات)'),
+                          if (_selectedDocuments.isNotEmpty)
+                            Container(
+                              margin: const EdgeInsets.only(bottom: 12),
+                              height: 100,
+                              child: ListView.separated(
+                                scrollDirection: Axis.horizontal,
+                                itemCount: _selectedDocuments.length,
+                                separatorBuilder: (context, index) =>
+                                    const SizedBox(width: 8),
+                                itemBuilder: (context, index) {
+                                  final file = _selectedDocuments[index];
+                                  return Stack(
+                                    children: [
+                                      Container(
+                                        width: 100,
+                                        height: 100,
+                                        decoration: BoxDecoration(
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
+                                        ),
+                                        clipBehavior: Clip.antiAlias,
+                                        child: kIsWeb
+                                            ? Image.network(
+                                                file.path,
+                                                fit: BoxFit.cover,
+                                                errorBuilder:
+                                                    (
+                                                      context,
+                                                      error,
+                                                      stackTrace,
+                                                    ) => const Center(
+                                                      child: Icon(
+                                                        Icons.insert_drive_file,
+                                                      ),
+                                                    ),
+                                              )
+                                            : Image.file(
+                                                File(file.path),
+                                                fit: BoxFit.cover,
+                                                errorBuilder:
+                                                    (
+                                                      context,
+                                                      error,
+                                                      stackTrace,
+                                                    ) => const Center(
+                                                      child: Icon(
+                                                        Icons.insert_drive_file,
+                                                      ),
+                                                    ),
+                                              ),
+                                      ),
+                                      Positioned(
+                                        top: 4,
+                                        right: 4,
+                                        child: GestureDetector(
+                                          onTap: () => _removeDocument(index),
+                                          child: Container(
+                                            padding: const EdgeInsets.all(4),
+                                            decoration: const BoxDecoration(
+                                              color: Colors.red,
+                                              shape: BoxShape.circle,
+                                            ),
+                                            child: const Icon(
+                                              Icons.close,
+                                              size: 16,
+                                              color: Colors.white,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  );
+                                },
+                              ),
+                            ),
+                          Container(
+                            height: 140,
+                            width: double.infinity,
+                            decoration: BoxDecoration(
+                              color: Theme.of(
+                                context,
+                              ).inputDecorationTheme.fillColor,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color:
+                                    Theme.of(context)
+                                        .inputDecorationTheme
+                                        .border
+                                        ?.borderSide
+                                        .color ??
+                                    Colors.grey,
+                                style: BorderStyle.solid,
+                              ),
+                            ),
+                            child: InkWell(
+                              onTap: _isUploading ? null : _pickDocuments,
+                              borderRadius: BorderRadius.circular(8),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.upload_file,
+                                    size: 40,
+                                    color: subtitleColor,
+                                  ),
+                                  const SizedBox(height: 8),
+                                  RichText(
+                                    text: TextSpan(
+                                      style: TextStyle(
+                                        color: subtitleColor,
+                                        fontFamily: 'Cairo',
+                                      ),
+                                      children: const [
+                                        TextSpan(
+                                          text: 'انقر لرفع المستندات',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    '${_selectedDocuments.length} ملفات تم اختيارها',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: subtitleColor.withValues(
+                                        alpha: 0.7,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          if (_isUploading) ...[
+                            const SizedBox(height: 16),
+                            const LinearProgressIndicator(),
+                            const SizedBox(height: 8),
+                            Text(
+                              _uploadStatus,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          ],
+                          if (_submitError != null) ...[
+                            const SizedBox(height: 16),
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: KadmatColors.stateError.withValues(
+                                  alpha: 0.08,
+                                ),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: KadmatColors.stateError.withValues(
+                                    alpha: 0.22,
+                                  ),
+                                ),
+                              ),
+                              child: Text(
+                                _submitError!,
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  color: KadmatColors.stateError,
                                 ),
                               ),
                             ),
                           ],
-                        );
-                      },
-                    ),
-                  ),
-
-                // Upload Button
-                Container(
-                  height: 140,
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).inputDecorationTheme.fillColor,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color:
-                          Theme.of(
-                            context,
-                          ).inputDecorationTheme.border?.borderSide.color ??
-                          Colors.grey,
-                      style: BorderStyle.solid,
-                    ),
-                  ),
-                  child: InkWell(
-                    onTap: _isUploading ? null : _pickDocuments,
-                    borderRadius: BorderRadius.circular(8),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.upload_file, size: 40, color: subtitleColor),
-                        const SizedBox(height: 8),
-                        RichText(
-                          text: TextSpan(
-                            style: TextStyle(
-                              color: subtitleColor,
-                              fontFamily: 'Cairo',
-                            ),
-                            children: const [
-                              TextSpan(
-                                text: 'انقر لرفع المستندات',
-                                style: TextStyle(fontWeight: FontWeight.bold),
+                          const SizedBox(height: 24),
+                          KadmatPrimaryButton(
+                            label: 'إنشاء الحساب',
+                            onPressed: _isUploading ? null : _submit,
+                            isLoading: _isUploading,
+                          ),
+                          const SizedBox(height: 14),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                'لديك حساب بالفعل؟',
+                                style: TextStyle(color: subtitleColor),
+                              ),
+                              TextButton(
+                                onPressed: () =>
+                                    context.go(AppRoutes.technicianLogin),
+                                child: const Text('سجّل الدخول'),
                               ),
                             ],
                           ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '${_selectedDocuments.length} ملفات تم اختيارها',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: subtitleColor.withValues(alpha: 0.7),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-
-                if (_isUploading) ...[
-                  const SizedBox(height: 16),
-                  LinearProgressIndicator(),
-                  const SizedBox(height: 8),
-                  Text(
-                    _uploadStatus,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 12, color: Colors.grey),
-                  ),
-                ],
-                const SizedBox(height: 32),
-
-                if (_submitError != null)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 16.0),
-                    child: Text(
-                      _submitError!,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.error,
+                        ],
                       ),
-                      textAlign: TextAlign.center,
                     ),
-                  ),
-
-                // Submit Button
-                KadmatPrimaryButton(
-                  label: 'إنشاء الحساب',
-                  onPressed: _isUploading ? null : _submit,
-                  isLoading: _isUploading,
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         ),
