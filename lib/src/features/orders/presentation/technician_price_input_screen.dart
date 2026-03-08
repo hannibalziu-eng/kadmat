@@ -12,6 +12,7 @@ import '../../jobs/domain/job_communication_policy.dart';
 import '../../jobs/data/job_repository.dart';
 import '../../../core/navigation/app_routes.dart';
 import '../../../core/utils/error_handler.dart';
+import '../../technician/presentation/widgets/technician_flow_widgets.dart';
 
 class TechnicianPriceInputScreen extends ConsumerStatefulWidget {
   final String orderId;
@@ -258,30 +259,69 @@ class _TechnicianPriceInputScreenState
       appBar: AppBar(title: const Text('تحديد السعر'), centerTitle: true),
       body: SingleChildScrollView(
         padding: EdgeInsets.all(16.w),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children:
-                [
-                      _buildCustomerPhotosSection(),
-                      SizedBox(height: 16.h),
-                      _buildCustomerInfoCard(),
-                      SizedBox(height: 16.h),
-                      _buildJobDetailsCard(),
-                      SizedBox(height: 24.h),
-                      const Divider(),
-                      SizedBox(height: 16.h),
-                      _buildPriceInputSection(),
-                      SizedBox(height: 16.h),
-                      _buildNotesSection(),
-                      SizedBox(height: 32.h),
-                      _buildSubmitButton(),
-                      SizedBox(height: 24.h),
-                    ]
-                    .animate(interval: 50.ms)
-                    .fadeIn(duration: 400.ms)
-                    .slideY(begin: 0.1, duration: 400.ms),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 960),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children:
+                    [
+                          TechnicianFlowHero(
+                            icon: Icons.price_change_rounded,
+                            eyebrow: 'قرار الفني',
+                            title: 'حدّد السعر النهائي بوضوح',
+                            subtitle:
+                                'راجع تفاصيل الطلب أولًا ثم أرسل سعرًا واحدًا واضحًا. بعد الإرسال ستنتظر موافقة العميل على هذا السعر نفسه.',
+                            bottom: Wrap(
+                              spacing: 8.w,
+                              runSpacing: 8.h,
+                              children: [
+                                TechnicianFlowPill(
+                                  icon: Icons.work_outline_rounded,
+                                  label:
+                                      widget.serviceName ??
+                                      _job?.service?['name'] ??
+                                      'الخدمة المطلوبة',
+                                ),
+                                if (_photos.isNotEmpty)
+                                  TechnicianFlowPill(
+                                    icon: Icons.photo_library_outlined,
+                                    label: '${_photos.length} صور من العميل',
+                                  ),
+                              ],
+                            ),
+                          ),
+                          SizedBox(height: 16.h),
+                          const TechnicianFlowSurface(
+                            child: TechnicianFlowNextStepCard(
+                              icon: Icons.rule_folder_outlined,
+                              title:
+                                  'الخطوة التالية: أرسل سعرًا نهائيًا واحدًا',
+                              description:
+                                  'لا ترسل سعرًا تجريبيًا. اكتب القيمة التي ستلتزم بها، ثم أضف ملاحظة قصيرة فقط إذا كانت ستساعد العميل على اتخاذ القرار.',
+                            ),
+                          ),
+                          SizedBox(height: 16.h),
+                          _buildJobDetailsCard(),
+                          SizedBox(height: 16.h),
+                          _buildCustomerPhotosSection(),
+                          SizedBox(height: 16.h),
+                          _buildCustomerInfoCard(),
+                          SizedBox(height: 16.h),
+                          _buildPriceInputSection(),
+                          SizedBox(height: 16.h),
+                          _buildNotesSection(),
+                          SizedBox(height: 32.h),
+                          _buildSubmitButton(),
+                          SizedBox(height: 24.h),
+                        ]
+                        .animate(interval: 50.ms)
+                        .fadeIn(duration: 400.ms)
+                        .slideY(begin: 0.1, duration: 400.ms),
+              ),
+            ),
           ),
         ),
       ),
@@ -720,6 +760,15 @@ class _TechnicianPriceInputScreenState
             ),
           ],
         ),
+        SizedBox(height: 6.h),
+        Text(
+          'اكتب السعر الذي ستلتزم به في هذه الخدمة، لأن العميل سيراه كعرضك النهائي.',
+          style: TextStyle(
+            fontSize: 12.5.fz,
+            color: Colors.grey[600],
+            height: 1.45,
+          ),
+        ),
         SizedBox(height: 12.h),
         TextFormField(
           controller: _priceController,
@@ -802,6 +851,15 @@ class _TechnicianPriceInputScreenState
               ),
             ),
           ],
+        ),
+        SizedBox(height: 6.h),
+        Text(
+          'اختياري. استخدمه فقط إذا كان لديك توضيح مهم للسعر أو لطبيعة التنفيذ.',
+          style: TextStyle(
+            fontSize: 12.5.fz,
+            color: Colors.grey[600],
+            height: 1.45,
+          ),
         ),
         SizedBox(height: 8.h),
         TextFormField(

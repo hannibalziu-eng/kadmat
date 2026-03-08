@@ -3,11 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_scalify/flutter_scalify.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/app_theme.dart';
+import '../../../../core/design/kadmat_tokens.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/utils/error_handler.dart';
 import '../../../../core/widgets/kadmat_toast.dart';
 import '../../data/job_repository.dart';
 import '../../domain/job.dart';
+import '../../../technician/presentation/widgets/technician_flow_widgets.dart';
 
 class TechnicianCompleteWorkScreen extends ConsumerStatefulWidget {
   final String jobId;
@@ -126,7 +128,7 @@ class _TechnicianCompleteWorkScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.backgroundDark,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         title: const Text('إنهاء الخدمة'),
         backgroundColor: Colors.transparent,
@@ -140,97 +142,174 @@ class _TechnicianCompleteWorkScreenState
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
               padding: EdgeInsets.all(16.w),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildSectionTitle('صور ما قبل الخدمة'),
-                  SizedBox(height: 12.h),
-                  _buildPhotoList(_prePhotos, isReadOnly: true),
-
-                  SizedBox(height: 24.h),
-
-                  _buildSectionTitle('صور ما بعد الخدمة'),
-                  SizedBox(height: 8.h),
-                  Text(
-                    'يمكنك إضافة المزيد من الصور هنا',
-                    style: TextStyle(color: Colors.grey, fontSize: 12.fz),
-                  ),
-                  SizedBox(height: 12.h),
-                  _buildPhotoList(_afterPhotos, isReadOnly: false),
-
-                  SizedBox(height: 32.h),
-
-                  _buildSectionTitle('تفاصيل العمل'),
-                  SizedBox(height: 12.h),
-                  TextField(
-                    controller: _notesController,
-                    maxLines: 4,
-                    style: const TextStyle(color: Colors.white),
-                    decoration: InputDecoration(
-                      hintText: 'اكتب وصفاً للعمل الذي تم إنجازه...',
-                      hintStyle: TextStyle(color: Colors.white38),
-                      filled: true,
-                      fillColor: Colors.white.withValues(alpha: 0.05),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12.r),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
-                  ),
-
-                  SizedBox(height: 24.h),
-
-                  _buildSectionTitle('السعر النهائي'),
-                  SizedBox(height: 12.h),
-                  TextField(
-                    controller: _priceController,
-                    keyboardType: TextInputType.number,
-                    style: TextStyle(
-                      color: AppTheme.primaryColor,
-                      fontSize: 24.fz,
-                      fontWeight: FontWeight.bold,
-                    ),
-                    decoration: InputDecoration(
-                      suffixText: 'ر.س',
-                      suffixStyle: TextStyle(
-                        color: Colors.grey,
-                        fontSize: 16.fz,
-                      ),
-                      filled: true,
-                      fillColor: Colors.white.withValues(alpha: 0.05),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12.r),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
-                  ),
-
-                  SizedBox(height: 48.h),
-
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: _isLoading ? null : _submitCompletion,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green,
-                        padding: EdgeInsets.symmetric(vertical: 16.h),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12.r),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 960),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      TechnicianFlowHero(
+                        icon: Icons.fact_check_rounded,
+                        eyebrow: 'إغلاق المهمة',
+                        title: 'أرسل طلب الإنهاء بشكل واضح',
+                        subtitle:
+                            'راجع الصور، أكمل وصف التنفيذ، ثم أرسل النتيجة النهائية للعميل حتى يؤكد اكتمال الخدمة.',
+                        bottom: Wrap(
+                          spacing: 8.w,
+                          runSpacing: 8.h,
+                          children: [
+                            TechnicianFlowPill(
+                              icon: Icons.photo_camera_back_outlined,
+                              label: '${_afterPhotos.length} صور بعد الخدمة',
+                            ),
+                            TechnicianFlowPill(
+                              icon: Icons.attach_money_outlined,
+                              label:
+                                  '${_priceController.text.isEmpty ? '0' : _priceController.text} ر.س',
+                            ),
+                          ],
                         ),
                       ),
-                      child: _isLoading
-                          ? const CircularProgressIndicator(color: Colors.white)
-                          : Text(
-                              'تأكيد وإرسال للعميل',
+                      SizedBox(height: 16.h),
+                      const TechnicianFlowSurface(
+                        child: TechnicianFlowNextStepCard(
+                          icon: Icons.assignment_turned_in_outlined,
+                          title:
+                              'الخطوة التالية: أرسل النتيجة النهائية مرة واحدة',
+                          description:
+                              'أرفق صور ما بعد الخدمة، اكتب وصفًا مختصرًا فقط إذا لزم، ثم تأكد أن السعر النهائي صحيح قبل الإرسال للعميل.',
+                        ),
+                      ),
+                      SizedBox(height: 16.h),
+                      TechnicianFlowSurface(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildSectionTitle('صور ما قبل الخدمة'),
+                            SizedBox(height: 12.h),
+                            _buildPhotoList(_prePhotos, isReadOnly: true),
+                          ],
+                        ),
+                      ),
+                      SizedBox(height: 16.h),
+                      TechnicianFlowSurface(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildSectionTitle('صور ما بعد الخدمة'),
+                            SizedBox(height: 8.h),
+                            Text(
+                              'أضف الصور النهائية التي تشرح النتيجة بوضوح للعميل.',
                               style: TextStyle(
-                                fontSize: 18.fz,
-                                fontWeight: FontWeight.bold,
+                                color: Colors.grey[600],
+                                fontSize: 12.5.fz,
                               ),
                             ),
-                    ),
+                            SizedBox(height: 12.h),
+                            _buildPhotoList(_afterPhotos, isReadOnly: false),
+                          ],
+                        ),
+                      ),
+                      SizedBox(height: 16.h),
+                      TechnicianFlowSurface(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildSectionTitle('تفاصيل العمل'),
+                            SizedBox(height: 8.h),
+                            Text(
+                              'اختياري. اكتب ما تم إنجازه فقط إذا كان سيضيف وضوحًا للعميل.',
+                              style: TextStyle(
+                                color: Colors.grey[600],
+                                fontSize: 12.5.fz,
+                              ),
+                            ),
+                            SizedBox(height: 12.h),
+                            TextField(
+                              controller: _notesController,
+                              maxLines: 4,
+                              decoration: InputDecoration(
+                                hintText: 'اكتب وصفاً للعمل الذي تم إنجازه...',
+                                filled: true,
+                                fillColor: Colors.grey[50],
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12.r),
+                                  borderSide: BorderSide.none,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      SizedBox(height: 16.h),
+                      TechnicianFlowSurface(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildSectionTitle('السعر النهائي'),
+                            SizedBox(height: 8.h),
+                            Text(
+                              'هذا هو السعر الذي سيراجعه العميل في خطوة الإنهاء.',
+                              style: TextStyle(
+                                color: Colors.grey[600],
+                                fontSize: 12.5.fz,
+                              ),
+                            ),
+                            SizedBox(height: 12.h),
+                            TextField(
+                              controller: _priceController,
+                              keyboardType: TextInputType.number,
+                              style: TextStyle(
+                                color: AppTheme.primaryColor,
+                                fontSize: 24.fz,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              decoration: InputDecoration(
+                                suffixText: 'ر.س',
+                                suffixStyle: TextStyle(
+                                  color: Colors.grey,
+                                  fontSize: 16.fz,
+                                ),
+                                filled: true,
+                                fillColor: Colors.grey[50],
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12.r),
+                                  borderSide: BorderSide.none,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      SizedBox(height: 32.h),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: _isLoading ? null : _submitCompletion,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.green,
+                            padding: EdgeInsets.symmetric(vertical: 16.h),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12.r),
+                            ),
+                          ),
+                          child: _isLoading
+                              ? const CircularProgressIndicator(
+                                  color: Colors.white,
+                                )
+                              : Text(
+                                  'إرسال طلب الإنهاء للعميل',
+                                  style: TextStyle(
+                                    fontSize: 18.fz,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                        ),
+                      ),
+                      SizedBox(height: 24.h),
+                    ],
                   ),
-                  SizedBox(height: 24.h),
-                ],
+                ),
               ),
             ),
     );
@@ -242,14 +321,14 @@ class _TechnicianCompleteWorkScreenState
       style: TextStyle(
         fontSize: 18.fz,
         fontWeight: FontWeight.bold,
-        color: Colors.white,
+        color: KadmatColors.lightTextPrimary,
       ),
     );
   }
 
   Widget _buildPhotoList(List<String> photos, {required bool isReadOnly}) {
     if (photos.isEmpty && isReadOnly) {
-      return Text('لا توجد صور', style: TextStyle(color: Colors.grey));
+      return Text('لا توجد صور', style: TextStyle(color: Colors.grey[600]));
     }
 
     return SizedBox(
@@ -271,11 +350,11 @@ class _TechnicianCompleteWorkScreenState
               child: Container(
                 width: 100.w,
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.05),
+                  color: Colors.grey[50],
                   borderRadius: BorderRadius.circular(12.r),
-                  border: Border.all(color: Colors.white24),
+                  border: Border.all(color: KadmatColors.lightBorder),
                 ),
-                child: Icon(Icons.add_a_photo, color: Colors.white54),
+                child: Icon(Icons.add_a_photo, color: Colors.grey[500]),
               ),
             );
           }
