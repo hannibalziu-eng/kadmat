@@ -13,13 +13,19 @@ void main() {
 
       await tester.pumpAndSettle();
 
-      expect(find.text('الحماية الحالية'), findsOneWidget);
-      expect(find.text('قيد الإعداد'), findsOneWidget);
+      expect(find.text('أبقِ أمان الحساب بسيطًا وواضحًا'), findsOneWidget);
+      expect(find.text('المتاح الآن'), findsOneWidget);
+      expect(find.text('لاحقًا'), findsAtLeastNWidgets(1));
       expect(find.text('تغيير كلمة المرور'), findsAtLeastNWidgets(1));
-      expect(find.text('المصادقة الثنائية (2FA)'), findsOneWidget);
-      expect(find.text('الأجهزة المتصلة'), findsOneWidget);
-      expect(find.text('لاحقًا'), findsNWidgets(2));
-      expect(find.byIcon(Icons.chevron_right), findsOneWidget);
+      expect(
+        find.text('المصادقة الثنائية (2FA)', skipOffstage: false),
+        findsOneWidget,
+      );
+      expect(
+        find.text('الأجهزة المتصلة', skipOffstage: false),
+        findsOneWidget,
+      );
+      expect(find.byIcon(Icons.chevron_left_rounded), findsOneWidget);
     },
   );
 
