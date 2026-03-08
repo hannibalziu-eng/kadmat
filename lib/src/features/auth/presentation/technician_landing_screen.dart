@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_scalify/flutter_scalify.dart';
 import 'package:go_router/go_router.dart';
+
 import '../../../core/design/kadmat_tokens.dart';
 import '../../../core/navigation/app_routes.dart';
 import '../../../core/widgets/kadmat_components.dart';
@@ -10,151 +11,179 @@ class TechnicianLandingScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    final backgroundColor = isDarkMode
-        ? KadmatColors.darkBackground
-        : KadmatColors.lightBackground;
-    final textColor = isDarkMode
-        ? KadmatColors.darkTextPrimary
-        : KadmatColors.lightTextPrimary;
-    final subtitleColor = isDarkMode
-        ? KadmatColors.darkTextSecondary
-        : KadmatColors.lightTextSecondary;
-    const primaryColor = KadmatColors.brandPrimary;
-
     return Scaffold(
-      backgroundColor: backgroundColor,
+      backgroundColor: const Color(0xFFF2F6F7),
       body: SafeArea(
-        child: SingleChildScrollView(
-          child: Padding(
+        child: Center(
+          child: SingleChildScrollView(
             padding: EdgeInsets.all(24.w),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                SizedBox(height: 24.h),
-                // Header Icon
-                Container(
-                  width: 96.w,
-                  height: 96.w,
-                  decoration: BoxDecoration(
-                    color: isDarkMode
-                        ? KadmatColors.darkBorder
-                        : const Color(0xFFE2E8F0),
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: isDarkMode
-                          ? KadmatColors.darkBorder
-                          : Colors.white,
-                      width: 4.w,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.1),
-                        blurRadius: 10.r,
-                        offset: Offset(0, 4.h),
-                      ),
-                    ],
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 680),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const _HeroCard(),
+                  SizedBox(height: 18.h),
+                  const _FocusCard(
+                    icon: Icons.track_changes_outlined,
+                    title: 'ما الذي ستفعله هنا؟',
+                    description:
+                        'أنشئ حساب الفني مرة واحدة، أضف تخصصك ومستنداتك، ثم ابدأ استقبال الطلبات القريبة من لوحة واحدة واضحة.',
                   ),
-                  child: Center(
-                    child: Icon(Icons.build, size: 48.s, color: primaryColor),
+                  SizedBox(height: 18.h),
+                  _SectionLabel(
+                    title: 'كيف تبدأ',
+                    subtitle:
+                        'ثلاث خطوات فقط للوصول إلى الحساب التشغيلي الكامل.',
                   ),
-                ),
-                SizedBox(height: 24.h),
-                // Title
-                Text(
-                  'انضم إلينا كفني محترف',
-                  style: TextStyle(
-                    fontSize: 28.fz,
-                    fontWeight: FontWeight.bold,
-                    color: textColor,
+                  SizedBox(height: 12.h),
+                  const _StepCard(
+                    number: '1',
+                    icon: Icons.badge_outlined,
+                    title: 'أنشئ حساب الفني',
+                    description:
+                        'ابدأ ببياناتك الأساسية حتى نفتح لك مساحة العمل الخاصة بالفني داخل التطبيق.',
                   ),
-                  textAlign: TextAlign.center,
-                ),
-                SizedBox(height: 12.h),
-                // Subtitle
-                Text(
-                  'وسّع نطاق عملك، تواصل مع عملاء جدد، وزد دخلك. كن جزءاً من شبكتنا الموثوقة من الخبراء.',
-                  style: TextStyle(
-                    fontSize: 16.fz,
-                    color: subtitleColor,
-                    height: 1.5,
+                  SizedBox(height: 12.h),
+                  const _StepCard(
+                    number: '2',
+                    icon: Icons.handyman_outlined,
+                    title: 'اختر التخصص والخبرة',
+                    description:
+                        'حدّد مجالات الخدمة التي تنفذها حتى تظهر لك الطلبات المناسبة فقط.',
                   ),
-                  textAlign: TextAlign.center,
-                ),
-                SizedBox(height: 48.h),
-                // Steps
-                _buildStepCard(
-                  context,
-                  icon: Icons.person_add,
-                  title: '1. إنشاء حسابك',
-                  description: 'أدخل بياناتك الأساسية للبدء.',
-                  isDarkMode: isDarkMode,
-                  primaryColor: primaryColor,
-                ),
-                SizedBox(height: 16.h),
-                _buildStepCard(
-                  context,
-                  icon: Icons.category,
-                  title: '2. حدد تخصصك',
-                  description: 'اختر مجالات خبرتك (سباكة، كهرباء، نجارة...).',
-                  isDarkMode: isDarkMode,
-                  primaryColor: primaryColor,
-                ),
-                SizedBox(height: 16.h),
-                _buildStepCard(
-                  context,
-                  icon: Icons.verified_user,
-                  title: '3. التحقق من الهوية',
-                  description: 'قم بتحميل مستنداتك لبناء الثقة مع العملاء.',
-                  isDarkMode: isDarkMode,
-                  primaryColor: primaryColor,
-                ),
-                SizedBox(height: 48.h),
-                // Buttons
-                KadmatPrimaryButton(
-                  label: 'ابدأ التسجيل',
-                  icon: Icons.app_registration_rounded,
-                  onPressed: () => context.push(AppRoutes.technicianRegister),
-                  backgroundColor: primaryColor,
-                  foregroundColor: Colors.white,
-                ),
-                SizedBox(height: 12.h),
-                KadmatSecondaryButton(
-                  label: 'لدي حساب بالفعل؟ تسجيل الدخول',
-                  icon: Icons.login_rounded,
-                  onPressed: () => context.push(AppRoutes.technicianLogin),
-                ),
-              ],
+                  SizedBox(height: 12.h),
+                  const _StepCard(
+                    number: '3',
+                    icon: Icons.verified_user_outlined,
+                    title: 'أكمل التحقق المهني',
+                    description:
+                        'أضف المستندات المطلوبة لبناء الثقة مع العميل وتفعيل الحساب بشكل صحيح.',
+                  ),
+                  SizedBox(height: 18.h),
+                  const _FocusCard(
+                    icon: Icons.info_outline,
+                    title: 'قبل أن تضغط تسجيل',
+                    description:
+                        'إذا كان لديك حساب فني سابق، لا تنشئ حسابًا جديدًا. ادخل مباشرة إلى شاشة تسجيل الدخول.',
+                  ),
+                  SizedBox(height: 22.h),
+                  KadmatPrimaryButton(
+                    label: 'ابدأ تسجيل الفني',
+                    icon: Icons.app_registration_rounded,
+                    onPressed: () => context.push(AppRoutes.technicianRegister),
+                  ),
+                  SizedBox(height: 12.h),
+                  KadmatSecondaryButton(
+                    label: 'لدي حساب فني بالفعل',
+                    icon: Icons.login_rounded,
+                    onPressed: () => context.push(AppRoutes.technicianLogin),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
       ),
     );
   }
+}
 
-  Widget _buildStepCard(
-    BuildContext context, {
-    required IconData icon,
-    required String title,
-    required String description,
-    required bool isDarkMode,
-    required Color primaryColor,
-  }) {
-    return KadmatCard(
-      padding: EdgeInsets.all(16.w),
+class _HeroCard extends StatelessWidget {
+  const _HeroCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.all(22.w),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(30.r),
+        gradient: const LinearGradient(
+          begin: Alignment.topRight,
+          end: Alignment.bottomLeft,
+          colors: [Color(0xFF17313B), Color(0xFF0D1E25)],
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 56.w,
+            height: 56.w,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(18.r),
+            ),
+            child: Icon(
+              Icons.engineering_rounded,
+              color: Colors.white,
+              size: 26.s,
+            ),
+          ),
+          SizedBox(height: 16.h),
+          Text(
+            'ادخل Kadmat كفني محترف',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 26.fz,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          SizedBox(height: 8.h),
+          Text(
+            'هذه المساحة مخصصة للفني الذي يريد إدارة الطلبات، التسعير، المتابعة، والمحفظة من تجربة تشغيلية بسيطة ومباشرة.',
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.76),
+              fontSize: 13.fz,
+              height: 1.6,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FocusCard extends StatelessWidget {
+  const _FocusCard({
+    required this.icon,
+    required this.title,
+    required this.description,
+  });
+
+  final IconData icon;
+  final String title;
+  final String description;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.all(18.w),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24.r),
+        border: Border.all(color: KadmatColors.lightBorder),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 18,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            width: 40.w,
-            height: 40.w,
+            width: 46.w,
+            height: 46.w,
             decoration: BoxDecoration(
-              color: primaryColor.withValues(alpha: 0.2),
-              shape: BoxShape.circle,
+              color: KadmatColors.brandAccent,
+              borderRadius: BorderRadius.circular(16.r),
             ),
-            child: Icon(icon, color: primaryColor, size: 24.s),
+            child: Icon(icon, color: KadmatColors.brandSecondary, size: 22.s),
           ),
-          SizedBox(width: 16.w),
+          SizedBox(width: 12.w),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -162,21 +191,133 @@ class TechnicianLandingScreen extends StatelessWidget {
                 Text(
                   title,
                   style: TextStyle(
-                    fontSize: 16.fz,
-                    fontWeight: FontWeight.bold,
-                    color: isDarkMode
-                        ? KadmatColors.darkTextPrimary
-                        : KadmatColors.lightTextPrimary,
+                    color: KadmatColors.lightTextPrimary,
+                    fontSize: 15.fz,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
-                SizedBox(height: 4.h),
+                SizedBox(height: 6.h),
                 Text(
                   description,
                   style: TextStyle(
-                    fontSize: 14.fz,
-                    color: isDarkMode
-                        ? KadmatColors.darkTextSecondary
-                        : KadmatColors.lightTextSecondary,
+                    color: KadmatColors.lightTextSecondary,
+                    fontSize: 12.6.fz,
+                    height: 1.55,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SectionLabel extends StatelessWidget {
+  const _SectionLabel({required this.title, required this.subtitle});
+
+  final String title;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: TextStyle(
+            color: KadmatColors.lightTextPrimary,
+            fontSize: 17.fz,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        SizedBox(height: 4.h),
+        Text(
+          subtitle,
+          style: TextStyle(
+            color: KadmatColors.lightTextSecondary,
+            fontSize: 12.6.fz,
+            height: 1.5,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _StepCard extends StatelessWidget {
+  const _StepCard({
+    required this.number,
+    required this.icon,
+    required this.title,
+    required this.description,
+  });
+
+  final String number;
+  final IconData icon;
+  final String title;
+  final String description;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.all(18.w),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24.r),
+        border: Border.all(color: KadmatColors.lightBorder),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 42.w,
+            height: 42.w,
+            decoration: BoxDecoration(
+              color: KadmatColors.brandPrimary.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(14.r),
+            ),
+            child: Center(
+              child: Text(
+                number,
+                style: TextStyle(
+                  color: KadmatColors.brandPrimary,
+                  fontSize: 16.fz,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ),
+          SizedBox(width: 12.w),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(icon, color: KadmatColors.brandSecondary, size: 18.s),
+                    SizedBox(width: 8.w),
+                    Expanded(
+                      child: Text(
+                        title,
+                        style: TextStyle(
+                          color: KadmatColors.lightTextPrimary,
+                          fontSize: 14.6.fz,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                SizedBox(height: 8.h),
+                Text(
+                  description,
+                  style: TextStyle(
+                    color: KadmatColors.lightTextSecondary,
+                    fontSize: 12.6.fz,
+                    height: 1.55,
                   ),
                 ),
               ],

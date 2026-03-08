@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/navigation/app_routes.dart';
 import '../../../core/design/kadmat_tokens.dart';
+import '../../../core/utils/error_handler.dart';
 import '../../../core/widgets/kadmat_components.dart';
 import 'auth_controller.dart';
 
@@ -194,7 +195,7 @@ class _TechnicianLoginScreenState extends ConsumerState<TechnicianLoginScreen> {
                                 ),
                               ),
                               child: Text(
-                                state.error.toString(),
+                                ErrorHandler.getMessage(state.error),
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
                                   color: KadmatColors.stateError,
