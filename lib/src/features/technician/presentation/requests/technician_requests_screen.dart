@@ -200,12 +200,15 @@ class _TechnicianRequestsScreenState
                   ),
                 Padding(
                   padding: EdgeInsets.fromLTRB(16.w, 12.h, 16.w, 8.h),
-                  child: _buildNewRequestsControls(),
+                  child: _buildNewRequestsFocusCard(
+                    queueJobs: queueJobs,
+                    isLocked: isLocked,
+                  ),
                 ),
-                if (queueJobs.isNotEmpty)
+                if (queueJobs.length > 1)
                   Padding(
                     padding: EdgeInsets.fromLTRB(16.w, 0, 16.w, 8.h),
-                    child: _buildNewRequestsHealthStrip(queueJobs),
+                    child: _buildNewRequestsControls(),
                   ),
                 Expanded(
                   child: RefreshIndicator(
@@ -503,86 +506,81 @@ class _TechnicianRequestsScreenState
     );
   }
 
-  Widget _buildNewRequestsHealthStrip(List<Job> jobs) {
-    if (jobs.isEmpty) return const SizedBox.shrink();
-    final now = DateTime.now();
-    final waits = jobs
-        .map((job) => now.difference(job.createdAt).inMinutes.clamp(0, 1440))
-        .toList();
-    final avgWait =
-        (waits.fold<int>(0, (sum, item) => sum + item) / waits.length).round();
-    final maxWait = waits.fold<int>(0, (max, item) => item > max ? item : max);
-    final urgentCount = jobs.where(_isUrgentJob).length;
+  Widget _buildNewRequestsFocusCard({
+    required List<Job> queueJobs,
+    required bool isLocked,
+  }) {
+    final urgentCount = queueJobs.where(_isUrgentJob).length;
+    final title = isLocked
+        ? 'الخطوة التالية: أنهِ طلبك الحالي أولًا'
+        : queueJobs.isEmpty
+        ? 'لا يوجد طلب مناسب الآن'
+        : queueJobs.length == 1
+        ? 'لديك طلب واحد مناسب الآن'
+        : 'ابدأ بأعلى طلب مناسب ثم راجع الباقي';
+    final description = isLocked
+        ? 'لن تتمكن من قبول طلب جديد حتى تنتهي من الطلب الجاري أو ينتقل إلى مرحلة الإغلاق.'
+        : queueJobs.isEmpty
+        ? 'أبقِ التطبيق في وضع متصل، وسنعرض هنا أي طلب جديد فور وصوله ضمن نطاقك.'
+        : queueJobs.length == 1
+        ? 'افتح بطاقة الطلب الظاهرة وقرّر بسرعة إن كنت ستقدم عرضك الآن.'
+        : urgentCount > 0
+        ? 'يوجد $urgentCount طلبات عاجلة الآن. ابدأ بالبطاقة الأولى، ثم استخدم الفرز فقط إذا احتجت ترتيبًا مختلفًا.'
+        : 'ابدأ بالبطاقة الأولى لأنها أعلى أولوية حاليًا، ثم استخدم الفرز إذا أردت تغيير الترتيب.';
 
     return Container(
       width: double.infinity,
-      padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h),
+      padding: EdgeInsets.all(16.w),
       decoration: BoxDecoration(
-        color: Theme.of(context).cardColor.withValues(alpha: 0.75),
-        borderRadius: BorderRadius.circular(12.r),
-        border: Border.all(
-          color: Theme.of(context).primaryColor.withValues(alpha: 0.22),
-        ),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22.r),
+        border: Border.all(color: KadmatColors.lightBorder),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: _buildHealthMetric(
-              icon: Icons.list_alt_rounded,
-              title: 'المتاح',
-              value: '${jobs.length}',
+          Container(
+            width: 44.w,
+            height: 44.w,
+            decoration: BoxDecoration(
+              color: KadmatColors.brandAccent,
+              borderRadius: BorderRadius.circular(16.r),
+            ),
+            child: Icon(
+              isLocked
+                  ? Icons.lock_outline_rounded
+                  : Icons.track_changes_rounded,
+              color: KadmatColors.brandSecondary,
+              size: 20.s,
             ),
           ),
+          SizedBox(width: 12.w),
           Expanded(
-            child: _buildHealthMetric(
-              icon: Icons.alarm,
-              title: 'العاجل',
-              value: '$urgentCount',
-            ),
-          ),
-          Expanded(
-            child: _buildHealthMetric(
-              icon: Icons.timelapse_rounded,
-              title: 'متوسط الانتظار',
-              value: avgWait < 1 ? 'أقل من د' : '$avgWait د',
-            ),
-          ),
-          Expanded(
-            child: _buildHealthMetric(
-              icon: Icons.schedule_rounded,
-              title: 'أطول انتظار',
-              value: maxWait < 1 ? 'أقل من د' : '$maxWait د',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 15.fz,
+                    fontWeight: FontWeight.w800,
+                    color: KadmatColors.lightTextPrimary,
+                  ),
+                ),
+                SizedBox(height: 6.h),
+                Text(
+                  description,
+                  style: TextStyle(
+                    fontSize: 12.5.fz,
+                    height: 1.55,
+                    color: KadmatColors.lightTextSecondary,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildHealthMetric({
-    required IconData icon,
-    required String title,
-    required String value,
-  }) {
-    return Column(
-      children: [
-        Icon(icon, size: 16.s, color: Theme.of(context).primaryColor),
-        SizedBox(height: 4.h),
-        Text(
-          title,
-          style: TextStyle(
-            fontSize: 10.fz,
-            color: Theme.of(context).textTheme.bodySmall?.color,
-          ),
-          textAlign: TextAlign.center,
-        ),
-        SizedBox(height: 2.h),
-        Text(
-          value,
-          style: TextStyle(fontSize: 12.fz, fontWeight: FontWeight.bold),
-          textAlign: TextAlign.center,
-        ),
-      ],
     );
   }
 

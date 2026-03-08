@@ -119,6 +119,17 @@ class _CustomerJobTrackingScreenState
         SliverToBoxAdapter(
           child: Padding(
             padding: EdgeInsets.symmetric(horizontal: 18.w),
+            child: _TrackingNextStepCard(
+              title: _getNextStepTitle(job.status),
+              description: _getNextStepDescription(job.status),
+              icon: _getNextStepIcon(job.status),
+            ),
+          ),
+        ),
+        SliverToBoxAdapter(child: SizedBox(height: 14.h)),
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: 18.w),
             child: _buildMapPanel(
               job: job,
               jobLocation: jobLocation,
@@ -395,6 +406,69 @@ class _CustomerJobTrackingScreenState
         return 'جاري التنفيذ...';
     }
   }
+
+  String _getNextStepTitle(String status) {
+    final normalizedStatus = JobStatus.normalize(status);
+    switch (normalizedStatus) {
+      case JobStatus.accepted:
+      case JobStatus.onTheWay:
+        return 'الخطوة التالية: تابع وصول الفني';
+      case JobStatus.arrived:
+        return 'الخطوة التالية: استقبل الفني وابدأ التنسيق';
+      case JobStatus.inProgress:
+        return 'الخطوة التالية: راقب التنفيذ فقط';
+      case JobStatus.pendingConfirm:
+        return 'الخطوة التالية: راجع النتيجة وأكّد الإكمال';
+      case JobStatus.completed:
+        return 'الخطوة التالية: أكمل الدفع';
+      case JobStatus.rated:
+        return 'الطلب أُغلق بنجاح';
+      default:
+        return 'الخطوة التالية: تابع حالة الطلب';
+    }
+  }
+
+  String _getNextStepDescription(String status) {
+    final normalizedStatus = JobStatus.normalize(status);
+    switch (normalizedStatus) {
+      case JobStatus.accepted:
+      case JobStatus.onTheWay:
+        return 'الخريطة أدناه تساعدك على متابعة الطريق، وستتحدث الحالة تلقائيًا عندما يقترب الفني أو يصل.';
+      case JobStatus.arrived:
+        return 'الفني أصبح في موقعك. استخدم المحادثة فقط إذا احتجت تنسيقًا سريعًا قبل بدء العمل.';
+      case JobStatus.inProgress:
+        return 'العمل جارٍ الآن. لا تحتاج لإجراء جديد إلا إذا طلب الفني توضيحًا أو أردت إرسال رسالة.';
+      case JobStatus.pendingConfirm:
+        return 'افتح تفاصيل التنفيذ والصور، ثم أكّد اكتمال الخدمة عندما تتأكد أن كل شيء انتهى كما طلبت.';
+      case JobStatus.completed:
+        return 'راجع المبلغ النهائي وانتقل إلى خطوة الدفع لإغلاق الطلب، ثم ستتمكن من إضافة تقييمك.';
+      case JobStatus.rated:
+        return 'كل شيء مكتمل الآن. يمكنك مراجعة السجل أو مغادرة الصفحة دون الحاجة لأي إجراء إضافي.';
+      default:
+        return 'هذه الشاشة تعرض لك المرحلة الحالية، والموقع، وأقرب إجراء مطلوب منك في الوقت المناسب.';
+    }
+  }
+
+  IconData _getNextStepIcon(String status) {
+    final normalizedStatus = JobStatus.normalize(status);
+    switch (normalizedStatus) {
+      case JobStatus.accepted:
+      case JobStatus.onTheWay:
+        return Icons.route_rounded;
+      case JobStatus.arrived:
+        return Icons.handshake_outlined;
+      case JobStatus.inProgress:
+        return Icons.construction_rounded;
+      case JobStatus.pendingConfirm:
+        return Icons.fact_check_outlined;
+      case JobStatus.completed:
+        return Icons.payments_outlined;
+      case JobStatus.rated:
+        return Icons.verified_rounded;
+      default:
+        return Icons.navigation_outlined;
+    }
+  }
 }
 
 class _LocationMarker extends StatelessWidget {
@@ -540,6 +614,77 @@ class _TrackingHeroCard extends StatelessWidget {
                     : KadmatColors.stateWarning,
               ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TrackingNextStepCard extends StatelessWidget {
+  const _TrackingNextStepCard({
+    required this.title,
+    required this.description,
+    required this.icon,
+  });
+
+  final String title;
+  final String description;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(16.w),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24.r),
+        border: Border.all(color: KadmatColors.lightBorder),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.035),
+            blurRadius: 18,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 46.w,
+            height: 46.w,
+            decoration: BoxDecoration(
+              color: KadmatColors.brandAccent,
+              borderRadius: BorderRadius.circular(16.r),
+            ),
+            child: Icon(icon, size: 22.s, color: KadmatColors.brandSecondary),
+          ),
+          SizedBox(width: 12.w),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 15.fz,
+                    fontWeight: FontWeight.w800,
+                    color: KadmatColors.lightTextPrimary,
+                  ),
+                ),
+                SizedBox(height: 6.h),
+                Text(
+                  description,
+                  style: TextStyle(
+                    fontSize: 12.5.fz,
+                    height: 1.55,
+                    color: KadmatColors.lightTextSecondary,
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),

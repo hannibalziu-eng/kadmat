@@ -407,6 +407,11 @@ class _OrderCard extends StatelessWidget {
     final totalPrice =
         job.finalPrice ?? job.technicianPrice ?? job.initialPrice ?? 0.0;
     final createdLabel = '${job.createdAt.day}/${job.createdAt.month}';
+    final primaryActionLabel = onRate != null ? 'تقييم الآن' : 'متابعة';
+    final primaryActionIcon = onRate != null
+        ? Icons.star_outline_rounded
+        : Icons.arrow_outward_rounded;
+    final primaryAction = onRate ?? onOpen;
 
     return Container(
       padding: EdgeInsets.all(18.w),
@@ -535,42 +540,63 @@ class _OrderCard extends StatelessWidget {
               ),
             ),
           ],
+          SizedBox(height: 14.h),
+          Container(
+            width: double.infinity,
+            padding: EdgeInsets.all(12.w),
+            decoration: BoxDecoration(
+              color: Theme.of(context).scaffoldBackgroundColor,
+              borderRadius: BorderRadius.circular(18.r),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  Icons.flag_outlined,
+                  size: 18.s,
+                  color: KadmatColors.lightTextSecondary,
+                ),
+                SizedBox(width: 10.w),
+                Expanded(
+                  child: Text(
+                    _nextStepText(status),
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: KadmatColors.lightTextSecondary,
+                      fontWeight: FontWeight.w600,
+                      height: 1.5,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
           SizedBox(height: 16.h),
-          Wrap(
-            spacing: 8.w,
-            runSpacing: 8.h,
+          Row(
             children: [
-              KadmatPrimaryButton(
-                label: 'متابعة',
-                icon: Icons.arrow_outward_rounded,
-                onPressed: onOpen,
+              Expanded(
+                child: KadmatPrimaryButton(
+                  label: primaryActionLabel,
+                  icon: primaryActionIcon,
+                  onPressed: primaryAction,
+                  backgroundColor: onRate != null
+                      ? KadmatColors.stateSuccess
+                      : null,
+                  foregroundColor: onRate != null ? Colors.white : null,
+                ),
               ),
-              if (onChat != null)
-                KadmatSecondaryButton(
-                  label: 'مراسلة',
-                  icon: Icons.chat_bubble_outline_rounded,
-                  onPressed: onChat,
+              if (onChat != null ||
+                  onProfile != null ||
+                  onRate != null ||
+                  onCancel != null) ...[
+                SizedBox(width: 10.w),
+                _OrderOverflowMenu(
+                  onOpen: onOpen,
+                  onChat: onChat,
+                  onProfile: onProfile,
+                  onRate: onRate,
+                  onCancel: onCancel,
                 ),
-              if (onProfile != null)
-                KadmatSecondaryButton(
-                  label: 'عرض الفني',
-                  icon: Icons.person_outline_rounded,
-                  onPressed: onProfile,
-                ),
-              if (onRate != null)
-                KadmatPrimaryButton(
-                  label: 'تقييم',
-                  icon: Icons.star_outline_rounded,
-                  onPressed: onRate,
-                  backgroundColor: KadmatColors.stateSuccess,
-                  foregroundColor: Colors.white,
-                ),
-              if (onCancel != null)
-                TextButton.icon(
-                  onPressed: onCancel,
-                  icon: const Icon(Icons.cancel_outlined),
-                  label: const Text('إلغاء'),
-                ),
+              ],
             ],
           ),
         ],
@@ -625,6 +651,137 @@ class _OrderCard extends StatelessWidget {
       default:
         return status;
     }
+  }
+
+  static String _nextStepText(String status) {
+    switch (status) {
+      case JobStatus.searching:
+      case JobStatus.pending:
+        return 'الخطوة التالية: انتظر العروض المناسبة أو افتح الطلب لمراجعة حالته الحالية.';
+      case JobStatus.accepted:
+      case JobStatus.pricePending:
+        return 'الخطوة التالية: راجع السعر أو تفاصيل التنفيذ ثم أكمل القرار من داخل الطلب.';
+      case JobStatus.onTheWay:
+      case JobStatus.arrived:
+      case JobStatus.inProgress:
+        return 'الخطوة التالية: افتح الطلب لمتابعة الفني، ثم استخدم المحادثة عند الحاجة.';
+      case JobStatus.pendingConfirm:
+        return 'الخطوة التالية: راجع النتيجة داخل الطلب ثم أكّد اكتمال الخدمة.';
+      case JobStatus.completed:
+        return 'الخطوة التالية: ابدأ التقييم الآن لإغلاق التجربة بشكل كامل.';
+      case JobStatus.rated:
+        return 'تم إغلاق الطلب. يمكنك فتح التفاصيل للاطلاع على السجل النهائي.';
+      case JobStatus.cancelled:
+        return 'الطلب ملغي. افتح التفاصيل إذا احتجت مراجعة ما حدث.';
+      case JobStatus.noTechnicianFound:
+        return 'لم يصل فني مناسب بعد. افتح الطلب إذا أردت المراجعة أو الإلغاء.';
+      default:
+        return 'الخطوة التالية: افتح الطلب لمتابعة الحالة واتخاذ القرار المناسب.';
+    }
+  }
+}
+
+enum _OrderAction { open, chat, profile, rate, cancel }
+
+class _OrderOverflowMenu extends StatelessWidget {
+  const _OrderOverflowMenu({
+    required this.onOpen,
+    this.onChat,
+    this.onProfile,
+    this.onRate,
+    this.onCancel,
+  });
+
+  final VoidCallback onOpen;
+  final VoidCallback? onChat;
+  final VoidCallback? onProfile;
+  final VoidCallback? onRate;
+  final VoidCallback? onCancel;
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<_OrderAction>(
+      tooltip: 'خيارات إضافية',
+      onSelected: (action) {
+        switch (action) {
+          case _OrderAction.open:
+            onOpen();
+            break;
+          case _OrderAction.chat:
+            onChat?.call();
+            break;
+          case _OrderAction.profile:
+            onProfile?.call();
+            break;
+          case _OrderAction.rate:
+            onRate?.call();
+            break;
+          case _OrderAction.cancel:
+            onCancel?.call();
+            break;
+        }
+      },
+      itemBuilder: (context) => [
+        const PopupMenuItem(
+          value: _OrderAction.open,
+          child: ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: Icon(Icons.open_in_new_rounded),
+            title: Text('فتح التفاصيل'),
+          ),
+        ),
+        if (onChat != null)
+          const PopupMenuItem(
+            value: _OrderAction.chat,
+            child: ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(Icons.chat_bubble_outline_rounded),
+              title: Text('مراسلة'),
+            ),
+          ),
+        if (onProfile != null)
+          const PopupMenuItem(
+            value: _OrderAction.profile,
+            child: ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(Icons.person_outline_rounded),
+              title: Text('عرض الفني'),
+            ),
+          ),
+        if (onRate != null)
+          const PopupMenuItem(
+            value: _OrderAction.rate,
+            child: ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(Icons.star_outline_rounded),
+              title: Text('تقييم'),
+            ),
+          ),
+        if (onCancel != null)
+          const PopupMenuItem(
+            value: _OrderAction.cancel,
+            child: ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(Icons.cancel_outlined),
+              title: Text('إلغاء الطلب'),
+            ),
+          ),
+      ],
+      child: Container(
+        width: 48.w,
+        height: 48.w,
+        decoration: BoxDecoration(
+          color: Theme.of(context).scaffoldBackgroundColor,
+          borderRadius: BorderRadius.circular(16.r),
+          border: Border.all(color: KadmatColors.lightBorder),
+        ),
+        child: Icon(
+          Icons.more_horiz_rounded,
+          size: 22.s,
+          color: KadmatColors.lightTextPrimary,
+        ),
+      ),
+    );
   }
 }
 

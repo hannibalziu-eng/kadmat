@@ -201,6 +201,22 @@ class _CustomerSearchingScreenState
                 mediaCount: mediaCount,
               ),
             ),
+            Padding(
+              padding: EdgeInsets.fromLTRB(18.w, 0, 18.w, 14.h),
+              child: _CustomerFlowSurface(
+                child: _CustomerFlowNextStepCard(
+                  icon: _offers.isEmpty
+                      ? Icons.hourglass_top_rounded
+                      : Icons.touch_app_rounded,
+                  title: _offers.isEmpty
+                      ? 'لا تحتاج إلى إجراء الآن'
+                      : 'الخطوة التالية: اختر فنيًا واحدًا',
+                  description: _offers.isEmpty
+                      ? 'طلبك نشط الآن ويظهر للفنيين القريبين. أبقِ الشاشة مفتوحة أو عد لاحقًا وستصل العروض هنا تلقائيًا.'
+                      : 'ابدأ بأفضل عرض ظاهر أولًا، ثم افتح ملف الفني فقط إذا احتجت مقارنة إضافية قبل القبول.',
+                ),
+              ),
+            ),
             Expanded(
               child: Stack(
                 children: [
@@ -386,7 +402,7 @@ class _CustomerSearchingScreenState
                     ),
                     SizedBox(height: 4.h),
                     Text(
-                      'وصل طلب $serviceName. سنعرضه للفنيين القريبين ثم يمكنك مراجعة العروض واختيار الأنسب.',
+                      'وصل طلب $serviceName. نبحث الآن عن أقرب الفنيين المناسبين ثم نعرض لك العروض بشكل واضح للاختيار.',
                       style: TextStyle(
                         color: Colors.white.withValues(alpha: 0.74),
                         fontSize: 12.5.fz,
@@ -556,8 +572,8 @@ class _CustomerSearchingScreenState
                         children: [
                           Text(
                             _offers.isEmpty
-                                ? 'جاري استقبال العروض'
-                                : 'عروض الفنيين',
+                                ? 'نراقب العروض من أجلك'
+                                : 'اختر فنيًا واحدًا للمتابعة',
                             style: TextStyle(
                               fontSize: 18.fz,
                               fontWeight: FontWeight.w800,
@@ -567,8 +583,8 @@ class _CustomerSearchingScreenState
                           SizedBox(height: 4.h),
                           Text(
                             _offers.isEmpty
-                                ? 'ستظهر هنا العروض الحقيقية بمجرد وصولها من الفنيين القريبين.'
-                                : 'قارن السعر، التقييم، والخبرة ثم اختر الفني المناسب.',
+                                ? 'لا تحتاج إلى تحديث الصفحة. ستظهر هنا العروض الحقيقية بمجرد وصولها من الفنيين القريبين.'
+                                : 'ابدأ بأعلى عرض مناسب، ثم راجع الملف الشخصي فقط إذا احتجت قرارًا أدق.',
                             style: TextStyle(
                               color: KadmatColors.lightTextSecondary,
                               fontSize: 12.fz,
@@ -1014,105 +1030,56 @@ class _CustomerTechnicianFoundScreenState
               padding: EdgeInsets.fromLTRB(18.w, 12.h, 18.w, 28.h),
               child: Column(
                 children: [
-                  Container(
-                    width: double.infinity,
-                    padding: EdgeInsets.all(22.w),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(28.r),
-                      gradient: const LinearGradient(
-                        begin: Alignment.topRight,
-                        end: Alignment.bottomLeft,
-                        colors: [Color(0xFF17313B), Color(0xFF0D1E25)],
-                      ),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Container(
-                          width: 56.w,
-                          height: 56.w,
-                          decoration: BoxDecoration(
-                            color: Colors.green.withValues(alpha: 0.18),
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(
-                            Icons.verified_rounded,
-                            color: Colors.greenAccent,
-                            size: 28.s,
-                          ),
+                  _CustomerFlowHero(
+                    icon: Icons.verified_rounded,
+                    eyebrow: 'تم تثبيت الفني',
+                    title: 'تم العثور على فني مناسب',
+                    subtitle:
+                        'لا تحتاج إلى إجراء الآن. ننتظر من الفني تحديد السعر أو الانتقال إلى المرحلة التالية، وسيتم نقلك تلقائيًا.',
+                    bottom: Wrap(
+                      spacing: 8.w,
+                      runSpacing: 8.h,
+                      children: const [
+                        _CustomerFlowPill(
+                          icon: Icons.verified_user_outlined,
+                          label: 'تم تثبيت الفني',
                         ),
-                        SizedBox(height: 16.h),
-                        Text(
-                          'تم العثور على فني مناسب',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 24.fz,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        SizedBox(height: 6.h),
-                        Text(
-                          'تم تثبيت الفني على طلبك. الخطوة التالية هي انتظار تحديد السعر أو الانتقال التلقائي عند وصوله.',
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.74),
-                            fontSize: 12.5.fz,
-                            height: 1.55,
-                          ),
-                        ),
-                        SizedBox(height: 16.h),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _FoundHeroMetric(
-                                label: 'الحالة',
-                                child: JobStatusBadge(status: job.status),
-                              ),
-                            ),
-                            SizedBox(width: 8.w),
-                            Expanded(
-                              child: _FoundHeroMetric(
-                                label: 'المرحلة الحالية',
-                                child: Text(
-                                  'بانتظار السعر',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 18.fz,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
+                        _CustomerFlowPill(
+                          icon: Icons.receipt_long_outlined,
+                          label: 'بانتظار السعر',
                         ),
                       ],
                     ),
                   ),
                   SizedBox(height: 18.h),
-                  Container(
-                    width: double.infinity,
-                    padding: EdgeInsets.all(18.w),
-                    decoration: BoxDecoration(
-                      color: AppTheme.surfaceDark,
-                      borderRadius: BorderRadius.circular(24.r),
+                  _CustomerFlowSurface(
+                    child: _CustomerFlowNextStepCard(
+                      icon: Icons.pause_circle_outline_rounded,
+                      title: 'الخطوة التالية: انتظر السعر فقط',
+                      description:
+                          'الطلب مثبت الآن على فني واحد. سننقلك تلقائيًا إلى شاشة مراجعة السعر عند وصوله، لذلك لا تحتاج إلى التنقل بين الشاشات.',
                     ),
+                  ),
+                  SizedBox(height: 16.h),
+                  _CustomerFlowSurface(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'مراحل الطلب',
+                          'ما الذي يحدث الآن؟',
                           style: TextStyle(
-                            color: Colors.white,
+                            color: KadmatColors.lightTextPrimary,
                             fontSize: 18.fz,
                             fontWeight: FontWeight.w800,
                           ),
                         ),
                         SizedBox(height: 6.h),
                         Text(
-                          'سنتابع نقل الطلب تلقائياً بمجرد أن يحدد الفني السعر أو ينتقل إلى المرحلة التالية.',
+                          'سنتابع نقل الطلب تلقائيًا بمجرد أن يحدد الفني السعر أو ينتقل إلى المرحلة التالية.',
                           style: TextStyle(
-                            color: Colors.white70,
-                            fontSize: 12.fz,
-                            height: 1.5,
+                            color: KadmatColors.lightTextSecondary,
+                            fontSize: 12.5.fz,
+                            height: 1.45,
                           ),
                         ),
                         SizedBox(height: 14.h),
@@ -1122,83 +1089,18 @@ class _CustomerTechnicianFoundScreenState
                   ),
                   if (job.technician != null) ...[
                     SizedBox(height: 16.h),
-                    Container(
-                      width: double.infinity,
-                      padding: EdgeInsets.all(18.w),
-                      decoration: BoxDecoration(
-                        color: AppTheme.surfaceDark,
-                        borderRadius: BorderRadius.circular(24.r),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'الفني المختار',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 18.fz,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          SizedBox(height: 6.h),
-                          Text(
-                            'يمكنك مراجعة بيانات الفني الآن، وسيظهر التواصل والمتابعة العملية في الخطوة التالية من الفلو.',
-                            style: TextStyle(
-                              color: Colors.white70,
-                              fontSize: 12.fz,
-                              height: 1.5,
-                            ),
-                          ),
-                          SizedBox(height: 14.h),
-                          ProfileCard(
-                            name: job.technician?['full_name'],
-                            phone: job.technician?['phone'],
-                            imageUrl: job.technician?['profile_image_url'],
-                            rating: (job.technician?['rating'] as num?)
-                                ?.toDouble(),
-                            label: 'الفني',
-                            showContactButtons: false,
-                          ),
-                        ],
+                    _CustomerFlowSurface(
+                      child: _CustomerFlowTechnicianCard(
+                        heading: 'الفني المختار',
+                        helperText:
+                            'يمكنك مراجعة بيانات الفني الآن، وسيظهر التواصل والتنفيذ العملي في الخطوة التالية من الفلو.',
+                        technician: job.technician!,
                       ),
                     ),
                   ],
                 ],
               ),
             ),
-    );
-  }
-}
-
-class _FoundHeroMetric extends StatelessWidget {
-  const _FoundHeroMetric({required this.label, required this.child});
-
-  final String label;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 12.h),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(18.r),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.68),
-              fontSize: 11.5.fz,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          SizedBox(height: 8.h),
-          child,
-        ],
-      ),
     );
   }
 }
@@ -1357,6 +1259,15 @@ class _CustomerPriceOfferScreenState
                               label: '${proposedPrice.toStringAsFixed(0)} ر.س',
                             ),
                           ],
+                        ),
+                      ),
+                      SizedBox(height: 16.h),
+                      _CustomerFlowSurface(
+                        child: _CustomerFlowNextStepCard(
+                          icon: Icons.rule_folder_outlined,
+                          title: 'القرار المطلوب الآن',
+                          description:
+                              'اقبل السعر إذا كان مناسبًا لك وابدأ التنفيذ، أو ارفض فقط إذا كنت مستعدًا لإلغاء الطلب الحالي بالكامل.',
                         ),
                       ),
                       SizedBox(height: 16.h),
@@ -1733,6 +1644,18 @@ class _CustomerInProgressScreenState
                         ),
                       ),
                       SizedBox(height: 16.h),
+                      _CustomerFlowSurface(
+                        child: _CustomerFlowNextStepCard(
+                          icon: canUseCommunication
+                              ? Icons.chat_bubble_outline_rounded
+                              : Icons.visibility_outlined,
+                          title: 'الخطوة التالية: راقب التنفيذ فقط',
+                          description: canUseCommunication
+                              ? 'لا تحتاج إلى قرار جديد الآن. راقب التقدم من هذه الشاشة واستخدم المحادثة فقط إذا احتجت توضيحًا سريعًا.'
+                              : 'لا تحتاج إلى قرار جديد الآن. راقب التقدم من هذه الشاشة وسننقلك تلقائيًا عندما ينتقل الطلب للخطوة التالية.',
+                        ),
+                      ),
+                      SizedBox(height: 16.h),
                       Container(
                         width: double.infinity,
                         padding: EdgeInsets.all(18.w),
@@ -1848,30 +1771,6 @@ class _CustomerInProgressScreenState
                           ),
                         ),
                       ],
-                      SizedBox(height: 16.h),
-                      _CustomerFlowSurface(
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Icon(
-                              Icons.info_outline_rounded,
-                              color: KadmatColors.stateInfo,
-                              size: 20.s,
-                            ),
-                            SizedBox(width: 10.w),
-                            Expanded(
-                              child: Text(
-                                'عند انتهاء الفني ستنتقل تلقائيًا إلى خطوة تأكيد الإكمال ثم الدفع ثم التقييم.',
-                                style: TextStyle(
-                                  color: KadmatColors.lightTextSecondary,
-                                  fontSize: 12.5.fz,
-                                  height: 1.5,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
                     ],
                   ),
                 ),
@@ -1995,6 +1894,20 @@ class _CustomerRateScreenState extends ConsumerState<CustomerRateScreen> {
                       icon: Icons.auto_awesome_rounded,
                       label: _ratingLabel(_rating),
                     ),
+            ),
+            SizedBox(height: 16.h),
+            _CustomerFlowSurface(
+              child: _CustomerFlowNextStepCard(
+                icon: _rating == 0
+                    ? Icons.touch_app_rounded
+                    : Icons.send_outlined,
+                title: _rating == 0
+                    ? 'الخطوة التالية: اختر تقييمك'
+                    : 'الخطوة التالية: أرسل التقييم',
+                description: _rating == 0
+                    ? 'ابدأ بالنجوم أولًا. لا تحتاج إلى كتابة ملاحظة إلا إذا كان لديك شيء مفيد تريد إضافته.'
+                    : 'النجوم جاهزة الآن. يمكنك الإرسال مباشرة أو إضافة ملاحظة قصيرة قبل إنهاء الطلب.',
+              ),
             ),
             SizedBox(height: 16.h),
             _CustomerFlowSurface(
@@ -2283,6 +2196,15 @@ class _CustomerCompletedScreenState
                       ),
                       SizedBox(height: 16.h),
                       _CustomerFlowSurface(
+                        child: const _CustomerFlowNextStepCard(
+                          icon: Icons.home_outlined,
+                          title: 'لا يوجد إجراء متبقٍ',
+                          description:
+                              'الطلب أُغلق بالكامل. راجع الملخص إذا أردت، ثم عد للرئيسية أو ابدأ طلبًا جديدًا عند الحاجة.',
+                        ),
+                      ),
+                      SizedBox(height: 16.h),
+                      _CustomerFlowSurface(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -2374,32 +2296,6 @@ class _CustomerCompletedScreenState
                           ),
                         ),
                       ],
-                      SizedBox(height: 16.h),
-                      _CustomerFlowSurface(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'ما الذي تم الآن؟',
-                              style: TextStyle(
-                                color: KadmatColors.lightTextPrimary,
-                                fontSize: 18.fz,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                            SizedBox(height: 12.h),
-                            const _CustomerFlowBullet(
-                              text:
-                                  'أغلق الطلب وتم حفظ السعر والتقييم ضمن سجلك الشخصي.',
-                            ),
-                            SizedBox(height: 10.h),
-                            const _CustomerFlowBullet(
-                              text:
-                                  'يمكنك الآن العودة للرئيسية أو بدء طلب جديد عند الحاجة.',
-                            ),
-                          ],
-                        ),
-                      ),
                       SizedBox(height: 22.h),
                       SizedBox(
                         width: double.infinity,
@@ -2600,6 +2496,61 @@ class _CustomerFlowMetricTile extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _CustomerFlowNextStepCard extends StatelessWidget {
+  const _CustomerFlowNextStepCard({
+    required this.icon,
+    required this.title,
+    required this.description,
+  });
+
+  final IconData icon;
+  final String title;
+  final String description;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 46.w,
+          height: 46.w,
+          decoration: BoxDecoration(
+            color: KadmatColors.brandAccent,
+            borderRadius: BorderRadius.circular(16.r),
+          ),
+          child: Icon(icon, color: KadmatColors.brandSecondary, size: 22.s),
+        ),
+        SizedBox(width: 12.w),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: TextStyle(
+                  color: KadmatColors.lightTextPrimary,
+                  fontSize: 15.fz,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              SizedBox(height: 6.h),
+              Text(
+                description,
+                style: TextStyle(
+                  color: KadmatColors.lightTextSecondary,
+                  fontSize: 12.5.fz,
+                  height: 1.55,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

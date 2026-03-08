@@ -55,8 +55,6 @@ class _TechnicianDashboardScreenState
   _NearbySortMode _nearbySortMode = _NearbySortMode.newest;
   _NearbyCardMode _nearbyCardMode = _NearbyCardMode.detailed;
   bool _urgentOnly = false;
-  final List<int> _dispatchObservedWaitSeconds = <int>[];
-  int? _lastObservedWaitSeconds;
 
   @override
   void initState() {
@@ -116,8 +114,6 @@ class _TechnicianDashboardScreenState
           .difference(job.createdAt)
           .inSeconds
           .clamp(0, 86400);
-      _dispatchObservedWaitSeconds.add(waitSeconds);
-      _lastObservedWaitSeconds = waitSeconds;
       LoggerService.i(
         'dispatch.telemetry nearby_job_visible '
         'job_id=${job.id} '
@@ -128,12 +124,6 @@ class _TechnicianDashboardScreenState
 
     if (_telemetryLoggedJobs.length > 3000) {
       _telemetryLoggedJobs.clear();
-    }
-    if (_dispatchObservedWaitSeconds.length > 3000) {
-      _dispatchObservedWaitSeconds.removeRange(
-        0,
-        _dispatchObservedWaitSeconds.length - 3000,
-      );
     }
   }
 
@@ -374,7 +364,7 @@ class _TechnicianDashboardScreenState
                   _buildSectionHeader(
                     title: 'طلبات قريبة الآن',
                     subtitle:
-                        'راجع الطلبات الأحدث حولك ثم قدّم عرضك أو افتح القائمة الكاملة.',
+                        'ابدأ بأقرب طلب مناسب الآن، ثم افتح القائمة الكاملة إذا أردت خيارات أكثر.',
                     actionLabel: 'عرض الكل',
                     onAction: () {
                       ref.read(technicianTabIndexProvider.notifier).state = 1;
@@ -388,10 +378,12 @@ class _TechnicianDashboardScreenState
                     ),
                   ],
                   SizedBox(height: 8.h),
-                  _buildSortControls(location),
-                  SizedBox(height: 8.h),
-                  _buildDispatchTelemetryCard(),
+                  _buildFocusCard(nearbyJobsCount: nearbyJobsCount),
                   SizedBox(height: 12.h),
+                  if (_isOnline && nearbyJobsCount > 1) ...[
+                    _buildSortControls(location),
+                    SizedBox(height: 12.h),
+                  ],
 
                   // Real-time jobs list
                   dispatchFeedAsync.when(
@@ -1012,37 +1004,69 @@ class _TechnicianDashboardScreenState
     );
   }
 
-  Widget _buildDispatchTelemetryCard() {
-    if (_dispatchObservedWaitSeconds.isEmpty) {
-      return const SizedBox.shrink();
-    }
-    final total = _dispatchObservedWaitSeconds.fold<int>(
-      0,
-      (sum, value) => sum + value,
-    );
-    final avgSeconds = (total / _dispatchObservedWaitSeconds.length).round();
-    final lastSeconds = _lastObservedWaitSeconds ?? avgSeconds;
+  Widget _buildFocusCard({required int nearbyJobsCount}) {
+    final title = !_isOnline
+        ? 'فعّل الاتصال لتبدأ استقبال الطلبات'
+        : nearbyJobsCount == 0
+        ? 'لا يوجد طلب مناسب الآن'
+        : nearbyJobsCount == 1
+        ? 'لديك طلب واحد مناسب الآن'
+        : 'ابدأ بأعلى طلب مناسب ثم راجع الباقي';
+    final description = !_isOnline
+        ? 'لن تظهر لك الطلبات الجديدة حتى تعود إلى وضع متصل من مؤشر الحالة أدناه.'
+        : nearbyJobsCount == 0
+        ? 'أبقِ التطبيق مفتوحًا وتابع حالة الاتصال، وستظهر الطلبات الجديدة هنا تلقائيًا.'
+        : nearbyJobsCount == 1
+        ? 'راجع تفاصيل الطلب الظاهر وقدّم عرضًا سريعًا إذا كان مناسبًا لك.'
+        : 'اعرض البطاقة الأولى أولًا، ثم استخدم الفرز فقط إذا أردت تغيير ترتيب الأولوية.';
 
     return Container(
       width: double.infinity,
-      padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h),
+      padding: EdgeInsets.all(16.w),
       decoration: BoxDecoration(
-        color: Colors.teal.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(12.r),
-        border: Border.all(color: Colors.teal.withValues(alpha: 0.25)),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22.r),
+        border: Border.all(color: KadmatColors.lightBorder),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.speed_rounded, size: 18.s, color: Colors.teal),
-          SizedBox(width: 8.w),
+          Container(
+            width: 44.w,
+            height: 44.w,
+            decoration: BoxDecoration(
+              color: KadmatColors.brandAccent,
+              borderRadius: BorderRadius.circular(16.r),
+            ),
+            child: Icon(
+              _isOnline ? Icons.track_changes_rounded : Icons.wifi_off_rounded,
+              color: KadmatColors.brandSecondary,
+              size: 20.s,
+            ),
+          ),
+          SizedBox(width: 12.w),
           Expanded(
-            child: Text(
-              'أداء الوصول: متوسط ${avgSeconds}s | آخر طلب ${lastSeconds}s',
-              style: TextStyle(
-                fontSize: 12.fz,
-                color: Colors.teal,
-                fontWeight: FontWeight.w700,
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 15.fz,
+                    fontWeight: FontWeight.w800,
+                    color: KadmatColors.lightTextPrimary,
+                  ),
+                ),
+                SizedBox(height: 6.h),
+                Text(
+                  description,
+                  style: TextStyle(
+                    fontSize: 12.5.fz,
+                    height: 1.55,
+                    color: KadmatColors.lightTextSecondary,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
