@@ -367,7 +367,10 @@ try {
   await api(`/jobs/${jobId}/technician-progress`, {
     method: 'POST',
     token: technicianLogin.token,
-    body: { progress: 'start_work' },
+    body: {
+      progress: 'start_work',
+      pre_photos: [afterPhotoUrl],
+    },
   });
   await api(`/jobs/${jobId}/request-completion`, {
     method: 'POST',
