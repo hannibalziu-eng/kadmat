@@ -5,10 +5,12 @@ import 'package:flutter_scalify/flutter_scalify.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/app_theme.dart';
+import '../../../core/design/kadmat_tokens.dart';
 import '../../../core/navigation/app_routes.dart';
 import '../../../core/widgets/kadmat_toast.dart';
 import '../../../core/utils/error_handler.dart';
 import '../../../core/utils/service_name_formatter.dart';
+import '../../../core/widgets/kadmat_components.dart';
 import '../../../core/widgets/shimmer_skeletons.dart';
 import '../data/job_repository.dart';
 import '../domain/job.dart';
@@ -60,18 +62,17 @@ class _CustomerActiveJobScreenState
   Widget build(BuildContext context) {
     if (_job == null) {
       return Scaffold(
-        backgroundColor: AppTheme.backgroundDark,
+        backgroundColor: const Color(0xFFF2F6F7),
         appBar: AppBar(title: const Text('طلبك')),
         body: const DetailSkeleton(),
       );
     }
 
     return Scaffold(
-      backgroundColor: AppTheme.backgroundDark,
+      backgroundColor: const Color(0xFFF2F6F7),
       appBar: AppBar(
         title: Text(formatServiceDisplayName(_job!.service, fallback: 'طلبك')),
         centerTitle: true,
-        backgroundColor: Colors.transparent,
       ),
       body: _buildContent(),
     );
@@ -122,46 +123,53 @@ class _CustomerActiveJobScreenState
       if (!mounted) return;
       context.go(AppRoutes.buildCustomerSearchingPath(widget.jobId));
     });
-    return Center(
-      child: Padding(
-        padding: EdgeInsets.all(24.w),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            SizedBox(
-              width: 100.w,
-              height: 100.w,
-              child: CircularProgressIndicator(
-                strokeWidth: 6,
-                color: AppTheme.primaryColor,
-              ),
-            ),
-            SizedBox(height: 32.h),
-            Text(
-              'جاري البحث عن فني...',
-              style: TextStyle(
-                fontSize: 20.fz,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-            ),
-            SizedBox(height: 12.h),
-            Text(
-              'سيتم إعلامك عند قبول فني للطلب',
-              style: TextStyle(fontSize: 14.fz, color: Colors.white60),
-            ),
-            SizedBox(height: 32.h),
-            TextButton.icon(
-              onPressed: _cancelJob,
-              icon: const Icon(Icons.close, color: Colors.red),
-              label: const Text(
-                'إلغاء الطلب',
-                style: TextStyle(color: Colors.red),
-              ),
-            ),
-          ],
+    return _buildScrollablePage(
+      children: [
+        _buildHeroCard(
+          icon: Icons.search_rounded,
+          title: 'جارٍ البحث عن الفني المناسب',
+          subtitle:
+              'الطلب نشط الآن ويظهر للفنيين القريبين. لا تحتاج إلى أي إجراء في هذه اللحظة سوى المتابعة أو الإلغاء إذا غيرت رأيك.',
         ),
-      ),
+        SizedBox(height: 16.h),
+        _buildFocusCard(
+          icon: Icons.track_changes_outlined,
+          title: 'الخطوة التالية',
+          description:
+              'اترك الطلب كما هو وسنحدّثك فور وصول عرض مناسب. يمكنك مغادرة الشاشة والعودة لاحقًا بدون فقدان الحالة.',
+        ),
+        SizedBox(height: 16.h),
+        _buildSurface(
+          child: Column(
+            children: [
+              SizedBox(
+                width: 64.w,
+                height: 64.w,
+                child: CircularProgressIndicator(
+                  strokeWidth: 5,
+                  color: KadmatColors.brandPrimary,
+                ),
+              ),
+              SizedBox(height: 18.h),
+              Text(
+                'سيتم إشعارك فور قبول فني للطلب',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 14.fz,
+                  color: KadmatColors.lightTextSecondary,
+                  height: 1.6,
+                ),
+              ),
+            ],
+          ),
+        ),
+        SizedBox(height: 18.h),
+        KadmatSecondaryButton(
+          label: 'إلغاء الطلب',
+          icon: Icons.close_rounded,
+          onPressed: _cancelJob,
+        ),
+      ],
     );
   }
 
@@ -169,142 +177,137 @@ class _CustomerActiveJobScreenState
     final status = JobStatus.normalize(_job!.status);
     final hasLockedOfferPrice =
         status == JobStatus.accepted && _job!.technicianPrice != null;
-    return SingleChildScrollView(
-      padding: EdgeInsets.all(24.w),
-      child: Column(
-        children: [
-          SizedBox(height: 20.h),
-          Container(
-            padding: EdgeInsets.all(32.w),
-            decoration: BoxDecoration(
-              color: status == JobStatus.pricePending
-                  ? Colors.green.withValues(alpha: 0.2)
-                  : Colors.orange.withValues(alpha: 0.2),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              status == JobStatus.pricePending
-                  ? Icons.receipt_long
-                  : Icons.hourglass_empty,
-              color: status == JobStatus.pricePending
-                  ? Colors.green
-                  : Colors.orange,
-              size: 60.s,
-            ),
-          ),
-          SizedBox(height: 24.h),
-          Text(
-            status == JobStatus.pricePending
-                ? 'عرض السعر'
-                : hasLockedOfferPrice
-                ? 'تم تثبيت السعر من العرض ✅'
-                : 'تم قبول طلبك! ✨',
-            style: TextStyle(
-              fontSize: 22.fz,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-            ),
-          ),
-          SizedBox(height: 12.h),
-          Text(
-            status == JobStatus.pricePending
-                ? 'الفني قم بتحديد السعر للخدمة - هل تقبل بهذا السعر؟'
-                : hasLockedOfferPrice
-                ? 'تم قبول عرض الفني بالسعر المتفق عليه، يمكنك متابعة التنفيذ.'
-                : 'الفني يقوم بتحديد السعر...',
-            style: TextStyle(fontSize: 14.fz, color: Colors.white60),
-            textAlign: TextAlign.center,
-          ),
-          SizedBox(height: 32.h),
-          if (status == JobStatus.pricePending) ...[
-            _buildPriceCard(),
-            SizedBox(height: 24.h),
-          ],
-          _buildTechnicianInfoCard(),
-          SizedBox(height: 32.h),
-          if (status == JobStatus.accepted && !hasLockedOfferPrice)
-            Container(
-              width: double.infinity,
-              padding: EdgeInsets.symmetric(vertical: 16.h),
-              decoration: BoxDecoration(
-                color: Colors.orange.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(12.r),
-                border: Border.all(color: Colors.orange, width: 1),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  SizedBox(
-                    width: 20.w,
-                    height: 20.h,
-                    child: const CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation(Colors.orange),
-                    ),
-                  ),
-                  SizedBox(width: 12.w),
-                  Expanded(
-                    child: Text(
-                      'يتم حالياً انتظار تحديد السعر من الفني',
-                      style: TextStyle(
-                        fontSize: 14.fz,
-                        color: Colors.orange,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          if (hasLockedOfferPrice) ...[
-            SizedBox(height: 16.h),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () => context.go(
-                  AppRoutes.buildCustomerInProgressPath(widget.jobId),
-                ),
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-                child: const Text('متابعة التنفيذ'),
-              ),
-            ),
-          ],
-          if (status == JobStatus.pricePending) ...[_buildPriceActionButtons()],
+
+    final title = status == JobStatus.pricePending
+        ? 'السعر جاهز للمراجعة'
+        : hasLockedOfferPrice
+        ? 'تم تثبيت السعر من العرض'
+        : 'تم قبول الطلب';
+    final subtitle = status == JobStatus.pricePending
+        ? 'الفني أرسل السعر المقترح للخدمة. راجعه الآن ثم اتخذ قرارًا واحدًا واضحًا: قبول أو رفض.'
+        : hasLockedOfferPrice
+        ? 'العرض المقبول أصبح هو السعر المعتمد. يمكنك الآن متابعة التنفيذ دون الحاجة إلى إعادة النقاش.'
+        : 'الفني ثبت نفسه على الطلب، والخطوة التالية الآن هي انتظار تحديد السعر قبل بدء التنفيذ.';
+
+    return _buildScrollablePage(
+      children: [
+        _buildHeroCard(
+          icon: status == JobStatus.pricePending
+              ? Icons.receipt_long_rounded
+              : hasLockedOfferPrice
+              ? Icons.verified_rounded
+              : Icons.person_pin_circle_rounded,
+          title: title,
+          subtitle: subtitle,
+        ),
+        SizedBox(height: 16.h),
+        _buildFocusCard(
+          icon: status == JobStatus.pricePending
+              ? Icons.touch_app_rounded
+              : hasLockedOfferPrice
+              ? Icons.route_rounded
+              : Icons.hourglass_top_rounded,
+          title: 'الخطوة التالية',
+          description: status == JobStatus.pricePending
+              ? 'اقبل السعر إذا كان مناسبًا لك، أو ارفضه للبحث عن فني آخر. لا يوجد إجراء ثالث مطلوب في هذه المرحلة.'
+              : hasLockedOfferPrice
+              ? 'انتقل لمتابعة التنفيذ فقط. أدوات التواصل أصبحت متاحة لأن الفني صار مثبتًا على الطلب.'
+              : 'انتظر السعر من الفني. لا تبدأ أي تنسيق خارجي قبل ظهور السعر واعتماده داخل التطبيق.',
+        ),
+        if (status == JobStatus.pricePending) ...[
+          SizedBox(height: 16.h),
+          _buildPriceCard(),
         ],
-      ),
+        SizedBox(height: 16.h),
+        _buildTechnicianInfoCard(),
+        if (status == JobStatus.accepted && !hasLockedOfferPrice) ...[
+          SizedBox(height: 16.h),
+          _buildSurface(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  Icons.hourglass_top_rounded,
+                  color: KadmatColors.stateWarning,
+                  size: 20.s,
+                ),
+                SizedBox(width: 10.w),
+                Expanded(
+                  child: Text(
+                    'الفني لم يرسل السعر بعد. ستنتقل الشاشة تلقائيًا إلى مرحلة المراجعة بمجرد اعتماده.',
+                    style: TextStyle(
+                      fontSize: 13.fz,
+                      color: KadmatColors.lightTextSecondary,
+                      height: 1.55,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+        if (hasLockedOfferPrice) ...[
+          SizedBox(height: 18.h),
+          KadmatPrimaryButton(
+            label: 'متابعة التنفيذ',
+            icon: Icons.arrow_forward_rounded,
+            onPressed: () =>
+                context.go(AppRoutes.buildCustomerInProgressPath(widget.jobId)),
+          ),
+        ],
+        if (status == JobStatus.pricePending) ...[
+          SizedBox(height: 18.h),
+          _buildPriceActionButtons(),
+        ],
+      ],
     );
   }
 
   Widget _buildPriceCard() {
-    return Container(
-      padding: EdgeInsets.all(24.w),
-      decoration: AppTheme.glassDecoration(radius: 20.r),
+    return _buildSurface(
       child: Column(
         children: [
           Text(
+            'السعر المقترح',
+            style: TextStyle(
+              fontSize: 13.fz,
+              color: KadmatColors.lightTextSecondary,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          SizedBox(height: 8.h),
+          Text(
             '${_job!.technicianPrice ?? 0}',
             style: TextStyle(
-              fontSize: 56.fz,
-              fontWeight: FontWeight.bold,
-              color: AppTheme.primaryColor,
+              fontSize: 48.fz,
+              fontWeight: FontWeight.w800,
+              color: KadmatColors.brandPrimary,
             ),
           ),
           Text(
-            'ريال',
-            style: TextStyle(fontSize: 18.fz, color: Colors.white60),
+            'دينار ليبي',
+            style: TextStyle(
+              fontSize: 15.fz,
+              color: KadmatColors.lightTextSecondary,
+            ),
           ),
           if (_job!.priceNotes != null && _job!.priceNotes!.isNotEmpty) ...[
-            SizedBox(height: 16.h),
+            SizedBox(height: 14.h),
             Container(
-              padding: EdgeInsets.all(12.w),
+              width: double.infinity,
+              padding: EdgeInsets.all(14.w),
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(8.r),
+                color: KadmatColors.brandAccent,
+                borderRadius: BorderRadius.circular(16.r),
               ),
               child: Text(
-                'ملاحظات: ${_job!.priceNotes!}',
-                style: TextStyle(fontSize: 13.fz, color: Colors.white70),
+                _job!.priceNotes!,
                 textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 12.8.fz,
+                  color: KadmatColors.brandSecondary,
+                  height: 1.55,
+                ),
               ),
             ),
           ],
@@ -317,46 +320,19 @@ class _CustomerActiveJobScreenState
     return Row(
       children: [
         Expanded(
-          child: OutlinedButton(
+          child: KadmatSecondaryButton(
+            label: 'رفض السعر',
+            icon: Icons.close_rounded,
             onPressed: _isLoading ? null : _rejectPrice,
-            style: OutlinedButton.styleFrom(
-              foregroundColor: Colors.red,
-              side: const BorderSide(color: Colors.red),
-              padding: EdgeInsets.symmetric(vertical: 16.h),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12.r),
-              ),
-            ),
-            child: const Text(
-              'رفض وابحث عن آخر',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
           ),
         ),
         SizedBox(width: 12.w),
         Expanded(
-          child: ElevatedButton(
+          child: KadmatPrimaryButton(
+            label: 'قبول السعر',
+            icon: Icons.check_circle_outline_rounded,
             onPressed: _isLoading ? null : _acceptPrice,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green,
-              padding: EdgeInsets.symmetric(vertical: 16.h),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12.r),
-              ),
-            ),
-            child: _isLoading
-                ? SizedBox(
-                    width: 16.w,
-                    height: 16.h,
-                    child: const CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation(Colors.white),
-                    ),
-                  )
-                : const Text(
-                    'قبول',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
+            isLoading: _isLoading,
           ),
         ),
       ],
@@ -373,14 +349,25 @@ class _CustomerActiveJobScreenState
 
     return Container(
       padding: EdgeInsets.all(16.w),
-      decoration: AppTheme.glassDecoration(radius: 16.r),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24.r),
+        border: Border.all(color: KadmatColors.lightBorder),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 18,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
       child: Column(
         children: [
           Row(
             children: [
               CircleAvatar(
                 radius: 32.r,
-                backgroundColor: AppTheme.primaryColor,
+                backgroundColor: KadmatColors.brandPrimary,
                 child: Icon(Icons.person, color: Colors.white, size: 32.s),
               ),
               SizedBox(width: 16.w),
@@ -392,7 +379,7 @@ class _CustomerActiveJobScreenState
                       'الفني المُختص',
                       style: TextStyle(
                         fontSize: 12.fz,
-                        color: Colors.white60,
+                        color: KadmatColors.lightTextSecondary,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
@@ -401,7 +388,7 @@ class _CustomerActiveJobScreenState
                       style: TextStyle(
                         fontSize: 18.fz,
                         fontWeight: FontWeight.bold,
-                        color: Colors.white,
+                        color: KadmatColors.lightTextPrimary,
                       ),
                     ),
                     SizedBox(height: 4.h),
@@ -476,7 +463,7 @@ class _CustomerActiveJobScreenState
                     icon: const Icon(Icons.chat),
                     label: const Text('مراسلة'),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blue,
+                      backgroundColor: KadmatColors.brandPrimary,
                       foregroundColor: Colors.white,
                       padding: EdgeInsets.symmetric(vertical: 12.h),
                       shape: RoundedRectangleBorder(
@@ -491,13 +478,18 @@ class _CustomerActiveJobScreenState
               SizedBox(height: 8.h),
               Text(
                 JobCommunicationPolicy.unavailableMessage,
-                style: TextStyle(fontSize: 12.fz, color: Colors.white60),
+                style: TextStyle(
+                  fontSize: 12.fz,
+                  color: KadmatColors.lightTextSecondary,
+                ),
               ),
             ],
             SizedBox(height: 8.h),
             SizedBox(
               width: double.infinity,
-              child: OutlinedButton.icon(
+              child: KadmatSecondaryButton(
+                label: 'ملف الفني',
+                icon: Icons.person_outline_rounded,
                 onPressed: () {
                   debugPrint(
                     '👨‍💼 View technician profile: ${_job!.technicianId}',
@@ -506,16 +498,6 @@ class _CustomerActiveJobScreenState
                   if (technicianId == null || technicianId.isEmpty) return;
                   _openTechnicianProfile(technicianId);
                 },
-                icon: const Icon(Icons.person_outline),
-                label: const Text('البروفايل'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.white,
-                  side: const BorderSide(color: Colors.white30),
-                  padding: EdgeInsets.symmetric(vertical: 12.h),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10.r),
-                  ),
-                ),
               ),
             ),
           ],
@@ -547,313 +529,373 @@ class _CustomerActiveJobScreenState
   }
 
   Widget _buildInProgressState() {
-    return SingleChildScrollView(
-      padding: EdgeInsets.all(24.w),
-      child: Column(
-        children: [
-          SizedBox(height: 20.h),
-          Container(
-            padding: EdgeInsets.all(32.w),
-            decoration: BoxDecoration(
-              color: Colors.blue.withValues(alpha: 0.2),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(Icons.engineering, color: Colors.blue, size: 60.s),
-          ),
-          SizedBox(height: 24.h),
-          Text(
-            'الفني في الطريق! 🚗',
-            style: TextStyle(
-              fontSize: 22.fz,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-            ),
-          ),
-          SizedBox(height: 12.h),
-          Text(
-            'سيصل قريباً لتنفيذ الخدمة',
-            style: TextStyle(fontSize: 16.fz, color: Colors.white60),
-          ),
-          SizedBox(height: 32.h),
-          _buildTechnicianInfoCard(),
-          SizedBox(height: 24.h),
-          Container(
-            padding: EdgeInsets.all(16.w),
-            decoration: BoxDecoration(
-              color: Colors.green.withValues(alpha: 0.2),
-              borderRadius: BorderRadius.circular(12.r),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.check_circle, color: Colors.green, size: 20.s),
-                SizedBox(width: 12.w),
-                Expanded(
-                  child: Text(
-                    'السعر المتفق عليه: ${_job!.technicianPrice ?? 0} ريال',
-                    style: TextStyle(
-                      fontSize: 16.fz,
-                      color: Colors.green,
-                      fontWeight: FontWeight.bold,
-                    ),
+    return _buildScrollablePage(
+      children: [
+        _buildHeroCard(
+          icon: Icons.route_rounded,
+          title: 'الخدمة دخلت مرحلة التنفيذ',
+          subtitle:
+              'الفني في الطريق أو بدأ تنفيذ المهمة. أفضل إجراء الآن هو المتابعة فقط واستخدام الخريطة عند الحاجة.',
+        ),
+        SizedBox(height: 16.h),
+        _buildFocusCard(
+          icon: Icons.map_outlined,
+          title: 'الخطوة التالية',
+          description:
+              'افتح شاشة التتبع إذا أردت رؤية حركة الفني أو تحديثات التنفيذ. لا تحتاج إلى تنسيق جانبي ما دام الطلب يسير داخل التطبيق.',
+        ),
+        SizedBox(height: 16.h),
+        _buildTechnicianInfoCard(),
+        SizedBox(height: 16.h),
+        _buildSurface(
+          child: Row(
+            children: [
+              Icon(
+                Icons.payments_outlined,
+                color: KadmatColors.stateSuccess,
+                size: 20.s,
+              ),
+              SizedBox(width: 10.w),
+              Expanded(
+                child: Text(
+                  'السعر المعتمد: ${_job!.technicianPrice ?? 0} دينار ليبي',
+                  style: TextStyle(
+                    fontSize: 14.fz,
+                    color: KadmatColors.stateSuccess,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-          SizedBox(height: 24.h),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: () {
-                context.push(
-                  AppRoutes.buildCustomerInProgressPath(widget.jobId),
-                  extra: {
-                    'technicianId': _job!.technicianId,
-                    'lat': _job!.lat,
-                    'lng': _job!.lng,
-                  },
-                );
+        ),
+        SizedBox(height: 18.h),
+        KadmatPrimaryButton(
+          label: 'فتح التتبع',
+          icon: Icons.map_rounded,
+          onPressed: () {
+            context.push(
+              AppRoutes.buildCustomerInProgressPath(widget.jobId),
+              extra: {
+                'technicianId': _job!.technicianId,
+                'lat': _job!.lat,
+                'lng': _job!.lng,
               },
-              icon: const Icon(Icons.map, color: Colors.white),
-              label: const Text(
-                'تتبع الفني على الخريطة',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blueAccent,
-                padding: EdgeInsets.symmetric(vertical: 16.h),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12.r),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
+            );
+          },
+        ),
+      ],
     );
   }
 
   Widget _buildCompletedState() {
-    return Center(
-      child: Padding(
-        padding: EdgeInsets.all(24.w),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              padding: EdgeInsets.all(32.w),
-              decoration: BoxDecoration(
-                color: Colors.teal.withValues(alpha: 0.2),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(Icons.done_all, color: Colors.teal, size: 60.s),
-            ),
-            SizedBox(height: 24.h),
-            Text(
-              'تم إكمال الخدمة! 🎉',
-              style: TextStyle(
-                fontSize: 22.fz,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-            ),
-            SizedBox(height: 32.h),
-            if (_job!.customerRating == null)
-              ElevatedButton(
-                onPressed: () =>
-                    context.push(AppRoutes.buildCustomerRatePath(widget.jobId)),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.amber,
-                  padding: EdgeInsets.symmetric(
-                    horizontal: 32.w,
-                    vertical: 16.h,
-                  ),
-                ),
-                child: const Text(
-                  'قيّم الخدمة ⭐',
-                  style: TextStyle(color: Colors.black),
-                ),
-              )
-            else
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(
-                  5,
-                  (i) => Icon(
-                    i < (_job!.customerRating ?? 0)
-                        ? Icons.star
-                        : Icons.star_border,
-                    color: Colors.amber,
-                    size: 32.s,
-                  ),
-                ),
-              ),
-          ],
+    return _buildScrollablePage(
+      children: [
+        _buildHeroCard(
+          icon: Icons.done_all_rounded,
+          title: 'اكتملت الخدمة بنجاح',
+          subtitle:
+              'الطلب أُغلق وحُفظ داخل حسابك. إذا لم ترسل التقييم بعد فهذه هي الخطوة الوحيدة المتبقية.',
         ),
-      ),
+        SizedBox(height: 16.h),
+        _buildFocusCard(
+          icon: Icons.star_outline_rounded,
+          title: 'الخطوة التالية',
+          description: _job!.customerRating == null
+              ? 'قيّم الخدمة الآن حتى يكتمل السجل وتظهر تجربتك ضمن تقييمات الفني.'
+              : 'لا يوجد إجراء متبقٍ على هذا الطلب. يمكنك الرجوع إلى السجل أو بدء طلب جديد.',
+        ),
+        SizedBox(height: 18.h),
+        if (_job!.customerRating == null)
+          KadmatPrimaryButton(
+            label: 'قيّم الخدمة',
+            icon: Icons.star_rounded,
+            onPressed: () =>
+                context.push(AppRoutes.buildCustomerRatePath(widget.jobId)),
+          )
+        else
+          _buildSurface(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: List.generate(
+                5,
+                (i) => Icon(
+                  i < (_job!.customerRating ?? 0)
+                      ? Icons.star_rounded
+                      : Icons.star_border_rounded,
+                  color: Colors.amber,
+                  size: 30.s,
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 
   Widget _buildCancelledState() {
-    return Center(
-      child: Padding(
-        padding: EdgeInsets.all(24.w),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.cancel, color: Colors.red, size: 80.s),
-            SizedBox(height: 24.h),
-            Text(
-              'تم إلغاء الطلب',
-              style: TextStyle(
-                fontSize: 22.fz,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-            ),
-            SizedBox(height: 32.h),
-            ElevatedButton(
-              onPressed: () => context.go(AppRoutes.home),
-              child: const Text('العودة للرئيسية'),
-            ),
-          ],
+    return _buildScrollablePage(
+      children: [
+        _buildHeroCard(
+          icon: Icons.cancel_outlined,
+          title: 'تم إلغاء الطلب',
+          subtitle:
+              'أُغلق هذا الطلب ولن يستمر التنفيذ عليه. يمكنك العودة إلى الرئيسية أو بدء طلب جديد عندما تحتاج الخدمة.',
         ),
-      ),
+        SizedBox(height: 16.h),
+        _buildFocusCard(
+          icon: Icons.home_outlined,
+          title: 'الخطوة التالية',
+          description:
+              'ارجع إلى الصفحة الرئيسية إذا أردت إنشاء طلب جديد أو مراجعة الطلبات السابقة.',
+        ),
+        SizedBox(height: 18.h),
+        KadmatPrimaryButton(
+          label: 'العودة إلى الرئيسية',
+          icon: Icons.home_rounded,
+          onPressed: () => context.go(AppRoutes.home),
+        ),
+      ],
     );
   }
 
   Widget _buildNoTechnicianFoundState() {
-    return Center(
-      child: Padding(
-        padding: EdgeInsets.all(24.w),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              padding: EdgeInsets.all(32.w),
-              decoration: BoxDecoration(
-                color: Colors.orange.withValues(alpha: 0.2),
-                shape: BoxShape.circle,
+    return _buildScrollablePage(
+      children: [
+        _buildHeroCard(
+          icon: Icons.search_off_rounded,
+          title: 'لم يُثبت فني على الطلب بعد',
+          subtitle:
+              'لم يظهر فني متاح حاليًا، لكن الطلب ما زال تحت المتابعة. يمكنك الانتظار أو إيقافه إذا لم تعد بحاجة للخدمة.',
+        ),
+        SizedBox(height: 16.h),
+        _buildFocusCard(
+          icon: Icons.hourglass_bottom_rounded,
+          title: 'الخطوة التالية',
+          description:
+              'لا يلزم أي إجراء الآن إذا كنت تريد الاستمرار في الانتظار. ألغِ الطلب فقط إذا قررت التوقف عن البحث.',
+        ),
+        SizedBox(height: 16.h),
+        _buildSurface(
+          child: Column(
+            children: [
+              SizedBox(
+                width: 56.w,
+                height: 56.w,
+                child: CircularProgressIndicator(
+                  strokeWidth: 4,
+                  color: KadmatColors.stateWarning,
+                ),
               ),
-              child: Icon(Icons.search_off, color: Colors.orange, size: 60.s),
-            ),
-            SizedBox(height: 24.h),
-            Text(
-              'لم نجد فني متاح حالياً 😔',
-              style: TextStyle(
-                fontSize: 22.fz,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
+              SizedBox(height: 14.h),
+              Text(
+                'سنخبرك فور توفر فني مناسب',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 13.5.fz,
+                  color: KadmatColors.lightTextSecondary,
+                  height: 1.55,
+                ),
               ),
-            ),
-            SizedBox(height: 12.h),
-            Text(
-              'ما زلنا نبحث...\nسيتم إعلامك فور توفر فني',
-              style: TextStyle(fontSize: 14.fz, color: Colors.white60),
-              textAlign: TextAlign.center,
-            ),
-            SizedBox(height: 32.h),
-            SizedBox(
-              width: 24.w,
-              height: 24.h,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: Colors.orange,
+            ],
+          ),
+        ),
+        SizedBox(height: 18.h),
+        KadmatSecondaryButton(
+          label: 'إلغاء الطلب',
+          icon: Icons.close_rounded,
+          onPressed: _cancelJob,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPaymentPendingState() {
+    return _buildScrollablePage(
+      children: [
+        _buildHeroCard(
+          icon: Icons.fact_check_outlined,
+          title: 'بانتظار تأكيدك لإكمال الخدمة',
+          subtitle:
+              'الفني أرسل طلب إغلاق الخدمة. راجع التنفيذ ثم أكد الإكمال داخل التطبيق حتى ينتقل الطلب إلى المرحلة النهائية.',
+        ),
+        SizedBox(height: 16.h),
+        _buildFocusCard(
+          icon: Icons.task_alt_rounded,
+          title: 'الخطوة التالية',
+          description:
+              'القرار المطلوب الآن هو تأكيد الإكمال فقط إذا انتهت الخدمة كما اتفقتما. لا يتم إغلاق الطلب نهائيًا قبل هذه الخطوة.',
+        ),
+        SizedBox(height: 16.h),
+        _buildTechnicianInfoCard(),
+        SizedBox(height: 16.h),
+        _buildSurface(
+          child: Row(
+            children: [
+              Icon(
+                Icons.payments_outlined,
+                color: KadmatColors.stateSuccess,
+                size: 20.s,
               ),
-            ),
-            SizedBox(height: 32.h),
-            TextButton.icon(
-              onPressed: _cancelJob,
-              icon: const Icon(Icons.close, color: Colors.red),
-              label: const Text(
-                'إلغاء الطلب',
-                style: TextStyle(color: Colors.red),
+              SizedBox(width: 10.w),
+              Expanded(
+                child: Text(
+                  'السعر النهائي: ${_job!.technicianPrice ?? _job!.finalPrice ?? 0} دينار ليبي',
+                  style: TextStyle(
+                    fontSize: 14.fz,
+                    color: KadmatColors.stateSuccess,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
               ),
+            ],
+          ),
+        ),
+        SizedBox(height: 18.h),
+        KadmatPrimaryButton(
+          label: 'تأكيد إكمال الخدمة',
+          icon: Icons.check_circle_rounded,
+          onPressed: () {
+            context.push(
+              AppRoutes.buildCustomerConfirmCompletionPath(widget.jobId),
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildScrollablePage({required List<Widget> children}) {
+    return SafeArea(
+      child: Center(
+        child: SingleChildScrollView(
+          padding: EdgeInsets.all(20.w),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 760),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: children,
             ),
-          ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildPaymentPendingState() {
-    return SingleChildScrollView(
-      padding: EdgeInsets.all(24.w),
+  Widget _buildHeroCard({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+  }) {
+    return Container(
+      padding: EdgeInsets.all(22.w),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(30.r),
+        gradient: const LinearGradient(
+          begin: Alignment.topRight,
+          end: Alignment.bottomLeft,
+          colors: [Color(0xFF17313B), Color(0xFF0D1E25)],
+        ),
+      ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(height: 20.h),
           Container(
-            padding: EdgeInsets.all(32.w),
+            width: 56.w,
+            height: 56.w,
             decoration: BoxDecoration(
-              color: Colors.purple.withValues(alpha: 0.2),
-              shape: BoxShape.circle,
+              color: Colors.white.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(18.r),
             ),
-            child: Icon(Icons.payment, color: Colors.purple, size: 60.s),
+            child: Icon(icon, color: Colors.white, size: 26.s),
           ),
-          SizedBox(height: 24.h),
+          SizedBox(height: 16.h),
           Text(
-            'انتظار تأكيد الإكمال 📝',
+            title,
             style: TextStyle(
-              fontSize: 22.fz,
-              fontWeight: FontWeight.bold,
               color: Colors.white,
+              fontSize: 24.fz,
+              fontWeight: FontWeight.w800,
             ),
           ),
-          SizedBox(height: 12.h),
+          SizedBox(height: 8.h),
           Text(
-            'الفني أنهى العمل - يُرجى التأكيد',
-            style: TextStyle(fontSize: 16.fz, color: Colors.white60),
-          ),
-          SizedBox(height: 32.h),
-          _buildTechnicianInfoCard(),
-          SizedBox(height: 24.h),
-          Container(
-            padding: EdgeInsets.all(16.w),
-            decoration: BoxDecoration(
-              color: Colors.green.withValues(alpha: 0.2),
-              borderRadius: BorderRadius.circular(12.r),
+            subtitle,
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.76),
+              fontSize: 13.fz,
+              height: 1.6,
             ),
-            child: Row(
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFocusCard({
+    required IconData icon,
+    required String title,
+    required String description,
+  }) {
+    return _buildSurface(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 46.w,
+            height: 46.w,
+            decoration: BoxDecoration(
+              color: KadmatColors.brandAccent,
+              borderRadius: BorderRadius.circular(16.r),
+            ),
+            child: Icon(icon, color: KadmatColors.brandSecondary, size: 22.s),
+          ),
+          SizedBox(width: 12.w),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(Icons.check_circle, color: Colors.green, size: 20.s),
-                SizedBox(width: 12.w),
-                Expanded(
-                  child: Text(
-                    'السعر: ${_job!.technicianPrice ?? _job!.finalPrice ?? 0} ريال',
-                    style: TextStyle(
-                      fontSize: 16.fz,
-                      color: Colors.green,
-                      fontWeight: FontWeight.bold,
-                    ),
+                Text(
+                  title,
+                  style: TextStyle(
+                    color: KadmatColors.lightTextPrimary,
+                    fontSize: 15.fz,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                SizedBox(height: 6.h),
+                Text(
+                  description,
+                  style: TextStyle(
+                    color: KadmatColors.lightTextSecondary,
+                    fontSize: 12.6.fz,
+                    height: 1.55,
                   ),
                 ),
               ],
             ),
           ),
-          SizedBox(height: 24.h),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: () {
-                context.push(
-                  AppRoutes.buildCustomerConfirmCompletionPath(widget.jobId),
-                );
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green,
-                padding: EdgeInsets.symmetric(vertical: 16.h),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12.r),
-                ),
-              ),
-              child: const Text(
-                'تأكيد إكمال الخدمة ✓',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-              ),
-            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSurface({required Widget child}) {
+    return Container(
+      padding: EdgeInsets.all(18.w),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24.r),
+        border: Border.all(color: KadmatColors.lightBorder),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 18,
+            offset: const Offset(0, 10),
           ),
         ],
       ),
+      child: child,
     );
   }
 
