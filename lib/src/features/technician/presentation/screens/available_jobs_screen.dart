@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_scalify/flutter_scalify.dart';
 import 'package:go_router/go_router.dart';
 import 'package:kadmat/src/core/navigation/app_routes.dart';
+import 'package:kadmat/src/core/design/kadmat_tokens.dart';
+import 'package:kadmat/src/core/widgets/kadmat_components.dart';
 import 'package:kadmat/src/features/technician/presentation/providers/technician_providers.dart';
 import 'package:kadmat/src/features/technician/presentation/widgets/online_status_toggle.dart';
 import 'package:kadmat/src/features/technician/presentation/widgets/technician_job_card.dart';
@@ -217,25 +219,21 @@ class _AvailableJobsScreenState extends ConsumerState<AvailableJobsScreen> {
     return Center(
       child: Padding(
         padding: EdgeInsets.all(24.w),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.location_off, size: 64.s, color: Colors.grey),
-            SizedBox(height: 16.h),
-            Text(
-              'فعّل الموقع لعرض الطلبات القريبة',
-              style: TextStyle(fontSize: 16.fz, fontWeight: FontWeight.bold),
-              textAlign: TextAlign.center,
-            ),
-            SizedBox(height: 16.h),
-            ElevatedButton.icon(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 520),
+          child: _buildStateSurface(
+            icon: Icons.location_off_rounded,
+            title: 'فعّل الموقع لعرض الطلبات القريبة',
+            subtitle:
+                'هذه الشاشة تعتمد على موقعك الحالي حتى تعرض الطلبات التي تقع ضمن نطاقك التشغيلي.',
+            action: KadmatPrimaryButton(
+              label: 'إعادة المحاولة',
+              icon: Icons.refresh_rounded,
               onPressed: () {
                 ref.invalidate(technicianLocationProvider);
               },
-              icon: const Icon(Icons.refresh),
-              label: const Text('إعادة المحاولة'),
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -245,16 +243,14 @@ class _AvailableJobsScreenState extends ConsumerState<AvailableJobsScreen> {
     return Center(
       child: Padding(
         padding: EdgeInsets.all(24.w),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.inbox, size: 80.s, color: Colors.grey),
-            SizedBox(height: 16.h),
-            Text(
-              'لا توجد طلبات متاحة حالياً',
-              style: TextStyle(fontSize: 16.fz, color: Colors.grey),
-            ),
-          ],
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 520),
+          child: _buildStateSurface(
+            icon: Icons.inbox_outlined,
+            title: 'لا توجد طلبات متاحة الآن',
+            subtitle:
+                'أبقِ حالة الاتصال مفعّلة، وعدّل الفلتر إذا أردت توسيع النطاق حتى تظهر الطلبات الجديدة هنا فور وصولها.',
+          ),
         ),
       ),
     );
@@ -264,29 +260,20 @@ class _AvailableJobsScreenState extends ConsumerState<AvailableJobsScreen> {
     return Center(
       child: Padding(
         padding: EdgeInsets.all(24.w),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.error_outline, size: 64.s, color: Colors.red),
-            SizedBox(height: 16.h),
-            Text(
-              'حدث خطأ',
-              style: TextStyle(fontSize: 16.fz, fontWeight: FontWeight.bold),
-            ),
-            SizedBox(height: 8.h),
-            Text(
-              error,
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 12.fz, color: Colors.grey),
-            ),
-            SizedBox(height: 16.h),
-            ElevatedButton(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 520),
+          child: _buildStateSurface(
+            icon: Icons.error_outline_rounded,
+            title: 'تعذر تحميل الطلبات المتاحة',
+            subtitle: error,
+            action: KadmatPrimaryButton(
+              label: 'إعادة المحاولة',
+              icon: Icons.refresh_rounded,
               onPressed: () {
                 ref.invalidate(nearbyJobsWithDistanceProvider);
               },
-              child: const Text('إعادة المحاولة'),
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -402,6 +389,65 @@ class _AvailableJobsScreenState extends ConsumerState<AvailableJobsScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildStateSurface({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    Widget? action,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(22.w),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24.r),
+        border: Border.all(color: KadmatColors.lightBorder),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 18,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 56.w,
+            height: 56.w,
+            decoration: BoxDecoration(
+              color: KadmatColors.brandAccent,
+              borderRadius: BorderRadius.circular(18.r),
+            ),
+            child: Icon(icon, color: KadmatColors.brandSecondary, size: 26.s),
+          ),
+          SizedBox(height: 16.h),
+          Text(
+            title,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 16.fz,
+              fontWeight: FontWeight.w800,
+              color: KadmatColors.lightTextPrimary,
+            ),
+          ),
+          SizedBox(height: 8.h),
+          Text(
+            subtitle,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 12.8.fz,
+              color: KadmatColors.lightTextSecondary,
+              height: 1.55,
+            ),
+          ),
+          if (action != null) ...[SizedBox(height: 18.h), action],
+        ],
       ),
     );
   }
