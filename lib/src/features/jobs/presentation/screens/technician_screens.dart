@@ -9,6 +9,7 @@ import '../../../../core/utils/error_handler.dart';
 import '../../data/job_repository.dart';
 import '../../domain/job.dart';
 import '../../domain/job_status.dart';
+import '../../../technician/presentation/widgets/technician_flow_widgets.dart';
 import '../widgets/job_widgets.dart';
 
 import 'package:flutter_map/flutter_map.dart';
@@ -50,7 +51,7 @@ class _TechnicianAcceptedScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.backgroundDark,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         title: const Text('تم قبول الطلب'),
         backgroundColor: Colors.transparent,
@@ -59,143 +60,153 @@ class _TechnicianAcceptedScreenState
       body: _job == null
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
-              padding: EdgeInsets.all(24.w),
-              child: Column(
-                children: [
-                  // Success Badge
-                  Container(
-                    padding: EdgeInsets.all(24.w),
-                    decoration: BoxDecoration(
-                      color: Colors.green.withValues(alpha: 0.2),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(Icons.check, color: Colors.green, size: 60.s),
-                  ),
-
-                  SizedBox(height: 24.h),
-
-                  Text(
-                    'تم قبول الطلب بنجاح! ✅',
-                    style: TextStyle(
-                      fontSize: 22.fz,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-
-                  SizedBox(height: 8.h),
-
-                  Text(
-                    'قم بتحديد السعر للعميل',
-                    style: TextStyle(fontSize: 16.fz, color: Colors.white60),
-                  ),
-
-                  SizedBox(height: 32.h),
-
-                  // Timeline
-                  JobTimeline(currentStatus: _job!.status),
-
-                  SizedBox(height: 24.h),
-
-                  // Customer Card
-                  if (_job?.customer != null)
-                    ProfileCard(
-                      name: _job!.customer?['full_name'],
-                      phone: _job!.customer?['phone'],
-                      imageUrl: _job!.customer?['profile_image_url'],
-                      rating: (_job!.customer?['rating'] as num?)?.toDouble(),
-                      label: 'العميل',
-                    ),
-
-                  SizedBox(height: 24.h),
-
-                  // Job Details
-                  Container(
-                    padding: EdgeInsets.all(16.w),
-                    decoration: AppTheme.glassDecoration(radius: 16.r),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
+              padding: EdgeInsets.all(18.w),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 960),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      TechnicianFlowHero(
+                        icon: Icons.check_circle_outline_rounded,
+                        eyebrow: 'تم تثبيت الطلب',
+                        title: 'الخطوة التالية: حدّد السعر',
+                        subtitle:
+                            'العميل اختارك لهذه المهمة. راجع الطلب بسرعة ثم أرسل سعرًا واضحًا حتى ينتقل الفلو إلى انتظار الموافقة.',
+                        bottom: Wrap(
+                          spacing: 8.w,
+                          runSpacing: 8.h,
                           children: [
-                            Icon(
-                              Icons.home_repair_service,
-                              color: AppTheme.primaryColor,
-                              size: 24.s,
+                            TechnicianFlowPill(
+                              icon: Icons.work_outline_rounded,
+                              label:
+                                  _job?.service?['name'] ?? 'الخدمة المطلوبة',
                             ),
-                            SizedBox(width: 12.w),
+                            const TechnicianFlowPill(
+                              icon: Icons.attach_money_outlined,
+                              label: 'المرحلة الحالية: تحديد السعر',
+                            ),
+                          ],
+                        ),
+                      ),
+                      SizedBox(height: 16.h),
+                      const TechnicianFlowSurface(
+                        child: TechnicianFlowNextStepCard(
+                          icon: Icons.rule_folder_outlined,
+                          title: 'أرسل السعر فقط',
+                          description:
+                              'لا تحتاج إلى بدء التنفيذ الآن. راجع تفاصيل الطلب، ثم افتح شاشة التسعير وأرسل قيمة واحدة واضحة للعميل.',
+                        ),
+                      ),
+                      SizedBox(height: 16.h),
+                      TechnicianFlowSurface(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'حالة الطلب',
+                              style: TextStyle(
+                                fontSize: 18.fz,
+                                fontWeight: FontWeight.w800,
+                                color: Colors.black87,
+                              ),
+                            ),
+                            SizedBox(height: 12.h),
+                            JobTimeline(currentStatus: _job!.status),
+                          ],
+                        ),
+                      ),
+                      if (_job?.customer != null) ...[
+                        SizedBox(height: 16.h),
+                        TechnicianFlowSurface(
+                          child: ProfileCard(
+                            name: _job!.customer?['full_name'],
+                            phone: _job!.customer?['phone'],
+                            imageUrl: _job!.customer?['profile_image_url'],
+                            rating: (_job!.customer?['rating'] as num?)
+                                ?.toDouble(),
+                            label: 'العميل',
+                          ),
+                        ),
+                      ],
+                      SizedBox(height: 16.h),
+                      TechnicianFlowSurface(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'تفاصيل الطلب',
+                              style: TextStyle(
+                                fontSize: 18.fz,
+                                fontWeight: FontWeight.w800,
+                                color: Colors.black87,
+                              ),
+                            ),
+                            SizedBox(height: 12.h),
                             Text(
                               _job?.service?['name'] ?? 'خدمة',
                               style: TextStyle(
-                                fontSize: 18.fz,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
+                                fontSize: 16.fz,
+                                fontWeight: FontWeight.w700,
                               ),
                             ),
-                          ],
-                        ),
-                        SizedBox(height: 12.h),
-                        Row(
-                          children: [
-                            Icon(
-                              Icons.location_on,
-                              color: Colors.white54,
-                              size: 20.s,
+                            SizedBox(height: 10.h),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Icon(
+                                  Icons.location_on_outlined,
+                                  color: Colors.grey[600],
+                                  size: 18.s,
+                                ),
+                                SizedBox(width: 8.w),
+                                Expanded(
+                                  child: Text(
+                                    _job?.addressText ?? 'الموقع غير محدد',
+                                    style: TextStyle(
+                                      fontSize: 13.fz,
+                                      color: Colors.grey[700],
+                                      height: 1.45,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
-                            SizedBox(width: 8.w),
-                            Expanded(
-                              child: Text(
-                                _job?.addressText ?? '',
+                            if (_job?.description != null &&
+                                _job!.description!.isNotEmpty) ...[
+                              SizedBox(height: 10.h),
+                              Text(
+                                _job!.description!,
                                 style: TextStyle(
-                                  fontSize: 14.fz,
-                                  color: Colors.white70,
+                                  fontSize: 13.fz,
+                                  color: Colors.grey[700],
+                                  height: 1.5,
                                 ),
                               ),
-                            ),
+                            ],
                           ],
                         ),
-                        if (_job?.description != null &&
-                            _job!.description!.isNotEmpty) ...[
-                          SizedBox(height: 12.h),
-                          Text(
-                            _job!.description!,
+                      ),
+                      SizedBox(height: 24.h),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: () => context.go(
+                            AppRoutes.buildTechnicianSetPricePath(widget.jobId),
+                          ),
+                          icon: const Icon(Icons.attach_money),
+                          label: Text(
+                            'فتح شاشة تحديد السعر',
                             style: TextStyle(
-                              fontSize: 14.fz,
-                              color: Colors.white60,
+                              fontSize: 18.fz,
+                              fontWeight: FontWeight.bold,
                             ),
                           ),
-                        ],
-                      ],
-                    ),
-                  ),
-
-                  SizedBox(height: 32.h),
-
-                  // Set Price Button
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton.icon(
-                      onPressed: () => context.go(
-                        AppRoutes.buildTechnicianSetPricePath(widget.jobId),
-                      ),
-                      icon: const Icon(Icons.attach_money),
-                      label: Text(
-                        'تحديد السعر',
-                        style: TextStyle(
-                          fontSize: 18.fz,
-                          fontWeight: FontWeight.bold,
                         ),
                       ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppTheme.primaryColor,
-                        padding: EdgeInsets.symmetric(vertical: 16.h),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12.r),
-                        ),
-                      ),
-                    ),
+                    ],
                   ),
-                ],
+                ),
               ),
             ),
     );
@@ -279,7 +290,7 @@ class _TechnicianWaitingScreenState
     final jobAsync = ref.watch(jobStreamProvider(widget.jobId));
 
     return Scaffold(
-      backgroundColor: AppTheme.backgroundDark,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         title: const Text('بانتظار موافقة العميل'),
         backgroundColor: Colors.transparent,
@@ -295,92 +306,88 @@ class _TechnicianWaitingScreenState
             return const Center(child: Text('جاري تحميل بيانات الطلب...'));
           }
           return SingleChildScrollView(
-            padding: EdgeInsets.all(24.w),
-            child: Column(
-              children: [
-                // Waiting Animation
-                Container(
-                  padding: EdgeInsets.all(32.w),
-                  decoration: BoxDecoration(
-                    color: Colors.amber.withValues(alpha: 0.2),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    Icons.hourglass_top,
-                    color: Colors.amber,
-                    size: 60.s,
-                  ),
-                ),
-
-                SizedBox(height: 24.h),
-
-                Text(
-                  'بانتظار موافقة العميل...',
-                  style: TextStyle(
-                    fontSize: 20.fz,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                ),
-
-                SizedBox(height: 8.h),
-
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
+            padding: EdgeInsets.all(18.w),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 960),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'العميل يراجع السعر',
-                      style: TextStyle(fontSize: 14.fz, color: Colors.white60),
+                    TechnicianFlowHero(
+                      icon: Icons.hourglass_top_rounded,
+                      eyebrow: 'بانتظار رد العميل',
+                      title: 'لا تحتاج إلى إجراء الآن',
+                      subtitle:
+                          'السعر أُرسل بالفعل. انتظر موافقة العميل أو تعديلك للسعر فقط إذا احتجت تصحيحًا قبل الرد.',
+                      bottom: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const TechnicianFlowPill(
+                            icon: Icons.receipt_long_outlined,
+                            label: 'السعر عند المراجعة الآن',
+                          ),
+                          SizedBox(width: 8.w),
+                          _buildAnimatedDots(),
+                        ],
+                      ),
                     ),
-                    SizedBox(width: 4.w),
-                    _buildAnimatedDots(),
+                    SizedBox(height: 16.h),
+                    const TechnicianFlowSurface(
+                      child: TechnicianFlowNextStepCard(
+                        icon: Icons.pause_circle_outline_rounded,
+                        title: 'انتظر موافقة العميل فقط',
+                        description:
+                            'لا تبدأ التنفيذ بعد. إذا احتجت تعديل السعر استخدم زر التعديل، وإلا اترك الطلب في هذه المرحلة حتى يصل رد العميل.',
+                      ),
+                    ),
+                    SizedBox(height: 16.h),
+                    TechnicianFlowSurface(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'حالة الطلب',
+                            style: TextStyle(
+                              fontSize: 18.fz,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.black87,
+                            ),
+                          ),
+                          SizedBox(height: 12.h),
+                          JobTimeline(currentStatus: job.status),
+                        ],
+                      ),
+                    ),
+                    SizedBox(height: 16.h),
+                    TechnicianFlowSurface(
+                      child: PriceCard(
+                        proposedPrice: job.technicianPrice,
+                        showBreakdown: true,
+                      ),
+                    ),
+                    if (job.customer != null) ...[
+                      SizedBox(height: 16.h),
+                      TechnicianFlowSurface(
+                        child: ProfileCard(
+                          name: job.customer?['full_name'],
+                          phone: job.customer?['phone'],
+                          imageUrl: job.customer?['profile_image_url'],
+                          rating: (job.customer?['rating'] as num?)?.toDouble(),
+                          label: 'العميل',
+                        ),
+                      ),
+                    ],
+                    SizedBox(height: 24.h),
+                    OutlinedButton.icon(
+                      onPressed: () => context.go(
+                        AppRoutes.buildTechnicianSetPricePath(widget.jobId),
+                      ),
+                      icon: const Icon(Icons.edit),
+                      label: const Text('تعديل السعر'),
+                    ),
                   ],
                 ),
-
-                SizedBox(height: 32.h),
-
-                // Timeline
-                JobTimeline(currentStatus: job.status),
-
-                SizedBox(height: 24.h),
-
-                // Price Card
-                PriceCard(
-                  proposedPrice: job.technicianPrice,
-                  showBreakdown: true,
-                ),
-
-                SizedBox(height: 24.h),
-
-                // Customer Card
-                if (job.customer != null)
-                  ProfileCard(
-                    name: job.customer?['full_name'],
-                    phone: job.customer?['phone'],
-                    imageUrl: job.customer?['profile_image_url'],
-                    rating: (job.customer?['rating'] as num?)?.toDouble(),
-                    label: 'العميل',
-                  ),
-
-                SizedBox(height: 32.h),
-
-                // Action Buttons
-                OutlinedButton.icon(
-                  onPressed: () => context.go(
-                    AppRoutes.buildTechnicianSetPricePath(widget.jobId),
-                  ),
-                  icon: const Icon(Icons.edit),
-                  label: const Text('تعديل السعر'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.white,
-                    side: BorderSide(color: Colors.white54),
-                    padding: EdgeInsets.symmetric(
-                      vertical: 14.h,
-                      horizontal: 24.w,
-                    ),
-                  ),
-                ),
-              ],
+              ),
             ),
           );
         },
@@ -391,7 +398,7 @@ class _TechnicianWaitingScreenState
             child: Text(
               _friendlyWaitingError(error),
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 14.fz, color: Colors.white70),
+              style: TextStyle(fontSize: 14.fz, color: Colors.grey[700]),
             ),
           ),
         ),
