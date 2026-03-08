@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_scalify/flutter_scalify.dart';
+import '../../../core/utils/error_handler.dart';
 import '../../domain/admin_models.dart';
 import '../controllers/admin_controller.dart';
 
@@ -26,7 +27,8 @@ class AdminDashboardScreen extends ConsumerWidget {
             platformStatsAsync.when(
               data: (stats) => _buildStatsGrid(stats),
               loading: () => const Center(child: CircularProgressIndicator()),
-              error: (error, stack) => _buildErrorWidget(error.toString()),
+              error: (error, stack) =>
+                  _buildErrorWidget(ErrorHandler.getMessage(error)),
             ),
             const SizedBox(height: 24),
 
@@ -364,7 +366,7 @@ class AdminDashboardScreen extends ConsumerWidget {
             Icon(Icons.error, color: Colors.red, size: 24.s),
             SizedBox(height: 8.h),
             Text(
-              'خطأ: $errorMessage',
+              errorMessage,
               style: const TextStyle(color: Colors.red),
               textAlign: TextAlign.center,
             ),

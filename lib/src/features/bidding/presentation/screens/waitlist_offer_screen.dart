@@ -212,7 +212,14 @@ class _WaitlistOfferScreenState extends ConsumerState<WaitlistOfferScreen> {
         },
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, _) => Center(
-          child: Text('خطأ: $error', style: const TextStyle(color: Colors.red)),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Text(
+              ErrorHandler.getMessage(error),
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.red),
+            ),
+          ),
         ),
       ),
     );

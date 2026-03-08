@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:kadmat/src/core/app_theme.dart';
+import 'package:kadmat/src/core/utils/error_handler.dart';
 import 'package:kadmat/src/core/widgets/kadmat_toast.dart';
 import 'package:kadmat/src/core/widgets/shared_components.dart';
 import 'package:kadmat/src/features/bidding/presentation/widgets/countdown_timer.dart';
@@ -117,7 +118,7 @@ class _TechnicianBiddingScreenState
       KadmatToast.showError(
         context,
         title: 'فشل تقديم العرض',
-        message: e.toString().replaceFirst('Exception: ', ''),
+        message: ErrorHandler.getMessage(e),
       );
     }
   }

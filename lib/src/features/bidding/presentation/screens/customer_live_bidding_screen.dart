@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:kadmat/src/core/app_theme.dart';
 import 'package:kadmat/src/core/navigation/app_routes.dart';
 import 'package:kadmat/src/core/navigation/job_flow_redirects.dart';
+import 'package:kadmat/src/core/utils/error_handler.dart';
 import 'package:kadmat/src/core/widgets/kadmat_toast.dart';
 import 'package:kadmat/src/core/exceptions/app_exceptions.dart';
 import 'package:kadmat/src/features/bidding/domain/entities/bid_entity.dart';
@@ -147,7 +148,16 @@ class _CustomerLiveBiddingScreenState
             ],
           );
         },
-        error: (err, st) => Center(child: Text('Error: $err')),
+        error: (err, st) => Center(
+          child: Padding(
+            padding: EdgeInsets.all(24.w),
+            child: Text(
+              ErrorHandler.getMessage(err),
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.white70, fontSize: 15.fz),
+            ),
+          ),
+        ),
         loading: () => const Center(child: CircularProgressIndicator()),
       ),
     );

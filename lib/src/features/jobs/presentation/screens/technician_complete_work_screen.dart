@@ -4,6 +4,7 @@ import 'package:flutter_scalify/flutter_scalify.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/app_theme.dart';
 import '../../../../core/navigation/app_routes.dart';
+import '../../../../core/utils/error_handler.dart';
 import '../../../../core/widgets/kadmat_toast.dart';
 import '../../data/job_repository.dart';
 import '../../domain/job.dart';
@@ -115,7 +116,7 @@ class _TechnicianCompleteWorkScreenState
       KadmatToast.showError(
         context,
         title: 'خطأ',
-        message: 'فشل إرسال الطلب: $e',
+        message: ErrorHandler.getMessage(e),
       );
     } finally {
       if (mounted) setState(() => _isLoading = false);

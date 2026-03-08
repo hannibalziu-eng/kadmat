@@ -327,8 +327,10 @@ class _TechnicianRegisterScreenState
                       },
                       loading: () =>
                           const Center(child: CircularProgressIndicator()),
-                      error: (err, stack) =>
-                          Text('خطأ في تحميل التخصصات: $err'),
+                      error: (err, stack) => Text(
+                        ErrorHandler.getMessage(err),
+                        style: const TextStyle(color: Colors.redAccent),
+                      ),
                     );
                   },
                 ),

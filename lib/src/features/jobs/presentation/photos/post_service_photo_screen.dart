@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../../core/app_theme.dart';
 import '../../../../core/navigation/app_routes.dart';
+import '../../../../core/utils/error_handler.dart';
 import '../../../../core/widgets/kadmat_toast.dart';
 import '../../data/job_repository.dart';
 
@@ -93,7 +94,7 @@ class _PostServicePhotoScreenState
         KadmatToast.showError(
           context,
           title: 'خطأ',
-          message: 'فشل التقاط الصورة: $e',
+          message: ErrorHandler.getMessage(e),
         );
       }
     }
@@ -133,7 +134,7 @@ class _PostServicePhotoScreenState
         KadmatToast.showError(
           context,
           title: 'خطأ',
-          message: 'فشل اختيار الصور: $e',
+          message: ErrorHandler.getMessage(e),
         );
       }
     }
@@ -196,7 +197,7 @@ class _PostServicePhotoScreenState
         KadmatToast.showError(
           context,
           title: 'خطأ',
-          message: 'فشل رفع الصور: $e',
+          message: ErrorHandler.getMessage(e),
         );
       }
     } finally {
