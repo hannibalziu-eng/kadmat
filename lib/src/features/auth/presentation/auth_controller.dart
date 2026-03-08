@@ -95,6 +95,15 @@ class AuthController extends _$AuthController {
     }
   }
 
+  Future<bool> sendPasswordResetEmail({required String email}) async {
+    state = const AsyncValue.loading();
+    state = await AsyncValue.guard(
+      () =>
+          ref.read(authRepositoryProvider).sendPasswordResetEmail(email: email),
+    );
+    return state.hasError == false;
+  }
+
   Future<bool> signInAsGuest() async {
     state = const AsyncValue.loading();
     state = await AsyncValue.guard(() => _authenticateAsGuest());

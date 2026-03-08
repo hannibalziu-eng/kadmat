@@ -265,6 +265,22 @@ class AuthRepository {
   }
 
   /// Update user password
+  Future<void> sendPasswordResetEmail({required String email}) async {
+    try {
+      await Supabase.instance.client.auth.resetPasswordForEmail(email);
+    } on AuthException catch (e) {
+      throw Exception(
+        e.message.trim().isEmpty
+            ? 'تعذر إرسال رابط إعادة التعيين'
+            : e.message.trim(),
+      );
+    } catch (e) {
+      throw Exception(
+        _friendlyErrorMessage(e, fallback: 'تعذر إرسال رابط إعادة التعيين'),
+      );
+    }
+  }
+
   Future<void> updatePassword({required String newPassword}) async {
     final user = Supabase.instance.client.auth.currentUser;
     if (user == null) throw Exception('المستخدم غير مسجل الدخول');
