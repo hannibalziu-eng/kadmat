@@ -5,6 +5,7 @@ import 'package:flutter_scalify/flutter_scalify.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/app_theme.dart';
 import '../../../../core/widgets/kadmat_toast.dart';
+import '../../../../core/utils/error_handler.dart';
 import '../../data/job_repository.dart';
 import '../../domain/job.dart';
 import '../../domain/job_status.dart';
@@ -497,7 +498,11 @@ class _TechnicianInProgressScreenState
       KadmatToast.showSuccess(context, title: title, message: message);
     } catch (e) {
       if (!mounted) return;
-      KadmatToast.showError(context, title: 'خطأ', message: e.toString());
+      KadmatToast.showError(
+        context,
+        title: 'خطأ',
+        message: ErrorHandler.getMessage(e),
+      );
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:kadmat/src/core/app_theme.dart';
 import 'package:kadmat/src/core/navigation/app_routes.dart';
+import 'package:kadmat/src/core/utils/error_handler.dart';
 import 'package:kadmat/src/core/widgets/kadmat_toast.dart';
 import 'package:kadmat/src/features/bidding/presentation/providers/waitlist_provider.dart';
 import 'package:kadmat/src/features/bidding/presentation/widgets/countdown_timer.dart';
@@ -76,7 +77,11 @@ class _WaitlistOfferScreenState extends ConsumerState<WaitlistOfferScreen> {
       }
     } catch (e) {
       if (mounted) {
-        KadmatToast.showError(context, title: 'خطأ', message: e.toString());
+        KadmatToast.showError(
+          context,
+          title: 'خطأ',
+          message: ErrorHandler.getMessage(e),
+        );
       }
     } finally {
       if (mounted) setState(() => _isAccepting = false);
@@ -99,7 +104,11 @@ class _WaitlistOfferScreenState extends ConsumerState<WaitlistOfferScreen> {
       }
     } catch (e) {
       if (mounted) {
-        KadmatToast.showError(context, title: 'خطأ', message: e.toString());
+        KadmatToast.showError(
+          context,
+          title: 'خطأ',
+          message: ErrorHandler.getMessage(e),
+        );
       }
     } finally {
       if (mounted) setState(() => _isDeclining = false);

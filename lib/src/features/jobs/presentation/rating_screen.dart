@@ -4,6 +4,7 @@ import 'package:flutter_scalify/flutter_scalify.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/app_theme.dart';
 import '../../../core/navigation/app_routes.dart';
+import '../../../core/utils/error_handler.dart';
 import '../../../core/widgets/kadmat_toast.dart';
 import '../data/job_repository.dart';
 
@@ -224,7 +225,11 @@ class _RatingScreenState extends ConsumerState<RatingScreen> {
       }
     } catch (e) {
       if (mounted) {
-        KadmatToast.showError(context, title: 'خطأ', message: '$e');
+        KadmatToast.showError(
+          context,
+          title: 'خطأ',
+          message: ErrorHandler.getMessage(e),
+        );
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
