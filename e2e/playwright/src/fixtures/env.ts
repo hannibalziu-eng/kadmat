@@ -12,6 +12,7 @@ export type KadmatEnv = {
   seedOnStart: boolean;
   cleanupOnEnd: boolean;
   supabaseUrl?: string;
+  supabaseAnonKey?: string;
   supabaseServiceRoleKey?: string;
 };
 
@@ -40,6 +41,7 @@ export function readEnv(): KadmatEnv {
     seedOnStart: asBool(process.env.E2E_SEED_ON_START, false),
     cleanupOnEnd: asBool(process.env.E2E_CLEANUP_ON_END, false),
     supabaseUrl: clean(process.env.SUPABASE_URL),
+    supabaseAnonKey: clean(process.env.SUPABASE_ANON_KEY),
     supabaseServiceRoleKey: clean(process.env.SUPABASE_SERVICE_ROLE_KEY),
   };
 }

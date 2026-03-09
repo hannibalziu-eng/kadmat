@@ -10,7 +10,11 @@ async function enableFlutterAccessibilityIfPrompted(page: Page): Promise<void> {
     .catch(() => false);
 
   if (isVisible) {
-    await accessibilityButton.click();
+    await accessibilityButton.evaluate((element) => {
+      element.scrollIntoView({ block: 'center' });
+      (element as HTMLElement).click();
+      return true;
+    });
     await accessibilityButton.waitFor({ state: 'hidden', timeout: 20_000 }).catch(() => {});
   }
 }
