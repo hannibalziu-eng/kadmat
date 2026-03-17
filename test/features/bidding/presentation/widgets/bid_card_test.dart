@@ -28,7 +28,7 @@ void main() {
       );
 
       expect(find.text('Ahmed Technician'), findsOneWidget);
-      expect(find.text('100 ريال'), findsOneWidget);
+      expect(find.text('100 د.ل'), findsOneWidget);
       expect(find.textContaining('50 مهمة'), findsOneWidget);
       expect(find.byIcon(Icons.verified), findsOneWidget);
     });

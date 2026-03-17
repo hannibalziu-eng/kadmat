@@ -35,7 +35,7 @@ class FavoriteServicesScreen extends StatelessWidget {
 
   Widget _buildFavoriteItem(BuildContext context, int index) {
     final titles = ['تنظيف منازل', 'صيانة مكيفات', 'غسيل سيارات'];
-    final prices = ['150 ر.س', '200 ر.س', '80 ر.س'];
+    final prices = ['150 د.ل', '200 د.ل', '80 د.ل'];
 
     return Container(
       padding: EdgeInsets.all(12.w),

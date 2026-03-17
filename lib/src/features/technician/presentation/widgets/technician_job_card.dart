@@ -116,7 +116,7 @@ class TechnicianJobCard extends StatelessWidget {
                     ),
                     SizedBox(width: 4.w),
                     Text(
-                      '${job.initialPrice!.toStringAsFixed(0)} ريال',
+                      '${job.initialPrice!.toStringAsFixed(0)} د.ل',
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         color: const Color(0xFF13b6ec),

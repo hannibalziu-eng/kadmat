@@ -48,6 +48,8 @@ class MockJobRepository extends Mock implements JobRepository {
     required double initialPrice,
     String? description,
     List<String>? images,
+    String? pricingMode,
+    List<Map<String, dynamic>>? catalogItems,
   }) {
     return super.noSuchMethod(
           Invocation.method(#createJob, [], {
@@ -58,6 +60,8 @@ class MockJobRepository extends Mock implements JobRepository {
             #initialPrice: initialPrice,
             #description: description,
             #images: images,
+            #pricingMode: pricingMode,
+            #catalogItems: catalogItems,
           }),
           returnValue: Future.value(
             Job(

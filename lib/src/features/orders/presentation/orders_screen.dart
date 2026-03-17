@@ -61,6 +61,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
         .length;
 
     return Scaffold(
+      backgroundColor: const Color(0xFFF6F8FB),
       body: SafeArea(
         child: Column(
           children: [
@@ -155,8 +156,16 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
         gradient: const LinearGradient(
           begin: Alignment.topRight,
           end: Alignment.bottomLeft,
-          colors: [Color(0xFF18323C), Color(0xFF102129)],
+          colors: [Color(0xFFEFF8FC), Color(0xFFDFF1F8)],
         ),
+        border: Border.all(color: const Color(0xFFD5E7EE)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -170,7 +179,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                     Text(
                       'طلباتك في مكان واحد',
                       style: TextStyle(
-                        color: Colors.white,
+                        color: KadmatColors.lightTextPrimary,
                         fontSize: 24.fz,
                         fontWeight: FontWeight.w800,
                         height: 1.15,
@@ -180,7 +189,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                     Text(
                       'تابع حالة كل طلب بسرعة، وافتح الشات أو التقييم من نفس الشاشة بدون تنقل مشتت.',
                       style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.74),
+                        color: KadmatColors.lightTextSecondary,
                         fontSize: 13.fz,
                         height: 1.5,
                       ),
@@ -193,8 +202,8 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                 onPressed: () => ref.invalidate(watchMyJobsRealtimeProvider),
                 icon: const Icon(Icons.refresh_rounded),
                 style: IconButton.styleFrom(
-                  backgroundColor: Colors.white.withValues(alpha: 0.14),
-                  foregroundColor: Colors.white,
+                  backgroundColor: Colors.white,
+                  foregroundColor: KadmatColors.brandSecondary,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(18.r),
                   ),
@@ -230,40 +239,58 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
   Widget _buildFilterStrip(BuildContext context) {
     return SizedBox(
       height: 44.h,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: _filters.length,
-        separatorBuilder: (_, _) => SizedBox(width: 8.w),
-        itemBuilder: (context, index) {
-          final filter = _filters[index];
-          final isSelected = _selectedFilter == filter;
-          return AnimatedContainer(
-            duration: KadmatMotion.medium,
-            decoration: BoxDecoration(
-              color: isSelected ? KadmatColors.brandPrimary : Colors.white,
-              borderRadius: BorderRadius.circular(999.r),
-              border: Border.all(
-                color: isSelected
-                    ? KadmatColors.brandPrimary
-                    : KadmatColors.lightBorder,
-              ),
-            ),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(999.r),
-              onTap: () => setState(() => _selectedFilter = filter),
-              child: Padding(
-                padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 10.h),
-                child: Text(
-                  filter,
-                  style: TextStyle(
-                    color: isSelected
-                        ? Colors.white
-                        : KadmatColors.lightTextPrimary,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13.fz,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: List.generate(_filters.length, (index) {
+                final filter = _filters[index];
+                final isSelected = _selectedFilter == filter;
+                return Padding(
+                  padding: EdgeInsetsDirectional.only(end: index == _filters.length - 1 ? 0 : 8.w),
+                  child: AnimatedContainer(
+                    duration: KadmatMotion.medium,
+                    decoration: BoxDecoration(
+                      color: isSelected ? KadmatColors.brandPrimary : Colors.white,
+                      borderRadius: BorderRadius.circular(999.r),
+                      border: Border.all(
+                        color: isSelected
+                            ? KadmatColors.brandPrimary
+                            : KadmatColors.lightBorder,
+                      ),
+                      boxShadow: [
+                        if (!isSelected)
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.025),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                      ],
+                    ),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(999.r),
+                      onTap: () => setState(() => _selectedFilter = filter),
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 14.w,
+                          vertical: 10.h,
+                        ),
+                        child: Text(
+                          filter,
+                          style: TextStyle(
+                            color: isSelected
+                                ? Colors.white
+                                : KadmatColors.lightTextPrimary,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13.fz,
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
-                ),
-              ),
+                );
+              }),
             ),
           );
         },
@@ -507,7 +534,7 @@ class _OrderCard extends StatelessWidget {
               ),
               _MetaChip(
                 icon: Icons.payments_outlined,
-                label: '${totalPrice.toStringAsFixed(2)} ر.س',
+                label: '${totalPrice.toStringAsFixed(2)} د.ل',
               ),
             ],
           ),
@@ -545,8 +572,9 @@ class _OrderCard extends StatelessWidget {
             width: double.infinity,
             padding: EdgeInsets.all(12.w),
             decoration: BoxDecoration(
-              color: Theme.of(context).scaffoldBackgroundColor,
+              color: const Color(0xFFF7FAFD),
               borderRadius: BorderRadius.circular(18.r),
+              border: Border.all(color: const Color(0xFFE0E8EC)),
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -771,7 +799,7 @@ class _OrderOverflowMenu extends StatelessWidget {
         width: 48.w,
         height: 48.w,
         decoration: BoxDecoration(
-          color: Theme.of(context).scaffoldBackgroundColor,
+          color: const Color(0xFFF7FAFD),
           borderRadius: BorderRadius.circular(16.r),
           border: Border.all(color: KadmatColors.lightBorder),
         ),
@@ -801,9 +829,9 @@ class _HeaderMetricCard extends StatelessWidget {
     return Container(
       padding: EdgeInsets.all(14.w),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.08),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(20.r),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+        border: Border.all(color: const Color(0xFFD6E7ED)),
       ),
       child: Row(
         children: [
@@ -811,10 +839,10 @@ class _HeaderMetricCard extends StatelessWidget {
             width: 38.w,
             height: 38.w,
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.12),
+              color: KadmatColors.brandAccent,
               borderRadius: BorderRadius.circular(14.r),
             ),
-            child: Icon(icon, color: Colors.white, size: 18.s),
+            child: Icon(icon, color: KadmatColors.brandSecondary, size: 18.s),
           ),
           SizedBox(width: 10.w),
           Column(
@@ -823,7 +851,7 @@ class _HeaderMetricCard extends StatelessWidget {
               Text(
                 value,
                 style: TextStyle(
-                  color: Colors.white,
+                  color: KadmatColors.lightTextPrimary,
                   fontSize: 18.fz,
                   fontWeight: FontWeight.w800,
                 ),
@@ -831,7 +859,7 @@ class _HeaderMetricCard extends StatelessWidget {
               Text(
                 label,
                 style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.72),
+                  color: KadmatColors.lightTextSecondary,
                   fontSize: 12.fz,
                 ),
               ),
@@ -854,15 +882,23 @@ class _MetaChip extends StatelessWidget {
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 8.h),
       decoration: BoxDecoration(
-        color: Theme.of(context).scaffoldBackgroundColor,
+        color: const Color(0xFFF7FAFD),
         borderRadius: BorderRadius.circular(999.r),
+        border: Border.all(color: const Color(0xFFE0E8EC)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(icon, size: 15.s, color: KadmatColors.lightTextSecondary),
           SizedBox(width: 6.w),
-          Text(label),
+          Text(
+            label,
+            style: TextStyle(
+              color: KadmatColors.lightTextPrimary,
+              fontSize: 12.4.fz,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
         ],
       ),
     );

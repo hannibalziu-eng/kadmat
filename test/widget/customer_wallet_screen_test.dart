@@ -68,7 +68,7 @@ void main() {
 
       await tester.pumpAndSettle();
 
-      expect(find.textContaining('42.00 SAR'), findsOneWidget);
+      expect(find.textContaining('42.00 د.ل'), findsOneWidget);
       expect(find.text('إضافة رصيد'), findsNothing);
       expect(find.text('سجل المعاملات'), findsOneWidget);
       expect(find.text('عرض السجل الكامل'), findsOneWidget);
@@ -95,7 +95,7 @@ void main() {
 
     expect(find.text('دفع خدمة صيانة'), findsOneWidget);
     expect(find.text('استرداد جزئي'), findsOneWidget);
-    expect(find.textContaining('ر.س'), findsWidgets);
+    expect(find.textContaining('د.ل'), findsWidgets);
     expect(find.text('لا توجد معاملات حتى الآن'), findsNothing);
   });
 }

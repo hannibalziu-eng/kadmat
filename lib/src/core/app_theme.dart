@@ -45,12 +45,12 @@ class AppTheme {
       useMaterial3: true,
       brightness: Brightness.light,
       primaryColor: primaryColor,
-      scaffoldBackgroundColor: const Color(0xFFF2F6F7),
+      scaffoldBackgroundColor: KadmatColors.lightBackground,
       colorScheme: ColorScheme.fromSeed(
         seedColor: primaryColor,
         primary: primaryColor,
         secondary: secondaryColor,
-        surface: Colors.white,
+        surface: KadmatColors.lightSurface,
       ),
       fontFamily: 'Cairo',
       extensions: const <ThemeExtension<dynamic>>[KadmatSemanticColors.light()],
@@ -66,29 +66,32 @@ class AppTheme {
           color: Colors.black,
         ),
         bodyLarge: TextStyle(fontSize: 16.fz, color: Colors.black87),
-        bodyMedium: TextStyle(fontSize: 14.fz, color: Colors.black54),
+        bodyMedium: TextStyle(
+          fontSize: 14.fz,
+          color: KadmatColors.lightTextSecondary,
+        ),
         titleLarge: TextStyle(
           fontSize: 22.fz,
           fontWeight: FontWeight.w800,
-          color: const Color(0xFF0C171C),
+          color: KadmatColors.lightTextPrimary,
         ),
         titleMedium: TextStyle(
           fontSize: 16.fz,
           fontWeight: FontWeight.w700,
-          color: const Color(0xFF0C171C),
+          color: KadmatColors.lightTextPrimary,
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: Colors.white,
+        fillColor: KadmatColors.lightSurface,
         contentPadding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 16.h),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12.r),
-          borderSide: BorderSide(color: Colors.grey.shade300),
+          borderSide: const BorderSide(color: KadmatColors.lightBorderStrong),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12.r),
-          borderSide: BorderSide(color: Colors.grey.shade300),
+          borderSide: const BorderSide(color: KadmatColors.lightBorderStrong),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12.r),
@@ -108,8 +111,8 @@ class AppTheme {
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          foregroundColor: const Color(0xFF0C171C),
-          side: const BorderSide(color: Color(0xFFD6E2E6)),
+          foregroundColor: KadmatColors.lightTextPrimary,
+          side: const BorderSide(color: KadmatColors.lightBorderStrong),
           padding: EdgeInsets.symmetric(vertical: 16.h, horizontal: 16.w),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14.r),
@@ -118,11 +121,11 @@ class AppTheme {
         ),
       ),
       cardTheme: CardThemeData(
-        color: Colors.white,
+        color: KadmatColors.lightSurface,
         elevation: 0,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20.r),
-          side: const BorderSide(color: Color(0xFFDCE5E8)),
+          side: const BorderSide(color: KadmatColors.lightBorder),
         ),
         shadowColor: Colors.black.withValues(alpha: 0.04),
       ),
@@ -135,9 +138,12 @@ class AppTheme {
           fontFamily: 'Cairo',
           fontSize: 20.fz,
           fontWeight: FontWeight.bold,
-          color: Colors.black,
+          color: KadmatColors.lightTextPrimary,
         ),
-        iconTheme: IconThemeData(color: Colors.black87, size: 24.s),
+        iconTheme: IconThemeData(
+          color: KadmatColors.lightTextPrimary,
+          size: 24.s,
+        ),
       ),
     );
   }

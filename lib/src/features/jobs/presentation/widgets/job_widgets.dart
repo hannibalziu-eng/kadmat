@@ -260,7 +260,7 @@ class PriceCard extends StatelessWidget {
             ),
           ),
           Text(
-            'ريال',
+            'د.ل',
             style: TextStyle(fontSize: 18.fz, color: Colors.white60),
           ),
 
@@ -311,7 +311,7 @@ class PriceCard extends StatelessWidget {
           ),
         ),
         Text(
-          '${isNegative ? "-" : ""}${amount.abs().toStringAsFixed(0)} ر.س',
+          '${isNegative ? "-" : ""}${amount.abs().toStringAsFixed(0)} د.ل',
           style: TextStyle(
             fontSize: 14.fz,
             color: color ?? (isNegative ? Colors.red : Colors.white),

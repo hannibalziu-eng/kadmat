@@ -19,6 +19,23 @@ import 'error_messages.dart';
 class ErrorHandler {
   ErrorHandler._();
 
+  static String _extractExceptionMessage(String raw) {
+    final trimmed = raw.trim();
+    if (trimmed.startsWith('Exception: ')) {
+      return trimmed.substring(11).trim();
+    }
+
+    final authMatch = RegExp(r'message:\s*([^,\)]+)').firstMatch(trimmed);
+    if (authMatch != null) {
+      final extracted = authMatch.group(1)?.trim() ?? '';
+      if (extracted.isNotEmpty) {
+        return extracted;
+      }
+    }
+
+    return trimmed;
+  }
+
   /// Handle error with toast notification
   /// Shows user-friendly message and optionally logs for analytics
   static void handle(
@@ -56,12 +73,9 @@ class ErrorHandler {
 
     // Handle Exception with message
     if (error is Exception) {
-      final message = error.toString();
-      // Remove "Exception: " prefix if present
-      if (message.startsWith('Exception: ')) {
-        return message.substring(11);
-      }
-      return ErrorMessages.fromException(error);
+      final message = _extractExceptionMessage(error.toString());
+      final resolved = ErrorMessages.fromException(message);
+      return resolved == ErrorMessages.unknownError ? message : resolved;
     }
 
     // Fallback to ErrorMessages helper

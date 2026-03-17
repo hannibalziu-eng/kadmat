@@ -77,7 +77,7 @@ class AuthRepository {
   }
 
   Future<void> _updateAuthState(Session session) async {
-    final userType = await _storage.read(key: 'user_type');
+    final storedUserType = await _storage.read(key: 'user_type');
 
     try {
       if (_userProfile == null) {
@@ -93,9 +93,13 @@ class AuthRepository {
       debugPrint('⚠️ Failed to fetch profile: $e');
     }
 
+    final profileUserType = _userProfile?['user_type']?.toString();
+    final metadataUserType = session.user.userMetadata?['user_type']?.toString();
+    final resolvedUserType = storedUserType ?? profileUserType ?? metadataUserType;
+
     // Keep `currentUser` as UUID to match DB relations (`technician_id/customer_id`).
     _currentUser = session.user.id;
-    _userType = userType;
+    _userType = resolvedUserType;
     _authStateController.add(_currentUser);
   }
 
@@ -133,17 +137,55 @@ class AuthRepository {
         // Ignore signOut errors - we're just cleaning up
       }
 
+      if (kIsWeb) {
+        final authResponse = await Supabase.instance.client.auth
+            .signInWithPassword(email: email, password: password);
+        final session = authResponse.session;
+        final user = authResponse.user;
+
+        if (session == null || user == null) {
+          throw Exception(ErrorMessages.authSessionSyncFailed);
+        }
+
+        final profileData = await Supabase.instance.client
+            .from('users')
+            .select()
+            .eq('id', user.id)
+            .single();
+
+        final type =
+            profileData['user_type']?.toString() ??
+            user.userMetadata?['user_type']?.toString() ??
+            'customer';
+
+        if (requiredUserType != null && type != requiredUserType) {
+          await Supabase.instance.client.auth.signOut(
+            scope: SignOutScope.local,
+          );
+          throw Exception(
+            requiredUserType == 'technician'
+                ? 'عذراً، هذا الحساب مخصص للعملاء فقط. يرجى استخدام تطبيق العملاء.'
+                : 'عذراً، هذا الحساب مخصص للفنيين فقط. يرجى استخدام تطبيق الفني.',
+          );
+        }
+
+        await _storage.write(key: 'user_type', value: type);
+        _userType = type;
+        _userProfile = Map<String, dynamic>.from(profileData);
+        _currentUser = user.id;
+        _authStateController.add(_currentUser);
+        return;
+      }
+
       final response = await _client.post(
         Endpoints.login,
         data: {'email': email, 'password': password},
       );
 
-      final refreshToken =
-          response.data['refresh_token']; // Extract refresh token
+      final refreshToken = response.data['refresh_token'];
       final user = response.data['user'];
       final type = user['user_type'] ?? 'customer';
 
-      // Enforce User Type Check
       if (requiredUserType != null && type != requiredUserType) {
         throw Exception(
           requiredUserType == 'technician'
@@ -152,17 +194,17 @@ class AuthRepository {
         );
       }
 
-      // 1. Persist User Type FIRST
-      // This ensures that when setSession triggers the auth listener:
-      // - _updateAuthState reads the correct value from storage
-      // - The Router gets the correct state immediately
       await _storage.write(key: 'user_type', value: type);
       _userType = type;
 
-      // 2. Hydrate Supabase Session
-      // This triggers onAuthStateChange -> _updateAuthState
       if (refreshToken != null) {
-        await Supabase.instance.client.auth.setSession(refreshToken);
+        try {
+          await Supabase.instance.client.auth.setSession(refreshToken);
+        } on AuthException catch (e) {
+          throw Exception(_authSessionErrorMessage(e));
+        }
+      } else {
+        throw Exception(ErrorMessages.authSessionSyncFailed);
       }
 
       // _updateAuthState will be triggered by listener via onAuthStateChange,
@@ -174,13 +216,68 @@ class AuthRepository {
           e.type == DioExceptionType.connectionTimeout) {
         throw Exception('فشل الاتصال بالخادم. تأكد من اتصالك بالإنترنت.');
       }
-      final message = e.response?.data?['message'] ?? 'فشل تسجيل الدخول';
-      throw Exception(message);
-    } catch (e) {
+      final data = e.response?.data;
+      final message =
+          (data is Map<String, dynamic>
+                  ? (data['message'] ??
+                      (data['error'] is Map<String, dynamic>
+                          ? data['error']['message']
+                          : null))
+                  : null)
+              as String?;
+      if (e.response?.statusCode == 401) {
+        throw Exception(ErrorMessages.invalidCredentials);
+      }
+      if (e.response?.statusCode == 429) {
+        throw Exception(ErrorMessages.rateLimited);
+      }
+      if (e.response?.statusCode != null &&
+          (e.response!.statusCode! >= 500)) {
+        throw Exception(ErrorMessages.serverError);
+      }
+      final resolved =
+          (message != null && message.trim().isNotEmpty)
+              ? message.trim()
+              : 'فشل تسجيل الدخول';
+      throw Exception(resolved);
+    } on AuthException catch (e) {
+      throw Exception(_authSessionErrorMessage(e));
+    } on Exception {
       rethrow;
+    } catch (e) {
+      throw Exception(_friendlyErrorMessage(e, fallback: 'فشل تسجيل الدخول'));
     } finally {
       _isPerformingLogin = false;
     }
+  }
+
+  String _authSessionErrorMessage(AuthException error) {
+    final raw = error.message.trim();
+    final normalized = raw.toLowerCase();
+
+    if (normalized.isEmpty) {
+      return ErrorMessages.authSessionSyncFailed;
+    }
+
+    if (normalized.contains('invalid refresh token') ||
+        normalized.contains('refresh_token_already_used') ||
+        normalized.contains('refresh token cannot be empty') ||
+        normalized.contains('session missing') ||
+        normalized.contains('session_not_found') ||
+        normalized.contains('no refresh_token detected') ||
+        normalized.contains('no access_token detected')) {
+      return ErrorMessages.authSessionSyncFailed;
+    }
+
+    if (normalized.contains('network') ||
+        normalized.contains('fetch') ||
+        normalized.contains('connection') ||
+        normalized.contains('timeout')) {
+      return ErrorMessages.noInternetConnection;
+    }
+
+    final resolved = ErrorMessages.fromException(raw);
+    return resolved == ErrorMessages.unknownError ? raw : resolved;
   }
 
   Future<void> register({

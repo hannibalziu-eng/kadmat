@@ -143,6 +143,46 @@ class _TechnicianPriceInputScreenState
     }
   }
 
+  Future<void> _advanceFixedPriceJob() async {
+    if (_job == null || _isSubmitting) return;
+
+    setState(() => _isSubmitting = true);
+    try {
+      if (_job!.status == 'accepted' && _job!.canStartTravel) {
+        await ref
+            .read(jobRepositoryProvider)
+            .updateTechnicianProgress(widget.orderId, progress: 'on_the_way');
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              _job!.status == 'accepted'
+                  ? 'تم بدء التوجّه لهذا الطلب الثابت'
+                  : 'تم تحديث حالة الطلب الثابت',
+            ),
+            backgroundColor: Colors.green,
+          ),
+        );
+        context.go(AppRoutes.buildTechnicianJobDetailPath(widget.orderId));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(ErrorHandler.getMessage(e)),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+      }
+    }
+  }
+
   // دوال مساعدة
   Future<void> _callCustomer(String? phoneNumber) async {
     if (phoneNumber == null || phoneNumber.isEmpty) return;
@@ -254,75 +294,289 @@ class _TechnicianPriceInputScreenState
       );
     }
 
+    final isCatalogFixed = _job?.isCatalogFixed ?? false;
+
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      appBar: AppBar(title: const Text('تحديد السعر'), centerTitle: true),
+      appBar: AppBar(
+        title: Text(isCatalogFixed ? 'تفاصيل السعر الثابت' : 'تحديد السعر'),
+        centerTitle: true,
+      ),
       body: SingleChildScrollView(
         padding: EdgeInsets.all(16.w),
         child: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 960),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children:
-                    [
-                          TechnicianFlowHero(
-                            icon: Icons.price_change_rounded,
-                            eyebrow: 'قرار الفني',
-                            title: 'حدّد السعر النهائي بوضوح',
-                            subtitle:
-                                'راجع تفاصيل الطلب أولًا ثم أرسل سعرًا واحدًا واضحًا. بعد الإرسال ستنتظر موافقة العميل على هذا السعر نفسه.',
-                            bottom: Wrap(
-                              spacing: 8.w,
-                              runSpacing: 8.h,
-                              children: [
-                                TechnicianFlowPill(
-                                  icon: Icons.work_outline_rounded,
-                                  label:
-                                      widget.serviceName ??
-                                      _job?.service?['name'] ??
-                                      'الخدمة المطلوبة',
-                                ),
-                                if (_photos.isNotEmpty)
-                                  TechnicianFlowPill(
-                                    icon: Icons.photo_library_outlined,
-                                    label: '${_photos.length} صور من العميل',
+            child: isCatalogFixed
+                ? _buildFixedPriceBody()
+                : Form(
+                    key: _formKey,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children:
+                          [
+                                TechnicianFlowHero(
+                                  icon: Icons.price_change_rounded,
+                                  eyebrow: 'قرار الفني',
+                                  title: 'حدّد السعر النهائي بوضوح',
+                                  subtitle:
+                                      'راجع تفاصيل الطلب أولًا ثم أرسل سعرًا واحدًا واضحًا. بعد الإرسال ستنتظر موافقة العميل على هذا السعر نفسه.',
+                                  bottom: Wrap(
+                                    spacing: 8.w,
+                                    runSpacing: 8.h,
+                                    children: [
+                                      TechnicianFlowPill(
+                                        icon: Icons.work_outline_rounded,
+                                        label:
+                                            widget.serviceName ??
+                                            _job?.service?['name'] ??
+                                            'الخدمة المطلوبة',
+                                      ),
+                                      if (_photos.isNotEmpty)
+                                        TechnicianFlowPill(
+                                          icon: Icons.photo_library_outlined,
+                                          label:
+                                              '${_photos.length} صور من العميل',
+                                        ),
+                                    ],
                                   ),
-                              ],
-                            ),
-                          ),
-                          SizedBox(height: 16.h),
-                          const TechnicianFlowSurface(
-                            child: TechnicianFlowNextStepCard(
-                              icon: Icons.rule_folder_outlined,
-                              title:
-                                  'الخطوة التالية: أرسل سعرًا نهائيًا واحدًا',
-                              description:
-                                  'لا ترسل سعرًا تجريبيًا. اكتب القيمة التي ستلتزم بها، ثم أضف ملاحظة قصيرة فقط إذا كانت ستساعد العميل على اتخاذ القرار.',
-                            ),
-                          ),
-                          SizedBox(height: 16.h),
-                          _buildJobDetailsCard(),
-                          SizedBox(height: 16.h),
-                          _buildCustomerPhotosSection(),
-                          SizedBox(height: 16.h),
-                          _buildCustomerInfoCard(),
-                          SizedBox(height: 16.h),
-                          _buildPriceInputSection(),
-                          SizedBox(height: 16.h),
-                          _buildNotesSection(),
-                          SizedBox(height: 32.h),
-                          _buildSubmitButton(),
-                          SizedBox(height: 24.h),
-                        ]
-                        .animate(interval: 50.ms)
-                        .fadeIn(duration: 400.ms)
-                        .slideY(begin: 0.1, duration: 400.ms),
+                                ),
+                                SizedBox(height: 16.h),
+                                const TechnicianFlowSurface(
+                                  child: TechnicianFlowNextStepCard(
+                                    icon: Icons.rule_folder_outlined,
+                                    title:
+                                        'الخطوة التالية: أرسل سعرًا نهائيًا واحدًا',
+                                    description:
+                                        'لا ترسل سعرًا تجريبيًا. اكتب القيمة التي ستلتزم بها، ثم أضف ملاحظة قصيرة فقط إذا كانت ستساعد العميل على اتخاذ القرار.',
+                                  ),
+                                ),
+                                SizedBox(height: 16.h),
+                                _buildJobDetailsCard(),
+                                SizedBox(height: 16.h),
+                                _buildCustomerPhotosSection(),
+                                SizedBox(height: 16.h),
+                                _buildCustomerInfoCard(),
+                                SizedBox(height: 16.h),
+                                _buildPriceInputSection(),
+                                SizedBox(height: 16.h),
+                                _buildNotesSection(),
+                                SizedBox(height: 32.h),
+                                _buildSubmitButton(),
+                                SizedBox(height: 24.h),
+                              ]
+                              .animate(interval: 50.ms)
+                              .fadeIn(duration: 400.ms)
+                              .slideY(begin: 0.1, duration: 400.ms),
+                    ),
+                  ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFixedPriceBody() {
+    final runtimePrice = _job?.effectiveRuntimePrice ?? 0;
+    final catalogItems = _job?.effectiveJobCatalogItems ?? const [];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        TechnicianFlowHero(
+          icon: Icons.sell_outlined,
+          eyebrow: 'طلب ثابت',
+          title: 'السعر جاهز ولا يحتاج تسعيرًا جديدًا',
+          subtitle:
+              'راجع العناصر والسعر الثابت ثم انتقل إلى الخطوة التالية فقط. لا ترسل عرضًا ولا ملاحظات تسعير لهذا الطلب.',
+          bottom: Wrap(
+            spacing: 8.w,
+            runSpacing: 8.h,
+            children: [
+              TechnicianFlowPill(
+                icon: Icons.work_outline_rounded,
+                label:
+                    widget.serviceName ??
+                    _job?.service?['name'] ??
+                    'الخدمة المطلوبة',
+              ),
+              TechnicianFlowPill(
+                icon: Icons.sell_outlined,
+                label: '${runtimePrice.toStringAsFixed(0)} د.ل',
+              ),
+              TechnicianFlowPill(
+                icon: Icons.inventory_2_outlined,
+                label: '${_job?.effectiveCatalogItemCount ?? 0} عنصر',
+              ),
+            ],
+          ),
+        ),
+        SizedBox(height: 16.h),
+        TechnicianFlowSurface(
+          child: TechnicianFlowNextStepCard(
+            icon: _job?.status == 'accepted'
+                ? Icons.navigation_outlined
+                : Icons.visibility_outlined,
+            title: _job?.status == 'accepted'
+                ? 'الخطوة التالية: ابدأ التوجّه'
+                : 'الخطوة التالية: راجع تفاصيل التنفيذ',
+            description: _job?.status == 'accepted'
+                ? 'الطلب ثابت السعر ومثبت على الفني بالفعل. استخدم هذه الشاشة للمراجعة فقط، ثم ابدأ التوجّه عندما تكون جاهزًا.'
+                : 'لا توجد هنا أي خطوة تسعير. راجع التفاصيل ثم واصل التنفيذ من شاشة الطلب.',
+          ),
+        ),
+        SizedBox(height: 16.h),
+        _buildFixedPriceSummaryCard(catalogItems, runtimePrice),
+        SizedBox(height: 16.h),
+        _buildJobDetailsCard(),
+        SizedBox(height: 16.h),
+        _buildCustomerPhotosSection(),
+        SizedBox(height: 16.h),
+        _buildCustomerInfoCard(),
+        SizedBox(height: 24.h),
+        _buildFixedPriceActionButton(),
+        SizedBox(height: 24.h),
+      ].animate(interval: 50.ms).fadeIn(duration: 400.ms).slideY(begin: 0.1, duration: 400.ms),
+    );
+  }
+
+  Widget _buildFixedPriceSummaryCard(
+    List<Map<String, dynamic>> catalogItems,
+    double runtimePrice,
+  ) {
+    return TechnicianFlowSurface(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.receipt_long_outlined,
+                size: 20.s,
+                color: Colors.grey[700],
+              ),
+              SizedBox(width: 8.w),
+              Text(
+                'ملخص السعر الثابت',
+                style: TextStyle(
+                  fontSize: 16.fz,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey[800],
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 12.h),
+          _buildDetailRow(
+            icon: Icons.attach_money,
+            label: 'الإجمالي الثابت',
+            value: '${runtimePrice.toStringAsFixed(0)} د.ل',
+            valueColor: Theme.of(context).primaryColor,
+          ),
+          _buildDetailRow(
+            icon: Icons.inventory_2_outlined,
+            label: 'عدد العناصر',
+            value: '${_job?.effectiveCatalogItemCount ?? 0}',
+          ),
+          if (catalogItems.isNotEmpty) ...[
+            Divider(height: 24.h),
+            Text(
+              'العناصر المحددة',
+              style: TextStyle(
+                fontSize: 14.fz,
+                fontWeight: FontWeight.w700,
+                color: Colors.grey[700],
               ),
             ),
+            SizedBox(height: 10.h),
+            ...catalogItems.map((item) {
+              final title =
+                  (item['item_name'] ??
+                          item['name_ar'] ??
+                          item['name'] ??
+                          item['title'] ??
+                          'عنصر خدمة')
+                      .toString();
+              final quantity = ((item['quantity'] as num?)?.toInt() ?? 1).clamp(
+                1,
+                999,
+              );
+              final lineTotal =
+                  (item['line_total'] as num?)?.toDouble() ??
+                  (item['price'] as num?)?.toDouble() ??
+                  (item['unit_price'] as num?)?.toDouble();
+
+              return Padding(
+                padding: EdgeInsets.only(bottom: 10.h),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        quantity > 1 ? '$title × $quantity' : title,
+                        style: TextStyle(
+                          fontSize: 13.fz,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    if (lineTotal != null)
+                      Text(
+                        '${lineTotal.toStringAsFixed(0)} د.ل',
+                        style: TextStyle(
+                          fontSize: 13.fz,
+                          color: Colors.grey[700],
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                  ],
+                ),
+              );
+            }),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFixedPriceActionButton() {
+    final canStartTravel =
+        _job?.status == 'accepted' && (_job?.canStartTravel ?? false);
+    return SizedBox(
+      width: double.infinity,
+      height: 56.h,
+      child: ElevatedButton.icon(
+        onPressed: _isSubmitting ? null : _advanceFixedPriceJob,
+        icon: Icon(
+          canStartTravel
+              ? Icons.navigation_outlined
+              : Icons.visibility_outlined,
+          color: Colors.white,
+          size: 22.s,
+        ),
+        label: _isSubmitting
+            ? SizedBox(
+                height: 24.s,
+                width: 24.s,
+                child: const CircularProgressIndicator(
+                  color: Colors.white,
+                  strokeWidth: 2.5,
+                ),
+              )
+            : Text(
+                canStartTravel ? 'بدء التوجّه' : 'فتح تفاصيل الطلب',
+                style: TextStyle(
+                  fontSize: 18.fz,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Theme.of(context).primaryColor,
+          disabledBackgroundColor: Colors.grey[300],
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16.r),
           ),
+          elevation: 4,
         ),
       ),
     );
@@ -660,7 +914,7 @@ class _TechnicianPriceInputScreenState
               _buildDetailRow(
                 icon: Icons.attach_money,
                 label: 'السعر المبدئي',
-                value: '${_job!.initialPrice!.toStringAsFixed(0)} ر.س',
+                value: '${_job!.initialPrice!.toStringAsFixed(0)} د.ل',
                 valueColor: Theme.of(context).primaryColor,
               ),
             ],
@@ -786,7 +1040,7 @@ class _TechnicianPriceInputScreenState
               fontWeight: FontWeight.bold,
               color: Colors.grey[300],
             ),
-            suffixText: 'ر.س',
+            suffixText: 'د.ل',
             suffixStyle: TextStyle(
               fontSize: 18.fz,
               fontWeight: FontWeight.w600,

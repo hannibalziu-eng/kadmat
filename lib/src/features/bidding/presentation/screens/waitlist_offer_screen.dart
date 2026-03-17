@@ -259,7 +259,7 @@ class _WaitlistOfferScreenState extends ConsumerState<WaitlistOfferScreen> {
           const SizedBox(height: 12),
           _buildDetailRow(
             'السعر المقترح',
-            '${offer.amount.toStringAsFixed(0)} ريال',
+            '${offer.amount.toStringAsFixed(0)} د.ل',
             Icons.monetization_on,
           ),
           const SizedBox(height: 16),

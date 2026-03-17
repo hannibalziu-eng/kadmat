@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_scalify/flutter_scalify.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import 'package:geolocator/geolocator.dart' show Position;
+import 'package:latlong2/latlong.dart';
 import '../../../../core/app_theme.dart';
 import '../../../../core/design/kadmat_tokens.dart';
 import '../../../../core/services/location/location_service.dart';
@@ -12,9 +14,10 @@ import '../../../../core/widgets/kadmat_components.dart';
 import '../../../jobs/presentation/job_controller.dart';
 import '../../../jobs/domain/job.dart';
 import '../../../jobs/data/job_repository.dart';
+import '../../../technician/domain/technician_status.dart';
 import '../../../../core/navigation/app_routes.dart';
-import '../../../auth/data/auth_repository.dart';
 import '../providers/technician_dispatch_feed_provider.dart';
+import '../providers/technician_providers.dart';
 import '../providers/technician_tab_provider.dart';
 import '../utils/technician_dispatch_queue.dart';
 
@@ -35,6 +38,7 @@ class _TechnicianRequestsScreenState
   _NewRequestsSortMode _newRequestsSortMode = _NewRequestsSortMode.newest;
   bool _urgentOnlyNewRequests = false;
   bool _compactNewRequests = false;
+  bool _manualLocationExpanded = false;
 
   @override
   void initState() {
@@ -54,16 +58,22 @@ class _TechnicianRequestsScreenState
     final myJobs = ref.watch(myJobsProvider).valueOrNull ?? const <Job>[];
     final newRequestsCount = dispatchFeed?.visibleJobs.length ?? 0;
     final awaitingCount = myJobs
-        .where((j) => j.status == 'accepted' || j.status == 'price_pending')
+        .where(
+          (j) =>
+              j.status == 'price_pending' ||
+              (j.status == 'accepted' && !j.isCatalogFixed),
+        )
         .length;
     final inProgressCount = myJobs
         .where(
-          (j) => [
-            'on_the_way',
-            'arrived',
-            'in_progress',
-            'pending_confirm',
-          ].contains(j.status),
+          (j) =>
+              [
+                'on_the_way',
+                'arrived',
+                'in_progress',
+                'pending_confirm',
+              ].contains(j.status) ||
+              (j.status == 'accepted' && j.isCatalogFixed),
         )
         .length;
 
@@ -104,13 +114,13 @@ class _TechnicianRequestsScreenState
   }
 
   Widget _buildNewRequestsTab() {
-    final userProfile = ref.watch(authRepositoryProvider).userProfile;
-    final isOnline = userProfile?['is_online'] == true;
-    final locationAsync = ref.watch(locationStreamProvider);
+    final isOnline =
+        ref.watch(technicianOnlineStatusProvider) == TechnicianStatus.online;
+    final locationAsync = ref.watch(technicianResolvedLocationProvider);
     final dispatchFeedAsync = ref.watch(technicianDispatchFeedProvider);
     final repository = ref.watch(jobRepositoryProvider);
 
-    if (userProfile != null && !isOnline) {
+    if (!isOnline) {
       return _buildNewRequestsGateState(
         icon: Icons.power_settings_new_rounded,
         title: 'أنت غير متصل حالياً',
@@ -122,30 +132,20 @@ class _TechnicianRequestsScreenState
     }
 
     if (locationAsync.hasError && !dispatchFeedAsync.hasValue) {
-      return _buildNewRequestsGateState(
+      return _buildLocationSelectionGateState(
         icon: Icons.location_off_rounded,
         title: 'تعذر تحديد موقعك',
         subtitle:
-            'امنح التطبيق صلاحية الموقع ثم أعد المحاولة لعرض الطلبات القريبة.',
-        actionLabel: 'إعادة المحاولة',
-        onAction: () {
-          ref.invalidate(locationStreamProvider);
-          ref.invalidate(technicianDispatchFeedProvider);
-          ref.invalidate(watchNearbyJobsStreamProvider);
-        },
+            'اسمح بالموقع أو اختر موقعك يدويًا حتى نعرض لك الطلبات المطابقة ضمن نطاقك.',
       );
     }
 
     if (locationAsync.isLoading && !dispatchFeedAsync.hasValue) {
-      return _buildNewRequestsGateState(
+      return _buildLocationSelectionGateState(
         icon: Icons.my_location_rounded,
         title: 'جار تحديد موقعك',
-        subtitle: 'سنبدأ بعرض الطلبات الجديدة بمجرد توفر موقعك الحالي.',
-        actionLabel: 'تحديث',
-        onAction: () {
-          ref.invalidate(locationStreamProvider);
-          ref.invalidate(technicianDispatchFeedProvider);
-        },
+        subtitle:
+            'سنبدأ بعرض الطلبات الجديدة بمجرد توفر موقعك. ويمكنك اختيار موقع يدويًا إذا أردت البدء فورًا.',
         showSpinner: true,
       );
     }
@@ -287,11 +287,15 @@ class _TechnicianRequestsScreenState
                                         icon: Icons.work,
                                         iconColor: Colors.blue,
                                         iconBgColor: Colors.blue.shade50,
-                                        statusText: _isUrgentJob(job)
+                                        statusText: job.isCatalogFixed
+                                            ? 'سعر ثابت'
+                                            : _isUrgentJob(job)
                                             ? 'عاجل'
                                             : 'جديد',
                                         statusColor: _isUrgentJob(job)
                                             ? Colors.red
+                                            : job.isCatalogFixed
+                                            ? AppTheme.primaryColor
                                             : Colors.orange,
                                         compact: _compactNewRequests,
                                         secondaryInfo: _buildRequestMeta(
@@ -303,11 +307,17 @@ class _TechnicianRequestsScreenState
                                             : Colors.blueGrey,
                                         showActions: true,
                                         isLocked: isLocked,
+                                        acceptLabel: job.isCatalogFixed
+                                            ? 'مراجعة الطلب'
+                                            : null,
+                                        acceptIcon: job.isCatalogFixed
+                                            ? Icons.visibility_outlined
+                                            : Icons.local_offer_outlined,
                                         onAccept: isLocked
                                             ? null
                                             : () async {
                                                 await _acceptJobAndNavigate(
-                                                  job.id,
+                                                  job,
                                                 );
                                               },
                                         onReject: () {
@@ -353,22 +363,25 @@ class _TechnicianRequestsScreenState
             normalized.contains('location') ||
             normalized.contains('permission');
 
+        if (isLocationError) {
+          return _buildLocationSelectionGateState(
+            icon: Icons.location_off_rounded,
+            title: 'فعّل موقعك أو حدده يدويًا',
+            subtitle:
+                'لا يمكن تحميل الطلبات القريبة بدون نقطة عمل واضحة. اختر موقعك يدويًا إذا كان المتصفح يمنع الموقع التلقائي.',
+          );
+        }
+
         return Center(
           child: Padding(
             padding: EdgeInsets.all(24.w),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(
-                  isLocationError ? Icons.location_off : Icons.wifi_off,
-                  size: 64.s,
-                  color: Colors.grey,
-                ),
+                Icon(Icons.wifi_off, size: 64.s, color: Colors.grey),
                 SizedBox(height: 12.h),
                 Text(
-                  isLocationError
-                      ? 'فعّل الموقع لعرض الطلبات القريبة'
-                      : 'تعذر تحميل الطلبات الجديدة',
+                  'تعذر تحميل الطلبات الجديدة',
                   style: TextStyle(
                     fontSize: 16.fz,
                     fontWeight: FontWeight.bold,
@@ -377,9 +390,7 @@ class _TechnicianRequestsScreenState
                 ),
                 SizedBox(height: 8.h),
                 Text(
-                  isLocationError
-                      ? 'لا يمكن تحديد الموقع حالياً. تأكد من صلاحية الموقع والمحاولة مجدداً.'
-                      : 'تحقق من الاتصال بالإنترنت وسيتم إعادة المحاولة تلقائياً.',
+                  'تحقق من الاتصال بالإنترنت وسيتم إعادة المحاولة تلقائياً.',
                   textAlign: TextAlign.center,
                   style: TextStyle(fontSize: 12.fz, color: Colors.grey),
                 ),
@@ -397,6 +408,93 @@ class _TechnicianRequestsScreenState
           ),
         );
       },
+    );
+  }
+
+  LatLng get _manualMapCenter {
+    final manualLocation = ref.read(technicianManualLocationProvider);
+    if (manualLocation != null) {
+      return LatLng(manualLocation.latitude, manualLocation.longitude);
+    }
+    return const LatLng(32.8872, 13.1913);
+  }
+
+  void _toggleManualLocationPicker() {
+    setState(() {
+      _manualLocationExpanded = !_manualLocationExpanded;
+    });
+  }
+
+  void _selectManualLocation(LatLng point) {
+    ref
+        .read(technicianManualLocationProvider.notifier)
+        .state = technicianPositionFromCoordinates(
+      latitude: point.latitude,
+      longitude: point.longitude,
+    );
+    ref.invalidate(technicianResolvedLocationProvider);
+    ref.invalidate(technicianDispatchFeedProvider);
+    ref.invalidate(watchNearbyJobsStreamProvider);
+  }
+
+  void _retryTechnicianLocation() {
+    ref.invalidate(locationStreamProvider);
+    ref.invalidate(technicianResolvedLocationProvider);
+    ref.invalidate(technicianDispatchFeedProvider);
+    ref.invalidate(watchNearbyJobsStreamProvider);
+  }
+
+  Widget _buildLocationSelectionGateState({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    bool showSpinner = false,
+  }) {
+    final manualLocation = ref.watch(technicianManualLocationProvider);
+
+    return SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: EdgeInsets.all(24.w),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 560),
+          child: Column(
+            children: [
+              _buildStateSurface(
+                icon: icon,
+                title: title,
+                subtitle: subtitle,
+                showSpinner: showSpinner,
+                action: KadmatPrimaryButton(
+                  label: 'إعادة المحاولة',
+                  icon: Icons.refresh_rounded,
+                  onPressed: _retryTechnicianLocation,
+                ),
+              ),
+              SizedBox(height: 14.h),
+              _ManualTechnicianLocationCard(
+                isExpanded: _manualLocationExpanded,
+                hasSelectedLocation: manualLocation != null,
+                center: _manualMapCenter,
+                selectedPoint: manualLocation == null
+                    ? null
+                    : LatLng(manualLocation.latitude, manualLocation.longitude),
+                onToggle: _toggleManualLocationPicker,
+                onMapTap: _selectManualLocation,
+                onClear: manualLocation == null
+                    ? null
+                    : () {
+                        ref
+                                .read(technicianManualLocationProvider.notifier)
+                                .state =
+                            null;
+                        _retryTechnicianLocation();
+                      },
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -685,10 +783,16 @@ class _TechnicianRequestsScreenState
                   onPressed: isLocked
                       ? null
                       : () async {
-                          await _acceptJobAndNavigate(job.id);
+                          await _acceptJobAndNavigate(job);
                         },
-                  icon: const Icon(Icons.local_offer_outlined),
-                  label: const Text('تقديم عرض'),
+                  icon: Icon(
+                    job.isCatalogFixed
+                        ? Icons.visibility_outlined
+                        : Icons.local_offer_outlined,
+                  ),
+                  label: Text(
+                    job.isCatalogFixed ? 'مراجعة الطلب' : 'تقديم عرض',
+                  ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppTheme.primaryColor,
                     foregroundColor: Colors.white,
@@ -716,7 +820,11 @@ class _TechnicianRequestsScreenState
       data: (jobs) {
         // فقط الطلبات المقبولة وبانتظار موافقة العميل على السعر
         final awaitingJobs = jobs
-            .where((j) => j.status == 'accepted' || j.status == 'price_pending')
+            .where(
+              (j) =>
+                  j.status == 'price_pending' ||
+                  (j.status == 'accepted' && !j.isCatalogFixed),
+            )
             .toList();
 
         debugPrint('📋 Awaiting Approval Tab: ${awaitingJobs.length} jobs');
@@ -752,7 +860,8 @@ class _TechnicianRequestsScreenState
                 statusText: _getAwaitingStatusText(job.status),
                 statusColor: Colors.amber,
                 showActions: false,
-                showSetPriceButton: job.status == 'accepted',
+                showSetPriceButton:
+                    job.status == 'accepted' && !job.isCatalogFixed,
                 showWaitingPriceApproval: job.status == 'price_pending',
                 onSetPrice: () {
                   debugPrint('💰 Navigate to set price: ${job.id}');
@@ -800,9 +909,11 @@ class _TechnicianRequestsScreenState
         final inProgressJobs = jobs
             .where(
               (j) =>
+                  (j.status == 'accepted' && j.isCatalogFixed) ||
                   j.status == 'on_the_way' ||
                   j.status == 'arrived' ||
-                  j.status == 'in_progress',
+                  j.status == 'in_progress' ||
+                  j.status == 'pending_confirm',
             )
             .toList();
 
@@ -839,10 +950,18 @@ class _TechnicianRequestsScreenState
                 icon: Icons.work_history,
                 iconColor: Colors.cyan,
                 iconBgColor: Colors.cyan.shade50,
-                statusText: _getStatusText(job.status),
-                statusColor: _getStatusColor(job.status),
+                statusText: job.isCatalogFixed && job.status == 'accepted'
+                    ? 'جاهز لبدء التوجّه'
+                    : _getStatusText(job.status),
+                statusColor: job.isCatalogFixed && job.status == 'accepted'
+                    ? AppTheme.primaryColor
+                    : _getStatusColor(job.status),
                 showActions: false,
-                showSetPriceButton: job.status == 'accepted',
+                secondaryInfo: job.isCatalogFixed && job.status == 'accepted'
+                    ? 'الخطوة التالية: ابدأ التوجّه من تفاصيل الطلب'
+                    : null,
+                showSetPriceButton:
+                    job.status == 'accepted' && !job.isCatalogFixed,
                 showWaitingPriceApproval: job.status == 'price_pending',
                 showArrivedButton: job.status == 'on_the_way',
                 showStartWorkButton: job.status == 'arrived',
@@ -1090,9 +1209,13 @@ class _TechnicianRequestsScreenState
     }
   }
 
-  Future<void> _acceptJobAndNavigate(String jobId) async {
+  Future<void> _acceptJobAndNavigate(Job job) async {
     if (!mounted) return;
-    await context.push(AppRoutes.buildTechnicianBiddingPath(jobId));
+    if (job.isCatalogFixed) {
+      await context.push(AppRoutes.buildTechnicianJobDetailPath(job.id));
+      return;
+    }
+    await context.push(AppRoutes.buildTechnicianBiddingPath(job.id));
   }
 
   /// Show job preview BottomSheet
@@ -1208,7 +1331,7 @@ class _TechnicianRequestsScreenState
                     ? null
                     : () async {
                         Navigator.pop(context);
-                        await _acceptJobAndNavigate(job.id);
+                        await _acceptJobAndNavigate(job);
                       },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Theme.of(context).primaryColor,
@@ -1252,6 +1375,8 @@ class _TechnicianRequestsScreenState
     double rating = 0.0,
     bool isLocked = false, // NEW: Lock status
     VoidCallback? onAccept,
+    String? acceptLabel,
+    IconData acceptIcon = Icons.local_offer_outlined,
     VoidCallback? onReject,
     VoidCallback? onComplete,
     VoidCallback? onArrived,
@@ -1411,8 +1536,10 @@ class _TechnicianRequestsScreenState
                     Expanded(
                       child: ElevatedButton.icon(
                         onPressed: isLocked ? null : onAccept,
-                        icon: const Icon(Icons.local_offer_outlined),
-                        label: Text(isLocked ? 'مقفول' : 'تقديم عرض'),
+                        icon: Icon(acceptIcon),
+                        label: Text(
+                          isLocked ? 'مقفول' : (acceptLabel ?? 'تقديم عرض'),
+                        ),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: isLocked
                               ? Colors.grey
@@ -1553,6 +1680,200 @@ class _TechnicianRequestsScreenState
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _ManualTechnicianLocationCard extends StatelessWidget {
+  const _ManualTechnicianLocationCard({
+    required this.isExpanded,
+    required this.hasSelectedLocation,
+    required this.center,
+    required this.selectedPoint,
+    required this.onToggle,
+    required this.onMapTap,
+    this.onClear,
+  });
+
+  final bool isExpanded;
+  final bool hasSelectedLocation;
+  final LatLng center;
+  final LatLng? selectedPoint;
+  final VoidCallback onToggle;
+  final ValueChanged<LatLng> onMapTap;
+  final VoidCallback? onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(18.w),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24.r),
+        border: Border.all(
+          color: hasSelectedLocation
+              ? KadmatColors.stateSuccess.withValues(alpha: 0.28)
+              : KadmatColors.lightBorder,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 16,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 48.w,
+                height: 48.w,
+                decoration: BoxDecoration(
+                  color: hasSelectedLocation
+                      ? KadmatColors.stateSuccess.withValues(alpha: 0.12)
+                      : KadmatColors.brandAccent,
+                  borderRadius: BorderRadius.circular(16.r),
+                ),
+                child: Icon(
+                  hasSelectedLocation
+                      ? Icons.place_rounded
+                      : Icons.map_outlined,
+                  color: hasSelectedLocation
+                      ? KadmatColors.stateSuccess
+                      : KadmatColors.brandSecondary,
+                  size: 22.s,
+                ),
+              ),
+              SizedBox(width: 12.w),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      hasSelectedLocation
+                          ? 'تم تحديد موقع العمل يدويًا'
+                          : 'حدد نطاق عملك يدويًا',
+                      style: TextStyle(
+                        color: KadmatColors.lightTextPrimary,
+                        fontSize: 15.fz,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    SizedBox(height: 4.h),
+                    Text(
+                      hasSelectedLocation
+                          ? 'سيُستخدم هذا الموقع لإظهار الطلبات القريبة منك حتى لو كان المتصفح يمنع الموقع التلقائي.'
+                          : 'إذا لم يعمل الموقع التلقائي، افتح الخريطة واضغط على المنطقة التي تعمل منها الآن.',
+                      style: TextStyle(
+                        color: KadmatColors.lightTextSecondary,
+                        fontSize: 12.4.fz,
+                        height: 1.45,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 14.h),
+          Row(
+            children: [
+              Expanded(
+                child: KadmatSecondaryButton(
+                  label: isExpanded ? 'إخفاء الخريطة' : 'فتح الخريطة',
+                  icon: isExpanded
+                      ? Icons.expand_less_rounded
+                      : Icons.map_rounded,
+                  onPressed: onToggle,
+                ),
+              ),
+              if (onClear != null) ...[
+                SizedBox(width: 10.w),
+                Expanded(
+                  child: KadmatSecondaryButton(
+                    label: 'مسح الموقع اليدوي',
+                    icon: Icons.close_rounded,
+                    onPressed: onClear!,
+                  ),
+                ),
+              ],
+            ],
+          ),
+          if (isExpanded) ...[
+            SizedBox(height: 12.h),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(20.r),
+              child: SizedBox(
+                height: 230.h,
+                child: FlutterMap(
+                  options: MapOptions(
+                    initialCenter: center,
+                    initialZoom: 12.8,
+                    onTap: (_, point) => onMapTap(point),
+                  ),
+                  children: [
+                    TileLayer(
+                      urlTemplate:
+                          'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                      userAgentPackageName: 'com.kadmat.app',
+                    ),
+                    if (selectedPoint != null)
+                      MarkerLayer(
+                        markers: [
+                          Marker(
+                            point: selectedPoint!,
+                            width: 42.w,
+                            height: 42.w,
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: KadmatColors.brandPrimary,
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: KadmatColors.brandPrimary.withValues(
+                                      alpha: 0.24,
+                                    ),
+                                    blurRadius: 12,
+                                    offset: const Offset(0, 6),
+                                  ),
+                                ],
+                              ),
+                              child: Icon(
+                                Icons.place_rounded,
+                                color: Colors.white,
+                                size: 24.s,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                  ],
+                ),
+              ),
+            ),
+            SizedBox(height: 10.h),
+            Text(
+              hasSelectedLocation
+                  ? 'تم تثبيت موقع العمل. حدّث الصفحة وستظهر لك الطلبات المطابقة لهذا النطاق.'
+                  : 'اضغط على الخريطة لتحديد المنطقة التي تنطلق منها لاستقبال الطلبات.',
+              style: TextStyle(
+                color: hasSelectedLocation
+                    ? KadmatColors.stateSuccess
+                    : KadmatColors.lightTextSecondary,
+                fontSize: 12.2.fz,
+                fontWeight: hasSelectedLocation
+                    ? FontWeight.w700
+                    : FontWeight.w500,
+                height: 1.45,
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }

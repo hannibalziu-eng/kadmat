@@ -110,7 +110,7 @@ class _CustomerJobTrackingScreenState
             child: _TrackingHeroCard(
               serviceName: serviceName,
               status: job.status,
-              message: _getStatusMessage(job.status),
+              message: _getStatusMessage(job),
               address: address,
               communicationAvailable: canUseCommunication,
             ),
@@ -120,12 +120,50 @@ class _CustomerJobTrackingScreenState
           child: Padding(
             padding: EdgeInsets.symmetric(horizontal: 18.w),
             child: _TrackingNextStepCard(
-              title: _getNextStepTitle(job.status),
-              description: _getNextStepDescription(job.status),
-              icon: _getNextStepIcon(job.status),
+              title: _getNextStepTitle(job),
+              description: _getNextStepDescription(job),
+              icon: _getNextStepIcon(job),
             ),
           ),
         ),
+        if (job.isCatalogFixed)
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(18.w, 14.h, 18.w, 0),
+              child: Container(
+                padding: EdgeInsets.all(16.w),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(24.r),
+                  border: Border.all(color: KadmatColors.lightBorder),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.03),
+                      blurRadius: 18,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: Wrap(
+                  spacing: 8.w,
+                  runSpacing: 8.h,
+                  children: [
+                    _TrackingPill(
+                      icon: Icons.sell_outlined,
+                      label:
+                          '${job.effectiveRuntimePrice.toStringAsFixed(0)} د.ل ثابتة',
+                      color: AppTheme.primaryColor,
+                    ),
+                    _TrackingPill(
+                      icon: Icons.shopping_bag_outlined,
+                      label: '${job.effectiveCatalogItemCount} عناصر',
+                      color: KadmatColors.stateInfo,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
         SliverToBoxAdapter(child: SizedBox(height: 14.h)),
         SliverToBoxAdapter(
           child: Padding(
@@ -144,8 +182,16 @@ class _CustomerJobTrackingScreenState
             child: Container(
               padding: EdgeInsets.all(18.w),
               decoration: BoxDecoration(
-                color: AppTheme.surfaceDark,
+                color: Colors.white,
                 borderRadius: BorderRadius.circular(28.r),
+                border: Border.all(color: KadmatColors.lightBorder),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.03),
+                    blurRadius: 18,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -153,7 +199,7 @@ class _CustomerJobTrackingScreenState
                   Text(
                     'مراحل الطلب الحالية',
                     style: TextStyle(
-                      color: Colors.white,
+                      color: KadmatColors.lightTextPrimary,
                       fontSize: 18.fz,
                       fontWeight: FontWeight.w800,
                     ),
@@ -162,7 +208,7 @@ class _CustomerJobTrackingScreenState
                   Text(
                     'يتم تحديث هذه المراحل تلقائيًا عند انتقال الفني إلى الحالة التالية.',
                     style: TextStyle(
-                      color: Colors.white70,
+                      color: KadmatColors.lightTextSecondary,
                       fontSize: 12.5.fz,
                       height: 1.5,
                     ),
@@ -391,8 +437,8 @@ class _CustomerJobTrackingScreenState
     );
   }
 
-  String _getStatusMessage(String status) {
-    final normalizedStatus = JobStatus.normalize(status);
+  String _getStatusMessage(Job job) {
+    final normalizedStatus = JobStatus.normalize(job.status);
     switch (normalizedStatus) {
       case JobStatus.onTheWay:
         return 'الفني في الطريق إليك الآن...';
@@ -401,16 +447,21 @@ class _CustomerJobTrackingScreenState
       case JobStatus.inProgress:
         return 'الفني يعمل على طلبك الآن...';
       case JobStatus.accepted:
-        return 'تم قبول الطلب، الفني في الطريق!';
+        return job.isCatalogFixed
+            ? 'تم تثبيت الفني على الطلب الثابت. ننتظر بدء التوجّه أو التنفيذ.'
+            : 'تم قبول الطلب، الفني في الطريق!';
       default:
         return 'جاري التنفيذ...';
     }
   }
 
-  String _getNextStepTitle(String status) {
-    final normalizedStatus = JobStatus.normalize(status);
+  String _getNextStepTitle(Job job) {
+    final normalizedStatus = JobStatus.normalize(job.status);
     switch (normalizedStatus) {
       case JobStatus.accepted:
+        return job.isCatalogFixed
+            ? 'الخطوة التالية: انتظر تحرك الفني'
+            : 'الخطوة التالية: تابع وصول الفني';
       case JobStatus.onTheWay:
         return 'الخطوة التالية: تابع وصول الفني';
       case JobStatus.arrived:
@@ -428,10 +479,13 @@ class _CustomerJobTrackingScreenState
     }
   }
 
-  String _getNextStepDescription(String status) {
-    final normalizedStatus = JobStatus.normalize(status);
+  String _getNextStepDescription(Job job) {
+    final normalizedStatus = JobStatus.normalize(job.status);
     switch (normalizedStatus) {
       case JobStatus.accepted:
+        return job.isCatalogFixed
+            ? 'لا توجد مراجعة سعر في هذا المسار. السعر ثابت بالفعل، وسننقلك تلقائيًا عندما يبدأ الفني التوجّه أو التنفيذ.'
+            : 'الخريطة أدناه تساعدك على متابعة الطريق، وستتحدث الحالة تلقائيًا عندما يقترب الفني أو يصل.';
       case JobStatus.onTheWay:
         return 'الخريطة أدناه تساعدك على متابعة الطريق، وستتحدث الحالة تلقائيًا عندما يقترب الفني أو يصل.';
       case JobStatus.arrived:
@@ -449,8 +503,8 @@ class _CustomerJobTrackingScreenState
     }
   }
 
-  IconData _getNextStepIcon(String status) {
-    final normalizedStatus = JobStatus.normalize(status);
+  IconData _getNextStepIcon(Job job) {
+    final normalizedStatus = JobStatus.normalize(job.status);
     switch (normalizedStatus) {
       case JobStatus.accepted:
       case JobStatus.onTheWay:
@@ -523,8 +577,15 @@ class _TrackingHeroCard extends StatelessWidget {
         gradient: const LinearGradient(
           begin: Alignment.topRight,
           end: Alignment.bottomLeft,
-          colors: [Color(0xFF17313B), Color(0xFF0D1E25)],
+          colors: [KadmatColors.heroPrimaryStart, KadmatColors.heroPrimaryEnd],
         ),
+        boxShadow: [
+          BoxShadow(
+            color: KadmatColors.brandPrimary.withValues(alpha: 0.16),
+            blurRadius: 24,
+            offset: const Offset(0, 12),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -752,13 +813,7 @@ class _TrackingMapEmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Color(0xFF172A32), Color(0xFF0C1A21)],
-        ),
-      ),
+      decoration: const BoxDecoration(color: Colors.white),
       padding: EdgeInsets.all(24.w),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -767,12 +822,12 @@ class _TrackingMapEmptyState extends StatelessWidget {
             width: 76.w,
             height: 76.w,
             decoration: BoxDecoration(
-              color: AppTheme.primaryColor.withValues(alpha: 0.12),
+              color: KadmatColors.brandAccent,
               shape: BoxShape.circle,
             ),
             child: Icon(
               Icons.my_location_rounded,
-              color: AppTheme.primaryColor,
+              color: KadmatColors.brandPrimary,
               size: 34.s,
             ),
           ),
@@ -782,7 +837,7 @@ class _TrackingMapEmptyState extends StatelessWidget {
             style: TextStyle(
               fontSize: 20.fz,
               fontWeight: FontWeight.bold,
-              color: Colors.white,
+              color: KadmatColors.lightTextPrimary,
             ),
           ),
           SizedBox(height: 8.h),
@@ -791,7 +846,7 @@ class _TrackingMapEmptyState extends StatelessWidget {
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 13.fz,
-              color: Colors.white70,
+              color: KadmatColors.lightTextSecondary,
               height: 1.6,
             ),
           ),
@@ -799,21 +854,21 @@ class _TrackingMapEmptyState extends StatelessWidget {
           Container(
             padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 10.h),
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.08),
+              color: KadmatColors.lightSurfaceMuted,
               borderRadius: BorderRadius.circular(16.r),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+              border: Border.all(color: KadmatColors.lightBorder),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.place_outlined, color: Colors.white70),
+                Icon(Icons.place_outlined, color: KadmatColors.brandPrimary),
                 SizedBox(width: 8.w),
                 Flexible(
                   child: Text(
                     address,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      color: Colors.white,
+                      color: KadmatColors.lightTextPrimary,
                       fontSize: 12.5.fz,
                       fontWeight: FontWeight.w600,
                     ),

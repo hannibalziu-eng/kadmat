@@ -19,6 +19,20 @@ const TECHNICIAN_LOCKED_STATUSES = [
     JOB_STATES.PENDING_CONFIRM
 ];
 
+const ALLOWED_PRICING_MODES = ['technician_quote', 'catalog_fixed'];
+
+const normalizeCatalogItemInput = (item) => ({
+    service_catalog_item_id: item?.service_catalog_item_id ?? item?.serviceCatalogItemId ?? item?.id ?? null,
+    quantity: Number(item?.quantity ?? 1)
+});
+
+const buildPricingSummary = ({ pricingMode, subtotal, itemCount, currencyCode }) => ({
+    pricing_mode: pricingMode,
+    catalog_subtotal: subtotal,
+    catalog_item_count: itemCount,
+    currency_code: currencyCode
+});
+
 class JobService {
     /**
      * Create a new job (Service Request)
@@ -33,6 +47,14 @@ class JobService {
         // duplicate dispatch items and stale legacy requests.
         await this._cancelOpenSearchJobsForCustomer(userId);
 
+        const pricingMode = ALLOWED_PRICING_MODES.includes(jobData.pricing_mode)
+            ? jobData.pricing_mode
+            : 'technician_quote';
+
+        if (pricingMode === 'catalog_fixed') {
+            return this._createCatalogFixedJob(userId, jobData);
+        }
+
         // 1. Prepare Data
         const jobToInsert = {
             customer_id: userId,
@@ -45,7 +67,17 @@ class JobService {
             initial_price: jobData.initial_price,
             status: JOB_STATES.PENDING,
             search_radius: 5000, // 5km initial radius
-            metadata: jobData.metadata || {}
+            metadata: jobData.metadata || {},
+            pricing_mode: 'technician_quote',
+            quote_required: true,
+            catalog_item_count: 0,
+            catalog_subtotal: null,
+            pricing_summary: buildPricingSummary({
+                pricingMode: 'technician_quote',
+                subtotal: null,
+                itemCount: 0,
+                currencyCode: 'LYD'
+            })
         };
 
         // 2. Insert into DB
@@ -91,6 +123,159 @@ class JobService {
         }
 
         return job;
+    }
+
+    async _createCatalogFixedJob(userId, jobData) {
+        const catalogItems = Array.isArray(jobData.catalog_items)
+            ? jobData.catalog_items.map(normalizeCatalogItemInput)
+            : [];
+
+        if (catalogItems.length === 0) {
+            throw new Error('catalog_items are required for catalog_fixed jobs');
+        }
+
+        const { data: service, error: serviceError } = await supabaseAdmin
+            .from('services')
+            .select('id, pricing_mode_default, is_catalog_enabled, is_active')
+            .eq('id', jobData.service_id)
+            .maybeSingle();
+
+        if (serviceError) throw serviceError;
+        if (!service || !service.is_active) {
+            throw new Error('Service not found');
+        }
+
+        if (!service.is_catalog_enabled && service.pricing_mode_default !== 'catalog_fixed') {
+            throw new Error('Selected service does not support fixed-price catalog flow');
+        }
+
+        const itemIds = catalogItems.map((item) => item.service_catalog_item_id).filter(Boolean);
+        if (itemIds.length !== catalogItems.length) {
+            throw new Error('Each catalog item must include service_catalog_item_id');
+        }
+
+        const { data: serviceCatalogItems, error: itemsError } = await supabaseAdmin
+            .from('service_catalog_items')
+            .select('*')
+            .eq('service_id', jobData.service_id)
+            .eq('is_active', true)
+            .in('id', itemIds);
+
+        if (itemsError) throw itemsError;
+
+        const catalogMap = new Map((serviceCatalogItems || []).map((item) => [item.id, item]));
+        if (catalogMap.size !== itemIds.length) {
+            throw new Error('One or more catalog items are invalid, inactive, or do not belong to the selected service');
+        }
+
+        const jobLineItems = catalogItems.map((item) => {
+            const quantity = Number(item.quantity || 0);
+            if (!Number.isFinite(quantity) || quantity <= 0) {
+                throw new Error('Catalog item quantity must be greater than zero');
+            }
+
+            const source = catalogMap.get(item.service_catalog_item_id);
+            const unitPrice = Number(source.price || 0);
+            const lineTotal = Number((unitPrice * quantity).toFixed(2));
+
+            return {
+                service_catalog_item_id: source.id,
+                name: source.name,
+                name_ar: source.name_ar,
+                unit_price: unitPrice,
+                quantity,
+                line_total: lineTotal,
+                currency_code: source.currency_code || 'LYD',
+                item_snapshot: source
+            };
+        });
+
+        const catalogSubtotal = Number(jobLineItems.reduce((sum, item) => sum + item.line_total, 0).toFixed(2));
+        const catalogItemCount = jobLineItems.reduce((sum, item) => sum + item.quantity, 0);
+        const currencyCode = jobLineItems[0]?.currency_code || 'LYD';
+
+        const jobToInsert = {
+            customer_id: userId,
+            service_id: jobData.service_id,
+            lat: jobData.lat,
+            lng: jobData.lng,
+            location: `SRID=4326;POINT(${jobData.lng} ${jobData.lat})`,
+            address_text: jobData.address_text,
+            description: jobData.description,
+            initial_price: catalogSubtotal,
+            status: JOB_STATES.PENDING,
+            search_radius: 5000,
+            metadata: jobData.metadata || {},
+            pricing_mode: 'catalog_fixed',
+            quote_required: false,
+            catalog_item_count: catalogItemCount,
+            catalog_subtotal: catalogSubtotal,
+            pricing_summary: buildPricingSummary({
+                pricingMode: 'catalog_fixed',
+                subtotal: catalogSubtotal,
+                itemCount: catalogItemCount,
+                currencyCode
+            })
+        };
+
+        const { data: job, error: jobError } = await supabaseAdmin
+            .from('jobs')
+            .insert(jobToInsert)
+            .select()
+            .single();
+
+        if (jobError) {
+            const dbError = new Error(`Failed to create job: ${jobError.message || 'Database error'}`);
+            dbError.code = jobError.code || 'DB_INSERT_ERROR';
+            dbError.details = jobError.details;
+            dbError.hint = jobError.hint;
+            throw dbError;
+        }
+
+        const lineItemsPayload = jobLineItems.map((item) => ({
+            job_id: job.id,
+            service_catalog_item_id: item.service_catalog_item_id,
+            name: item.name,
+            name_ar: item.name_ar,
+            unit_price: item.unit_price,
+            quantity: item.quantity,
+            line_total: item.line_total,
+            currency_code: item.currency_code,
+            item_snapshot: item.item_snapshot
+        }));
+
+        const { error: lineItemsError } = await supabaseAdmin
+            .from('job_catalog_items')
+            .insert(lineItemsPayload);
+
+        if (lineItemsError) {
+            const dbError = new Error(`Failed to create job catalog items: ${lineItemsError.message || 'Database error'}`);
+            dbError.code = lineItemsError.code || 'DB_INSERT_ERROR';
+            dbError.details = lineItemsError.details;
+            dbError.hint = lineItemsError.hint;
+            throw dbError;
+        }
+
+        if (jobData.images && jobData.images.length > 0) {
+            const imageRecords = jobData.images.map(url => ({
+                job_id: job.id,
+                image_url: url,
+                media_type: 'image'
+            }));
+
+            const { error: imagesError } = await supabaseAdmin
+                .from('job_images')
+                .insert(imageRecords);
+
+            if (imagesError) {
+                console.error('Error inserting job images:', imagesError);
+            }
+        }
+
+        return {
+            ...job,
+            job_catalog_items: lineItemsPayload
+        };
     }
 
     /**
@@ -153,7 +338,41 @@ class JobService {
             throw genericError;
         }
 
+        if (job.pricing_mode === 'catalog_fixed' && job.customer_id) {
+            const notificationPayload = {
+                user_id: job.customer_id,
+                type: 'job_accepted',
+                title: 'تم قبول طلبك',
+                body: 'تم تعيين فني لطلبك وسيبدأ التوجه إليك قريبًا.',
+                data: {
+                    job_id: jobId,
+                    pricing_mode: 'catalog_fixed'
+                },
+                is_read: false
+            };
+
+            await supabaseAdmin.from('notifications').insert(notificationPayload);
+
+            await sendPushNotification(job.customer_id, {
+                title: 'تم قبول طلبك! ✅',
+                body: 'تم تعيين فني لطلبك وسيبدأ التوجه إليك قريبًا.',
+                data: {
+                    type: 'job_accepted',
+                    job_id: jobId,
+                    pricing_mode: 'catalog_fixed'
+                }
+            });
+        }
+
         return updatedJob;
+    }
+
+    _buildFixedPriceRuntimeError(job, message) {
+        const err = new Error(message);
+        err.code = 'INVALID_STATUS_TRANSITION';
+        err.currentStatus = job.status;
+        err.pricingMode = job.pricing_mode;
+        return err;
     }
 
     /**
@@ -161,6 +380,14 @@ class JobService {
      */
     async submitOffer(jobId, technicianId, price) {
         const job = await this._getJob(jobId);
+
+        if (job.pricing_mode === 'catalog_fixed') {
+            const err = new Error('Fixed-price jobs do not accept technician offers');
+            err.code = 'INVALID_STATUS_TRANSITION';
+            err.currentStatus = job.status;
+            err.pricingMode = job.pricing_mode;
+            throw err;
+        }
 
         const numericPrice = Number(price);
         if (!Number.isFinite(numericPrice) || numericPrice <= 0) {
@@ -254,6 +481,14 @@ class JobService {
         if (job.customer_id !== customerId) {
             const err = new Error('Unauthorized');
             err.code = 'UNAUTHORIZED';
+            throw err;
+        }
+
+        if (job.pricing_mode === 'catalog_fixed') {
+            const err = new Error('Fixed-price jobs do not support offer acceptance');
+            err.code = 'INVALID_STATUS_TRANSITION';
+            err.currentStatus = job.status;
+            err.pricingMode = job.pricing_mode;
             throw err;
         }
 
@@ -524,6 +759,13 @@ class JobService {
 
         const job = await this._getJob(jobId);
 
+        if (job.pricing_mode === 'catalog_fixed') {
+            throw this._buildFixedPriceRuntimeError(
+                job,
+                'Fixed-price jobs do not support technician price submission'
+            );
+        }
+
         if (job.technician_id !== technicianId) {
             throw new Error('Unauthorized');
         }
@@ -565,6 +807,13 @@ class JobService {
      */
     async confirmPrice(jobId, customerId) {
         const job = await this._getJob(jobId);
+
+        if (job.pricing_mode === 'catalog_fixed') {
+            throw this._buildFixedPriceRuntimeError(
+                job,
+                'Fixed-price jobs do not require customer price confirmation'
+            );
+        }
 
         if (job.customer_id !== customerId) {
             throw new Error('Unauthorized');
@@ -611,7 +860,7 @@ class JobService {
      */
     async updateTechnicianProgress(jobId, technicianId, progress, { prePhotos } = {}) {
         const normalizedProgress = String(progress || '').trim().toLowerCase();
-        const allowedProgress = new Set(['arrived', 'start_work']);
+        const allowedProgress = new Set(['on_the_way', 'arrived', 'start_work']);
 
         if (!allowedProgress.has(normalizedProgress)) {
             const err = new Error('Invalid progress action');
@@ -628,6 +877,31 @@ class JobService {
         }
 
         let nextStatus = job.status;
+        if (normalizedProgress === 'on_the_way') {
+            if (job.pricing_mode !== 'catalog_fixed') {
+                const err = new Error('Only fixed-price jobs can start travel from accepted state');
+                err.code = 'INVALID_STATUS_TRANSITION';
+                err.currentStatus = job.status;
+                err.pricingMode = job.pricing_mode || 'technician_quote';
+                throw err;
+            }
+
+            nextStatus = JOB_STATES.ON_THE_WAY;
+            if (job.status === JOB_STATES.ON_THE_WAY) {
+                return job;
+            }
+
+            if (job.status !== JOB_STATES.ACCEPTED) {
+                const err = new Error(
+                    `Cannot start travel while job is '${job.status}'. Expected 'accepted'.`
+                );
+                err.code = 'INVALID_STATUS_TRANSITION';
+                err.currentStatus = job.status;
+                err.pricingMode = job.pricing_mode;
+                throw err;
+            }
+        }
+
         if (normalizedProgress === 'arrived') {
             nextStatus = JOB_STATES.ARRIVED;
             if (job.status === JOB_STATES.ARRIVED) {
@@ -699,6 +973,13 @@ class JobService {
         }
 
         const notificationByStatus = {
+            [JOB_STATES.ON_THE_WAY]: {
+                type: 'technician_on_the_way',
+                title: 'الفني في الطريق',
+                body: 'الفني بدأ التوجه إلى موقعك.',
+                pushTitle: 'الفني في الطريق 🚗',
+                pushBody: 'الفني بدأ التوجه إلى موقعك.'
+            },
             [JOB_STATES.ARRIVED]: {
                 type: 'technician_arrived',
                 title: 'الفني وصل',
@@ -971,6 +1252,65 @@ class JobService {
             err.code = 'CANCELLATION_RESTRICTED';
             err.currentStatus = job.status;
             throw err;
+        }
+
+        if (
+            job.pricing_mode === 'catalog_fixed' &&
+            job.status === JOB_STATES.ACCEPTED &&
+            job.technician_id === userId
+        ) {
+            const releasedAt = new Date().toISOString();
+            const releaseReason = reason || 'technician_released_before_travel';
+            const metadata = {
+                ...job.metadata,
+                release_reason: releaseReason,
+                released_by: userId,
+                released_at: releasedAt
+            };
+
+            const { data: reopenedJob, error } = await supabaseAdmin
+                .from('jobs')
+                .update({
+                    status: JOB_STATES.PENDING,
+                    technician_id: null,
+                    accepted_at: null,
+                    metadata,
+                    updated_at: releasedAt
+                })
+                .eq('id', jobId)
+                .eq('technician_id', userId)
+                .eq('status', JOB_STATES.ACCEPTED)
+                .select()
+                .single();
+
+            if (error) throw new Error('Failed to reopen fixed-price job');
+
+            if (job.customer_id) {
+                await supabaseAdmin.from('notifications').insert({
+                    user_id: job.customer_id,
+                    type: 'technician_timeout',
+                    title: 'جاري إعادة البحث عن فني',
+                    body: 'تعذر متابعة الفني الحالي. جارٍ إعادة البحث عن فني بديل.',
+                    data: {
+                        job_id: jobId,
+                        pricing_mode: 'catalog_fixed',
+                        restart_search: true
+                    },
+                    is_read: false
+                });
+
+                await sendPushNotification(job.customer_id, {
+                    title: 'جاري إعادة البحث عن فني',
+                    body: 'تعذر متابعة الفني الحالي. جارٍ إعادة البحث عن فني بديل.',
+                    data: {
+                        type: 'technician_timeout',
+                        job_id: jobId,
+                        pricing_mode: 'catalog_fixed'
+                    }
+                });
+            }
+
+            return reopenedJob;
         }
 
         validateTransition(job.status, JOB_STATES.CANCELLED);

@@ -3,11 +3,13 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_scalify/flutter_scalify.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../../core/navigation/app_routes.dart';
+
 import '../../../core/design/kadmat_tokens.dart';
+import '../../../core/navigation/app_routes.dart';
 import '../../../core/utils/error_handler.dart';
 import '../../../core/widgets/kadmat_components.dart';
 import 'auth_controller.dart';
+import 'widgets/technician_auth_widgets.dart';
 
 class TechnicianLoginScreen extends ConsumerStatefulWidget {
   const TechnicianLoginScreen({super.key});
@@ -49,209 +51,146 @@ class _TechnicianLoginScreenState extends ConsumerState<TechnicianLoginScreen> {
   Widget build(BuildContext context) {
     final state = ref.watch(authControllerProvider);
 
-    return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      appBar: AppBar(backgroundColor: Colors.transparent, elevation: 0),
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: EdgeInsets.all(24.w),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 560),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Container(
-                      padding: EdgeInsets.all(24.w),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(28.r),
-                        gradient: const LinearGradient(
-                          begin: Alignment.topRight,
-                          end: Alignment.bottomLeft,
-                          colors: [Color(0xFF17313B), Color(0xFF0D1E25)],
-                        ),
+    return TechnicianAuthScaffold(
+      topActionLabel: 'إنشاء حساب',
+      onTopAction: () => context.push(AppRoutes.technicianRegister),
+      child: Form(
+        key: _formKey,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const TechnicianAuthHero(
+              icon: Icons.engineering_rounded,
+              title: 'ادخل وابدأ استقبال الطلبات',
+              subtitle:
+                  'استخدم حساب الفني للوصول إلى الطلبات القريبة، التسعير، التنفيذ، والمحفظة من تجربة تشغيلية واضحة.',
+            ),
+            SizedBox(height: 16.h),
+            const TechnicianAuthInfoCard(
+              icon: Icons.track_changes_outlined,
+              title: 'الخطوة الأهم الآن',
+              description:
+                  'أدخل بريدك أو هاتفك وكلمة المرور فقط. إذا نسيت كلمة المرور استخدم الرابط المباشر أسفل النموذج بدل تكرار المحاولات.',
+            ),
+            SizedBox(height: 16.h),
+            TechnicianAuthSurface(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    'بيانات الدخول',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  SizedBox(height: 8.h),
+                  Text(
+                    'بعد تسجيل الدخول ستنتقل مباشرة إلى مساحة العمل الخاصة بالفني.',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                  SizedBox(height: 18.h),
+                  KadmatTextField(
+                    controller: _emailController,
+                    label: 'البريد الإلكتروني أو رقم الهاتف',
+                    hint: 'ادخل بريدك الإلكتروني أو رقم هاتفك',
+                    prefixIcon: Icons.alternate_email,
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'الرجاء إدخال البريد الإلكتروني';
+                      }
+                      return null;
+                    },
+                  ),
+                  SizedBox(height: 16.h),
+                  KadmatTextField(
+                    controller: _passwordController,
+                    label: 'كلمة المرور',
+                    hint: 'ادخل كلمة المرور',
+                    prefixIcon: Icons.lock_outline,
+                    obscureText: true,
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'الرجاء إدخال كلمة المرور';
+                      }
+                      return null;
+                    },
+                  ),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton(
+                      onPressed: () => context.push(AppRoutes.forgotPassword),
+                      style: TextButton.styleFrom(
+                        padding: EdgeInsets.symmetric(vertical: 8.h),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Container(
-                            width: 54.w,
-                            height: 54.w,
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(18.r),
-                            ),
-                            child: Icon(
-                              Icons.engineering_rounded,
-                              color: Colors.white,
-                              size: 24.s,
-                            ),
-                          ),
-                          SizedBox(height: 16.h),
-                          Text(
-                            'مساحة الفني',
-                            style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.72),
-                              fontSize: 12.fz,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          SizedBox(height: 4.h),
-                          Text(
-                            'سجّل دخولك وابدأ استقبال الطلبات',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 24.fz,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          SizedBox(height: 8.h),
-                          Text(
-                            'استخدم حساب الفني للوصول إلى الطلبات القريبة، العروض، المحفظة، وسجل الأعمال من مكان واحد واضح.',
-                            style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.74),
-                              fontSize: 12.8.fz,
-                              height: 1.55,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    SizedBox(height: 18.h),
-                    Container(
-                      padding: EdgeInsets.all(20.w),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(24.r),
-                        border: Border.all(color: KadmatColors.lightBorder),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.04),
-                            blurRadius: 18,
-                            offset: const Offset(0, 10),
-                          ),
-                        ],
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          KadmatTextField(
-                            controller: _emailController,
-                            label: 'البريد الإلكتروني أو رقم الهاتف',
-                            hint: 'ادخل بريدك الإلكتروني أو رقم هاتفك',
-                            prefixIcon: Icons.alternate_email,
-                            validator: (value) {
-                              if (value == null || value.isEmpty) {
-                                return 'الرجاء إدخال البريد الإلكتروني';
-                              }
-                              return null;
-                            },
-                          ),
-                          SizedBox(height: 16.h),
-                          KadmatTextField(
-                            controller: _passwordController,
-                            label: 'كلمة المرور',
-                            hint: 'ادخل كلمة المرور',
-                            prefixIcon: Icons.lock_outline,
-                            obscureText: true,
-                            validator: (value) {
-                              if (value == null || value.isEmpty) {
-                                return 'الرجاء إدخال كلمة المرور';
-                              }
-                              return null;
-                            },
-                          ),
-                          Align(
-                            alignment: Alignment.centerLeft,
-                            child: TextButton(
-                              onPressed: () =>
-                                  context.push(AppRoutes.forgotPassword),
-                              style: TextButton.styleFrom(
-                                padding: EdgeInsets.symmetric(vertical: 8.h),
-                                minimumSize: Size.zero,
-                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              ),
-                              child: const Text(
-                                'نسيت كلمة المرور؟',
-                                style: TextStyle(fontWeight: FontWeight.bold),
-                              ),
-                            ),
-                          ),
-                          if (state.hasError) ...[
-                            SizedBox(height: 8.h),
-                            Container(
-                              padding: EdgeInsets.all(12.w),
-                              decoration: BoxDecoration(
-                                color: KadmatColors.stateError.withValues(
-                                  alpha: 0.08,
-                                ),
-                                borderRadius: BorderRadius.circular(16.r),
-                                border: Border.all(
-                                  color: KadmatColors.stateError.withValues(
-                                    alpha: 0.22,
-                                  ),
-                                ),
-                              ),
-                              child: Text(
-                                ErrorHandler.getMessage(state.error),
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  color: KadmatColors.stateError,
-                                  fontSize: 12.5.fz,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                          ],
-                          SizedBox(height: 16.h),
-                          KadmatPrimaryButton(
-                            label: 'تسجيل الدخول',
-                            onPressed: _submit,
-                            isLoading: state.isLoading,
-                          ),
-                        ],
+                      child: const Text(
+                        'نسيت كلمة المرور؟',
+                        style: TextStyle(fontWeight: FontWeight.bold),
                       ),
                     ),
-                    SizedBox(height: 18.h),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          'ليس لديك حساب؟',
-                          style: TextStyle(
-                            color: KadmatColors.lightTextSecondary,
-                          ),
-                        ),
-                        TextButton(
-                          onPressed: () =>
-                              context.push(AppRoutes.technicianRegister),
-                          child: const Text(
-                            'أنشئ حساباً جديداً',
-                            style: TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                      ],
+                  ),
+                  if (state.hasError) ...[
+                    SizedBox(height: 8.h),
+                    TechnicianAuthInfoCard(
+                      icon: Icons.error_outline,
+                      title: 'تعذر تسجيل الدخول',
+                      description: ErrorHandler.getMessage(state.error),
+                      tint: const Color(0xFFFBE7EA),
+                      iconColor: const Color(0xFFB23A48),
                     ),
-                    if (kDebugMode) ...[
-                      SizedBox(height: 10.h),
-                      Center(
-                        child: TextButton(
-                          onPressed: () =>
-                              context.push(AppRoutes.technicianHome),
-                          style: TextButton.styleFrom(
-                            foregroundColor: KadmatColors.lightTextSecondary,
-                          ),
-                          child: const Text('الدخول كزائر للتطوير'),
+                  ],
+                  SizedBox(height: 16.h),
+                  KadmatPrimaryButton(
+                    label: 'تسجيل الدخول',
+                    onPressed: _submit,
+                    isLoading: state.isLoading,
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(height: 16.h),
+            TechnicianAuthSurface(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Wrap(
+                    alignment: WrapAlignment.center,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 6.w,
+                    runSpacing: 4.h,
+                    children: [
+                      Text(
+                        'ليس لديك حساب؟',
+                        style: TextStyle(
+                          color: KadmatColors.lightTextSecondary,
+                          fontSize: 13.fz,
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () =>
+                            context.push(AppRoutes.technicianRegister),
+                        child: const Text(
+                          'أنشئ حسابًا جديدًا',
+                          style: TextStyle(fontWeight: FontWeight.bold),
                         ),
                       ),
                     ],
+                  ),
+                  if (kDebugMode) ...[
+                    SizedBox(height: 6.h),
+                    Center(
+                      child: TextButton(
+                        onPressed: () => context.push(AppRoutes.technicianHome),
+                        style: TextButton.styleFrom(
+                          foregroundColor: KadmatColors.lightTextSecondary,
+                        ),
+                        child: const Text('الدخول كزائر للتطوير'),
+                      ),
+                    ),
                   ],
-                ),
+                ],
               ),
             ),
-          ),
+          ],
         ),
       ),
     );

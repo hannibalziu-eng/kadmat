@@ -13,7 +13,14 @@ const createJobSchema = Joi.object({
     description: Joi.string().optional(),
     initial_price: Joi.number().required(),
     metadata: Joi.object().optional(),
-    images: Joi.array().items(Joi.string()).optional()
+    images: Joi.array().items(Joi.string()).optional(),
+    pricing_mode: Joi.string().valid('technician_quote', 'catalog_fixed').optional(),
+    catalog_items: Joi.array().items(
+        Joi.object({
+            service_catalog_item_id: Joi.string().required(),
+            quantity: Joi.number().integer().positive().default(1)
+        })
+    ).optional()
 });
 
 const nearbyJobsQuerySchema = Joi.object({
@@ -58,6 +65,14 @@ export const createJob = async (req, res) => {
                 error.details[0].message
             );
             return res.status(statusCode).json(response);
+        }
+
+        if (value.pricing_mode === 'catalog_fixed' && (!Array.isArray(value.catalog_items) || value.catalog_items.length === 0)) {
+            return sendValidationError(
+                res,
+                'catalog_items are required for catalog_fixed services',
+                { field: 'catalog_items' }
+            );
         }
 
         const job = await jobService.create(req.user.id, value);
@@ -147,19 +162,90 @@ export const getNearbyJobs = async (req, res) => {
 
 // 3. Accept Job (Legacy - now handled via submitOffer/acceptOffer)
 export const acceptJob = async (req, res) => {
-    const { response, statusCode } = responseFormatter.error(
-        ERROR_CODES.INVALID_STATUS_TRANSITION,
-        'تم إيقاف القبول المباشر. استخدم تقديم عرض عبر المسار الجديد.',
-        {
-            statusCode: HTTP_STATUS.CONFLICT,
-            details: {
-                flow: 'bidding_only',
-                action: 'submit_offer',
-                endpoint: '/api/jobs/:id/submit-offer'
-            }
+    try {
+        const { data: job, error } = await supabase
+            .from('jobs')
+            .select('id, pricing_mode')
+            .eq('id', req.params.id)
+            .maybeSingle();
+
+        if (error) {
+            const { response, statusCode } = responseFormatter.error(
+                ERROR_CODES.DATABASE_ERROR,
+                'Database error',
+                HTTP_STATUS.INTERNAL_SERVER_ERROR
+            );
+            return res.status(statusCode).json(response);
         }
-    );
-    return res.status(statusCode).json(response);
+
+        if (!job) {
+            const { response, statusCode } = responseFormatter.error(
+                ERROR_CODES.JOB_NOT_FOUND,
+                'Job not found',
+                HTTP_STATUS.NOT_FOUND
+            );
+            return res.status(statusCode).json(response);
+        }
+
+        if (job.pricing_mode !== 'catalog_fixed') {
+            const { response, statusCode } = responseFormatter.error(
+                ERROR_CODES.INVALID_STATUS_TRANSITION,
+                'تم إيقاف القبول المباشر. استخدم تقديم عرض عبر المسار الجديد.',
+                {
+                    statusCode: HTTP_STATUS.CONFLICT,
+                    details: {
+                        flow: 'bidding_only',
+                        action: 'submit_offer',
+                        endpoint: '/api/jobs/:id/submit-offer',
+                        pricingMode: job.pricing_mode || 'technician_quote'
+                    }
+                }
+            );
+            return res.status(statusCode).json(response);
+        }
+
+        const acceptedJob = await jobService.accept(req.params.id, req.user.id);
+        onJobAccepted(acceptedJob.id);
+        return res.json(responseFormatter.success(acceptedJob, 'Job accepted'));
+    } catch (error) {
+        const message = error.message || 'Failed to accept job';
+        let code = ERROR_CODES.INVALID_INPUT;
+        let statusCode = HTTP_STATUS.BAD_REQUEST;
+        const details = {};
+
+        if (error.code === 'JOB_ALREADY_ACCEPTED') {
+            code = ERROR_CODES.JOB_ALREADY_ACCEPTED;
+            statusCode = HTTP_STATUS.CONFLICT;
+        } else if (error.code === 'ACTIVE_JOB_LOCKED') {
+            code = ERROR_CODES.ACTIVE_JOB_LOCKED;
+            statusCode = HTTP_STATUS.CONFLICT;
+        } else if (error.code === 'TECHNICIAN_WALLET_DEBT_LOCKED') {
+            code = ERROR_CODES.TECHNICIAN_WALLET_DEBT_LOCKED;
+            statusCode = HTTP_STATUS.CONFLICT;
+        } else if (error.code === 'INVALID_STATUS_TRANSITION') {
+            code = ERROR_CODES.INVALID_STATUS_TRANSITION;
+            statusCode = HTTP_STATUS.CONFLICT;
+        } else if (error.code === 'ACCEPT_FAILED') {
+            code = ERROR_CODES.SERVER_ERROR;
+            statusCode = HTTP_STATUS.INTERNAL_SERVER_ERROR;
+        }
+
+        if (error.currentStatus) details.currentStatus = error.currentStatus;
+        if (error.lockedJobId) details.lockedJobId = error.lockedJobId;
+        if (error.debtAmount != null) details.debtAmount = error.debtAmount;
+        if (error.currency) details.currency = error.currency;
+        if (error.walletId) details.walletId = error.walletId;
+        if (error.pricingMode) details.pricingMode = error.pricingMode;
+
+        const formatted = responseFormatter.error(
+            code,
+            message,
+            Object.keys(details).length > 0
+                ? { statusCode, details }
+                : statusCode
+        );
+        return res.status(formatted.statusCode).json(formatted.response);
+    }
 };
 
 // 3.1. Submit Offer (Technician)
@@ -176,7 +262,9 @@ export const submitOffer = async (req, res) => {
         return res.status(HTTP_STATUS.CREATED).json(responseFormatter.success(offer, 'Offer submitted successfully'));
     } catch (error) {
         console.error('Submit Offer Error:', error);
-        const isInvalidState = error.message?.includes('no longer available');
+        const isInvalidState =
+            error.code === 'INVALID_STATUS_TRANSITION' ||
+            error.message?.includes('no longer available');
         const details = {};
         let code = isInvalidState ? ERROR_CODES.INVALID_STATUS_TRANSITION : ERROR_CODES.INVALID_INPUT;
         let statusCode = isInvalidState ? HTTP_STATUS.CONFLICT : HTTP_STATUS.BAD_REQUEST;
@@ -195,6 +283,13 @@ export const submitOffer = async (req, res) => {
             if (error.debtAmount != null) details.debtAmount = error.debtAmount;
             if (error.currency) details.currency = error.currency;
             if (error.walletId) details.walletId = error.walletId;
+        }
+
+        if (error.currentStatus) {
+            details.currentStatus = error.currentStatus;
+        }
+        if (error.pricingMode) {
+            details.pricingMode = error.pricingMode;
         }
 
         const { response } = responseFormatter.error(
@@ -300,6 +395,9 @@ export const acceptOffer = async (req, res) => {
         if (error.walletId) {
             details.walletId = error.walletId;
         }
+        if (error.pricingMode) {
+            details.pricingMode = error.pricingMode;
+        }
 
         const formatted = responseFormatter.error(
             code,
@@ -350,8 +448,35 @@ export const getMyJobs = async (req, res) => {
 
         if (queryError) throw queryError;
 
+        const fixedPriceJobIds = (jobs || [])
+            .filter((job) => job.pricing_mode === 'catalog_fixed')
+            .map((job) => job.id);
+
+        let catalogItemsByJobId = new Map();
+        if (fixedPriceJobIds.length > 0) {
+            const { data: catalogItems, error: catalogError } = await supabase
+                .from('job_catalog_items')
+                .select('*')
+                .in('job_id', fixedPriceJobIds)
+                .limit(500);
+
+            if (catalogError) throw catalogError;
+
+            catalogItemsByJobId = (catalogItems || []).reduce((map, item) => {
+                const existing = map.get(item.job_id) || [];
+                existing.push(item);
+                map.set(item.job_id, existing);
+                return map;
+            }, new Map());
+        }
+
+        const enrichedJobs = (jobs || []).map((job) => ({
+            ...job,
+            job_catalog_items: catalogItemsByJobId.get(job.id) || []
+        }));
+
         return res.json(
-            responseFormatter.successPaginated(jobs, {
+            responseFormatter.successPaginated(enrichedJobs, {
                 page: pageNum,
                 limit: limitNum,
                 total: count || 0,
@@ -438,11 +563,25 @@ export const setPrice = async (req, res) => {
         const job = await jobService.setPrice(req.params.id, req.user.id, price, notes, paymentMethod);
         return res.json(responseFormatter.success(job, 'Price submitted'));
     } catch (error) {
-        const { response, statusCode } = responseFormatter.error(
-            ERROR_CODES.INVALID_INPUT,
-            error.message
+        let code = ERROR_CODES.INVALID_INPUT;
+        let statusCode = HTTP_STATUS.BAD_REQUEST;
+        const details = {};
+
+        if (error.code === 'INVALID_STATUS_TRANSITION') {
+            code = ERROR_CODES.INVALID_STATUS_TRANSITION;
+            statusCode = HTTP_STATUS.CONFLICT;
+        }
+        if (error.currentStatus) details.currentStatus = error.currentStatus;
+        if (error.pricingMode) details.pricingMode = error.pricingMode;
+
+        const formatted = responseFormatter.error(
+            code,
+            error.message,
+            Object.keys(details).length > 0
+                ? { statusCode, details }
+                : statusCode
         );
-        return res.status(statusCode).json(response);
+        return res.status(formatted.statusCode).json(formatted.response);
     }
 };
 
@@ -452,11 +591,18 @@ export const confirmPrice = async (req, res) => {
         const job = await jobService.confirmPrice(req.params.id, req.user.id);
         return res.json(responseFormatter.success(job, 'Price confirmed'));
     } catch (error) {
-        const { response, statusCode } = responseFormatter.error(
+        const details = {};
+        if (error.currentStatus) details.currentStatus = error.currentStatus;
+        if (error.pricingMode) details.pricingMode = error.pricingMode;
+
+        const formatted = responseFormatter.error(
             ERROR_CODES.INVALID_STATUS_TRANSITION,
-            error.message
+            error.message,
+            Object.keys(details).length > 0
+                ? { statusCode: HTTP_STATUS.CONFLICT, details }
+                : HTTP_STATUS.CONFLICT
         );
-        return res.status(statusCode).json(response);
+        return res.status(formatted.statusCode).json(formatted.response);
     }
 };
 
@@ -538,9 +684,23 @@ export const cancelJob = async (req, res) => {
         const { reason } = req.body;
         const job = await jobService.cancel(req.params.id, req.user.id, reason);
 
-        cancelJobSearch(job.id);
+        const reopenedForRedispatch =
+            job.pricing_mode === 'catalog_fixed' &&
+            job.status === 'pending' &&
+            !job.technician_id;
 
-        return res.json(responseFormatter.success(job, 'Job cancelled'));
+        if (reopenedForRedispatch) {
+            await startJobSearch(job.id, job.lat, job.lng, job.service_id);
+        } else {
+            cancelJobSearch(job.id);
+        }
+
+        return res.json(
+            responseFormatter.success(
+                job,
+                reopenedForRedispatch ? 'Job reopened for matching' : 'Job cancelled'
+            )
+        );
     } catch (error) {
         const message = error.message || 'Failed to cancel job';
         let code = ERROR_CODES.INVALID_STATUS_TRANSITION;
@@ -609,6 +769,28 @@ export const getJobById = async (req, res) => {
             );
             return res.status(statusCode).json(response);
         }
+        const isFixedPrice = job.pricing_mode === 'catalog_fixed';
+
+        let jobCatalogItems = [];
+        if (isFixedPrice) {
+            const { data: catalogItems, error: catalogError } = await supabase
+                .from('job_catalog_items')
+                .select('*')
+                .eq('job_id', jobId)
+                .limit(200);
+
+            if (catalogError) {
+                const { response, statusCode } = responseFormatter.error(
+                    ERROR_CODES.DATABASE_ERROR,
+                    'Database error',
+                    HTTP_STATUS.INTERNAL_SERVER_ERROR
+                );
+                return res.status(statusCode).json(response);
+            }
+
+            jobCatalogItems = catalogItems || [];
+        }
+
         // Check if user is authorized (customer or technician involved in the job)
         // OR if the job is in technician-discoverable pool (available to view)
         const isParticipant = job.customer_id === req.user.id || job.technician_id === req.user.id;
@@ -626,11 +808,16 @@ export const getJobById = async (req, res) => {
         // NEW: Add computed fields for frontend
         const enrichedJob = {
             ...job,
+            job_catalog_items: jobCatalogItems,
             // Permissions for current user
             permissions: {
-                canAccept: job.status === 'pending' && !job.technician_id && req.user.user_type === 'technician',
-                canSetPrice: job.status === 'accepted' && job.technician_id === req.user.id,
-                canConfirmPrice: job.status === 'price_pending' && job.customer_id === req.user.id,
+                canAccept: isFixedPrice &&
+                    ['pending', 'searching', 'no_technician_found'].includes(job.status) &&
+                    !job.technician_id &&
+                    req.user.user_type === 'technician',
+                canSetPrice: !isFixedPrice && job.status === 'accepted' && job.technician_id === req.user.id,
+                canConfirmPrice: !isFixedPrice && job.status === 'price_pending' && job.customer_id === req.user.id,
+                canStartTravel: isFixedPrice && job.status === 'accepted' && job.technician_id === req.user.id,
                 canMarkArrived:
                     (job.status === 'on_the_way' || job.status === 'arrived') &&
                     job.technician_id === req.user.id,
@@ -641,7 +828,16 @@ export const getJobById = async (req, res) => {
                 canConfirmCompletion: job.status === 'pending_confirm' && job.customer_id === req.user.id, // New permission
                 canRate: job.status === 'completed' && job.customer_id === req.user.id && !job.customer_rating,
                 canCancel: !['arrived', 'in_progress', 'pending_confirm', 'completed', 'rated', 'cancelled'].includes(job.status) &&
+                    !(isFixedPrice && job.status === 'accepted' && job.technician_id === req.user.id) &&
                     (job.customer_id === req.user.id || job.technician_id === req.user.id)
+            },
+            pricingContext: {
+                pricingMode: job.pricing_mode || 'technician_quote',
+                dispatchMode: job.dispatch_mode || null,
+                quoteRequired: job.quote_required !== false,
+                catalogSubtotal: job.catalog_subtotal,
+                catalogItemCount: job.catalog_item_count || 0,
+                pricingSummary: job.pricing_summary || null
             },
             // Metadata
             timeline: {
@@ -654,9 +850,14 @@ export const getJobById = async (req, res) => {
             },
             // Price summary
             priceSummary: {
+                pricingMode: job.pricing_mode || 'technician_quote',
+                quoteRequired: job.quote_required !== false,
                 initialPrice: job.initial_price,
                 technicianProposedPrice: job.technician_price,
                 finalPrice: job.final_price || job.technician_price,
+                catalogSubtotal: job.catalog_subtotal,
+                catalogItemCount: job.catalog_item_count || 0,
+                pricingSummary: job.pricing_summary || null,
                 commission: job.technician_price ? Math.round(job.technician_price * 0.1) : 0
             }
         };

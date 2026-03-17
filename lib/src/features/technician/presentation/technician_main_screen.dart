@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
-import '../../../core/services/location/location_service.dart';
 import '../../../core/services/notification_service.dart';
 import '../../../core/services/fcm_service.dart';
 import 'dart:async';
@@ -14,6 +13,7 @@ import '../../notifications/data/notification_repository.dart';
 
 import '../data/technician_repository.dart';
 import 'dashboard/technician_dashboard_screen.dart';
+import 'providers/technician_providers.dart';
 import 'providers/technician_tab_provider.dart';
 import 'requests/technician_requests_screen.dart';
 import 'wallet/technician_wallet_screen.dart';
@@ -59,7 +59,7 @@ class _TechnicianMainScreenState extends ConsumerState<TechnicianMainScreen> {
 
   void _setupLocationSyncListener() {
     _locationSubscription = ref.listenManual<AsyncValue<Position>>(
-      locationStreamProvider,
+      technicianResolvedLocationProvider,
       (_, next) {
         next.when(
           data: (position) {

@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/app_theme.dart';
 import '../../../core/design/kadmat_tokens.dart';
 import '../../../core/navigation/app_routes.dart';
 import '../../../core/utils/error_handler.dart';
@@ -28,6 +29,7 @@ class MessagesScreen extends ConsumerWidget {
     );
 
     return Scaffold(
+      backgroundColor: const Color(0xFFF6F8FB),
       body: SafeArea(
         child: Column(
           children: [
@@ -92,8 +94,16 @@ class _MessagesHeader extends StatelessWidget {
         gradient: const LinearGradient(
           begin: Alignment.topRight,
           end: Alignment.bottomLeft,
-          colors: [Color(0xFF123039), Color(0xFF0B1F27)],
+          colors: [Color(0xFFEFF8FC), Color(0xFFDCEFF7)],
         ),
+        border: Border.all(color: const Color(0xFFD5E7EE)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -107,7 +117,7 @@ class _MessagesHeader extends StatelessWidget {
                     Text(
                       'محادثاتك الفعلية فقط',
                       style: TextStyle(
-                        color: Colors.white,
+                        color: KadmatColors.lightTextPrimary,
                         fontSize: 24.fz,
                         fontWeight: FontWeight.w800,
                         height: 1.15,
@@ -117,7 +127,7 @@ class _MessagesHeader extends StatelessWidget {
                     Text(
                       'التواصل يظهر بعد قبول العرض فقط، حتى تبقى المحادثات مرتبطة بطلبات حقيقية ومفيدة للطرفين.',
                       style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.74),
+                        color: KadmatColors.lightTextSecondary,
                         fontSize: 13.fz,
                         height: 1.5,
                       ),
@@ -130,8 +140,8 @@ class _MessagesHeader extends StatelessWidget {
                 onPressed: onRefresh,
                 icon: const Icon(Icons.refresh_rounded),
                 style: IconButton.styleFrom(
-                  backgroundColor: Colors.white.withValues(alpha: 0.14),
-                  foregroundColor: Colors.white,
+                  backgroundColor: Colors.white,
+                  foregroundColor: const Color(0xFF0C171C),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(18.r),
                   ),
@@ -517,9 +527,9 @@ class _HeaderStatTile extends StatelessWidget {
     return Container(
       padding: EdgeInsets.all(14.w),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.08),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(20.r),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+        border: Border.all(color: const Color(0xFFDCE5E8)),
       ),
       child: Row(
         children: [
@@ -527,10 +537,10 @@ class _HeaderStatTile extends StatelessWidget {
             width: 38.w,
             height: 38.w,
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.12),
+              color: KadmatColors.brandAccent,
               borderRadius: BorderRadius.circular(14.r),
             ),
-            child: Icon(icon, color: Colors.white, size: 18.s),
+            child: Icon(icon, color: AppTheme.primaryColor, size: 18.s),
           ),
           SizedBox(width: 10.w),
           Column(
@@ -539,7 +549,7 @@ class _HeaderStatTile extends StatelessWidget {
               Text(
                 value,
                 style: TextStyle(
-                  color: Colors.white,
+                  color: KadmatColors.lightTextPrimary,
                   fontSize: 18.fz,
                   fontWeight: FontWeight.w800,
                 ),
@@ -547,7 +557,7 @@ class _HeaderStatTile extends StatelessWidget {
               Text(
                 label,
                 style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.72),
+                  color: KadmatColors.lightTextSecondary,
                   fontSize: 12.fz,
                 ),
               ),

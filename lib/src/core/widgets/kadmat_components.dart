@@ -13,6 +13,8 @@ class KadmatPrimaryButton extends StatelessWidget {
     this.icon,
     this.backgroundColor,
     this.foregroundColor,
+    this.maxLines = 2,
+    this.minHeight = 52,
   });
 
   final String label;
@@ -21,6 +23,8 @@ class KadmatPrimaryButton extends StatelessWidget {
   final IconData? icon;
   final Color? backgroundColor;
   final Color? foregroundColor;
+  final int maxLines;
+  final double minHeight;
 
   @override
   Widget build(BuildContext context) {
@@ -31,18 +35,25 @@ class KadmatPrimaryButton extends StatelessWidget {
             child: const CircularProgressIndicator.adaptive(strokeWidth: 2),
           )
         : Row(
-            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               if (icon != null) ...[
                 Icon(icon, size: 18.s),
                 SizedBox(width: KadmatSpacing.xs.w),
               ],
-              Text(label),
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: maxLines,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                ),
+              ),
             ],
           );
 
-    return SizedBox(
-      height: 52.h,
+    return ConstrainedBox(
+      constraints: BoxConstraints(minHeight: minHeight.h),
       child: ElevatedButton(
         onPressed: isLoading ? null : onPressed,
         style: backgroundColor == null && foregroundColor == null
@@ -50,6 +61,10 @@ class KadmatPrimaryButton extends StatelessWidget {
             : ElevatedButton.styleFrom(
                 backgroundColor: backgroundColor,
                 foregroundColor: foregroundColor,
+                padding: EdgeInsets.symmetric(
+                  horizontal: KadmatSpacing.md.w,
+                  vertical: 12.h,
+                ),
               ),
         child: child,
       ),
@@ -63,20 +78,43 @@ class KadmatSecondaryButton extends StatelessWidget {
     required this.label,
     this.onPressed,
     this.icon,
+    this.maxLines = 2,
+    this.minHeight = 52,
   });
 
   final String label;
   final VoidCallback? onPressed;
   final IconData? icon;
+  final int maxLines;
+  final double minHeight;
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 52.h,
-      child: OutlinedButton.icon(
+    return ConstrainedBox(
+      constraints: BoxConstraints(minHeight: minHeight.h),
+      child: OutlinedButton(
         onPressed: onPressed,
-        icon: Icon(icon ?? Icons.circle_outlined, size: 18.s),
-        label: Text(label),
+        style: OutlinedButton.styleFrom(
+          padding: EdgeInsets.symmetric(
+            horizontal: KadmatSpacing.md.w,
+            vertical: 12.h,
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon ?? Icons.circle_outlined, size: 18.s),
+            SizedBox(width: KadmatSpacing.xs.w),
+            Flexible(
+              child: Text(
+                label,
+                maxLines: maxLines,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

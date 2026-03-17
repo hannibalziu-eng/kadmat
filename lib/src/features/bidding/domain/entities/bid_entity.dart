@@ -28,7 +28,7 @@ class BidEntity with _$BidEntity {
   bool get isAccepted => status == BidStatus.accepted;
   bool get isRejected => status == BidStatus.rejected;
 
-  String get formattedAmount => '${amount.toStringAsFixed(0)} ريال';
+  String get formattedAmount => '${amount.toStringAsFixed(0)} د.ل';
 
   String? get estimatedDurationText {
     if (estimatedDurationMinutes == null) return null;

@@ -17,6 +17,7 @@ ios/Flutter/Flutter.framework
 ios/Flutter/Flutter.podspec
 ios/Flutter/.last_build_id
 ios/Runner/GeneratedPluginRegistrant.*
+ios/Runner/GoogleService-Info.plist
 *.xcworkspace/xcuserdata/
 *.xcuserdata
 **/DerivedData/
@@ -31,6 +32,7 @@ android/gradlew
 android/gradlew.bat
 android/local.properties
 android/**/generated/
+android/app/google-services.json
 *.apk
 *.aab
 
@@ -45,6 +47,8 @@ android/**/generated/
 # Backend
 backend/node_modules/
 backend/.env
+backend/.env.autopilot
+backend/.env.autopilotc
 backend/coverage/
 backend/*.log
 backend/logs/
@@ -66,6 +70,8 @@ backend/logs/
 analysis_output.txt
 memory/
 output/playwright/
+.playwright-cli/
+.github/workflows/.tmp_*.yml
 
 # Playwright E2E
 e2e/playwright/node_modules/
@@ -74,8 +80,16 @@ e2e/playwright/.env.local
 
 # Accidental duplicate copies ("... 2")
 .flutter-plugins-dependencies 2
+.flutter-plugins-dependencies 3
 ios/Flutter/* 2.*
+ios/Flutter/* 3.*
 test/unit/* 2.dart
+.github/workflows 3/
+backend/src/controllers/messageController 2.js
+lib/src/core/router.g 2.dart
+lib/src/core/security/security_providers.g 2.dart
+lib/src/features/auth/data/auth_repository.g 2.dart
+lib/src/features/bidding/data/models/dispute_model.freezed 2.dart
 .github/workflows 2/
 lib/src/features/notifications/presentation/screens 2/
 linux/flutter/ephemeral/.plugin_symlinks 2/

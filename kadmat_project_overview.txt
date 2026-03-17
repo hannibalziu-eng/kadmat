@@ -1,0 +1,70 @@
+# Kadmat Project Overview for AI Assistant
+
+## Project Structure
+```
+lib/
+├── src/
+│   ├── core/                 # Core utilities and services
+│   │   ├── auth/            # Authentication services (OAuth 2.0, MFA)
+│   │   ├── services/        # Shared services (API, storage, location)
+│   │   ├── utils/           # Utilities and helpers
+│   │   └── theme/           # Theme configuration
+│   ├── admin/               # Admin panel (dashboard, analytics)
+│   │   ├── data/           # Admin data models and repositories
+│   │   ├── domain/         # Admin business logic
+│   │   ├── presentation/   # Admin UI components
+│   │   └── services/       # Admin-specific services
+│   ├── technician/          # Technician app features
+│   │   ├── data/           # Technician data models
+│   │   ├── domain/         # Technician business logic
+│   │   ├── presentation/   # Technician UI
+│   │   └── services/       # Technician services
+│   └── customer/            # Customer app features
+│       ├── data/           # Customer data models
+│       ├── domain/         # Customer business logic
+│       ├── presentation/   # Customer UI
+│       └── services/       # Customer services
+```
+
+## Key Technologies
+- Flutter 3.x with Dart 3.x
+- Riverpod for state management
+- GoRouter for navigation
+- Supabase for backend/database
+- OAuth 2.0 with MFA for authentication
+- Responsive UI with RTL support
+
+## Critical Files
+- `lib/main.dart` - App entry point with theme configuration
+- `lib/router.dart` - Route definitions
+- `lib/src/core/auth/auth_provider.dart` - Authentication state
+- `lib/src/admin/presentation/screens/dashboard_screen.dart` - Admin dashboard
+- `lib/src/technician/presentation/screens/dashboard_screen.dart` - Technician dashboard
+- `lib/src/core/services/api_service.dart` - API communication
+- `lib/src/core/services/location_service.dart` - GPS tracking
+
+## Current Features
+- ✅ OAuth 2.0 login (Google/Apple/Facebook)
+- ✅ Multi-factor authentication (MFA)
+- ✅ Technician dashboard with basic stats
+- ✅ Customer service booking
+- ✅ Real-time job assignments
+- ✅ Location tracking
+- ✅ Push notifications
+
+## Enhancement Requirements
+- Upgrade AppBar with profile, status, notifications
+- Replace basic stat cards with 6 detailed metrics
+- Implement theme switching (light/dark/system)
+- Enable live location updates to server
+- Connect online status toggle to backend
+- Improve RTL design and responsiveness
+
+## Development Guidelines
+- Follow existing Riverpod patterns
+- Maintain Arabic localization
+- Preserve responsive layouts
+- Use Material 3 design system
+- Implement proper error handling
+- Ensure secure data handling
+- Optimize for performance

@@ -1,0 +1,47 @@
+# Kadmat Enhancement Prompts
+
+## 1. Enhanced AppBar
+Create a sophisticated AppBar with:
+- Profile avatar circle
+- Technician name and online status
+- Notification bell icon
+- Settings menu with logout
+- RTL support
+
+## 2. Detailed Stat Cards
+Replace basic cards with comprehensive stats:
+- Rating stars (⭐)
+- Current jobs count
+- Acceptance rate %
+- Work hours logged
+- Color-coded metrics
+- Responsive grid layout
+
+## 3. Theme Switcher
+Implement theme switching:
+- Light/Dark/System modes
+- Persistent settings via SharedPreferences
+- Material 3 compliance
+- Automatic theme detection
+
+## 4. Live Location Updates
+Real-time location tracking:
+- GPS position streaming
+- Server sync every 5 seconds
+- Distance filtering (10m)
+- Error handling for disabled services
+
+## 5. Live Online Status
+Real-time connectivity:
+- Toggle switch with server sync
+- WebSocket connection
+- Status persistence
+- Offline queue mechanism
+
+## 6. Code Requirements
+- Dart/Flutter best practices
+- Riverpod state management
+- Clean architecture
+- Error handling
+- Performance optimization
+- Security considerations

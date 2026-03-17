@@ -64,6 +64,8 @@ class ErrorMessages {
   static const String serverError = 'خطأ في الخادم. يرجى المحاولة لاحقاً';
   static const String requestFailed = 'فشل الطلب';
   static const String unauthorized = 'غير مصرح. يرجى تسجيل الدخول مرة أخرى';
+  static const String invalidCredentials =
+      'البريد الإلكتروني أو كلمة المرور غير صحيحة';
   static const String rateLimited = 'طلبات كثيرة. يرجى المحاولة بعد قليل';
   static const String forbidden = 'ليست لديك صلاحية لتنفيذ هذا الإجراء';
   static const String invalidInput = 'البيانات المدخلة غير صحيحة';
@@ -71,6 +73,8 @@ class ErrorMessages {
       'الخادم غير متاح حاليًا. يرجى المحاولة بعد قليل';
   static const String localBackendUnreachable =
       'الخادم المحلي غير متاح. تأكد من تشغيل واجهة البرمجة المحلية';
+  static const String authSessionSyncFailed =
+      'تعذر إكمال تسجيل الدخول. أعد المحاولة مرة أخرى';
 
   // General Errors
   static const String unknownError = 'حدث خطأ غير متوقع';
@@ -166,12 +170,36 @@ class ErrorMessages {
       return unauthorized;
     }
 
+    if (errorString.contains('invalid credentials')) {
+      return invalidCredentials;
+    }
+
+    if (errorString.contains('invalid refresh token') ||
+        errorString.contains('refresh_token_already_used') ||
+        errorString.contains('refresh token cannot be empty') ||
+        errorString.contains('no refresh_token detected') ||
+        errorString.contains('no access_token detected') ||
+        errorString.contains('session missing') ||
+        errorString.contains('session_not_found') ||
+        errorString.contains('authsessionmissingexception') ||
+        errorString.contains('authretryablefetchexception')) {
+      return authSessionSyncFailed;
+    }
+
     if (errorString.contains('500') || errorString.contains('server')) {
       return serverError;
     }
 
+    if ((errorString.contains('images') || errorString.contains('"images"')) &&
+        (errorString.contains('array') ||
+            errorString.contains('must be') ||
+            errorString.contains('validation'))) {
+      return invalidInput;
+    }
+
     // Photo errors
-    if (errorString.contains('photo') || errorString.contains('image')) {
+    if (errorString.contains('photo') ||
+        (errorString.contains('image') && !errorString.contains('images'))) {
       return photoUploadFailed;
     }
 

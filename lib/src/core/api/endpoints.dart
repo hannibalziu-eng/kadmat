@@ -1,7 +1,26 @@
+import 'package:flutter/foundation.dart';
+
 class Endpoints {
-  // Base URL - Use 10.0.2.2 for Android Emulator, localhost for iOS Simulator
-  // For physical device, use your machine's IP address (e.g., http://192.168.1.5:3000)
-  static const String baseUrl = 'http://localhost:3000/api';
+  static const String _configuredBaseUrl = String.fromEnvironment(
+    'API_BASE',
+    defaultValue: '',
+  );
+
+  static String get baseUrl {
+    if (_configuredBaseUrl.isNotEmpty) {
+      return _configuredBaseUrl;
+    }
+
+    if (kIsWeb) {
+      final origin = Uri.base;
+      final host = origin.host.isEmpty ? 'localhost' : origin.host;
+      final scheme = origin.scheme.isEmpty ? 'http' : origin.scheme;
+      return '$scheme://$host:3000/api';
+    }
+
+    // Default local mobile/native development target.
+    return 'http://localhost:3000/api';
+  }
 
   // Auth
   static const String login = '/auth/login';
@@ -43,4 +62,5 @@ class Endpoints {
   // Services
   static const String services = '/services';
   static String serviceById(String id) => '/services/$id';
+  static String serviceCatalogItems(String id) => '/services/$id/catalog-items';
 }

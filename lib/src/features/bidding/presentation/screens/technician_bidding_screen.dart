@@ -255,7 +255,7 @@ class _TechnicianBiddingScreenState
             const SizedBox(height: 12),
             _buildDetailRow(
               'السعر المتوقع من العميل',
-              '${initialPrice.toStringAsFixed(0)} ر.س',
+              '${initialPrice.toStringAsFixed(0)} د.ل',
               Icons.attach_money,
             ),
           ],
@@ -373,7 +373,7 @@ class _TechnicianBiddingScreenState
             keyboardType: TextInputType.number,
             style: const TextStyle(color: Colors.white),
             decoration: InputDecoration(
-              labelText: 'السعر المقترح (ريال)',
+              labelText: 'السعر المقترح (د.ل)',
               labelStyle: const TextStyle(color: Colors.grey),
               prefixIcon: const Icon(
                 Icons.monetization_on,
@@ -392,7 +392,7 @@ class _TechnicianBiddingScreenState
               final price = double.tryParse(value);
               if (price == null || price <= 0) return 'السعر غير صالح';
 
-              if (price < 10) return 'الحد الأدنى 10 ريال';
+              if (price < 10) return 'الحد الأدنى 10 د.ل';
 
               return null;
             },

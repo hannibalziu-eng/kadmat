@@ -4,12 +4,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/exceptions/app_exceptions.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/router_modular.dart';
-import '../../../../core/services/location/location_service.dart';
 import '../../../../core/utils/logger_service.dart';
 import '../../../../core/widgets/kadmat_toast.dart';
 import '../../../auth/data/auth_repository.dart';
 import '../../../jobs/data/job_repository.dart';
 import '../../../jobs/presentation/job_controller.dart';
+import '../providers/technician_providers.dart';
 
 class TechnicianAcceptJobFlow {
   const TechnicianAcceptJobFlow._();
@@ -68,7 +68,7 @@ class TechnicianAcceptJobFlow {
   static void _invalidateAfterAccept(WidgetRef ref) {
     ref.invalidate(myJobsProvider);
 
-    final currentLocation = ref.read(locationStreamProvider).valueOrNull;
+    final currentLocation = ref.read(technicianLocationProvider);
     final rawServiceId = ref
         .read(authRepositoryProvider)
         .userProfile?['service_id'];

@@ -1,11 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart' show Position;
 
-import '../../../../core/services/location/location_service.dart';
 import '../../../auth/data/auth_repository.dart';
 import '../../../jobs/domain/job.dart';
 import '../../../jobs/domain/job_visibility_policy.dart';
 import '../../../jobs/presentation/job_controller.dart';
+import 'technician_providers.dart';
 
 class TechnicianDispatchFeed {
   const TechnicianDispatchFeed({
@@ -32,7 +32,7 @@ double _normalizeCoordinate(double value) {
 /// and requests screens subscribe to the exact same data contract.
 final technicianDispatchFeedProvider =
     Provider<AsyncValue<TechnicianDispatchFeed>>((ref) {
-      final locationAsync = ref.watch(locationStreamProvider);
+      final locationAsync = ref.watch(technicianResolvedLocationProvider);
       final rawServiceId = ref
           .watch(authRepositoryProvider)
           .userProfile?['service_id'];

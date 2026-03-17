@@ -257,90 +257,27 @@ BEGIN
     -- 3. Calculate Amounts
     v_commission_amount := p_amount * p_commission_rate;
     v_technician_amount := p_amount - v_commission_amount;
-    
-    -- 4. Perform Transfers (Debit Customer, Credit Tech)
-    -- Note: In a real app, customer might have pre-authorized card payment. 
-    -- Here we assume wallet balance or cash recording.
-    
-    -- Credit Technician
-    UPDATE wallets 
-    SET balance = balance + v_technician_amount, updated_at = NOW()
-    WHERE id = v_technician_wallet_id;
-    
-    INSERT INTO wallet_transactions (wallet_id, amount, type, reference_type, reference_id, description)
-    VALUES (v_technician_wallet_id, v_technician_amount, 'job_payment', 'job', p_job_id, 'Payment for job');
-    
-    -- Record Commission (Platform Revenue)
-    -- We could have a platform wallet, but for now just logging it via the job or a system wallet.
-    
-    -- 5. Update Job Status
-    UPDATE jobs 
-    SET payment_status = 'captured',
-        final_price = p_amount,
-        updated_at = NOW()
-    WHERE id = p_job_id;
-    
-    RETURN jsonb_build_object('success', true, 'message', 'Payment processed successfully');
-EXCEPTION WHEN OTHERS THEN
-    RETURN jsonb_build_object('success', false, 'message', SQLERRM);
-END;
-$$;
 
--- ==============================================================================
--- 5. RLS POLICIES (Security)
--- ==============================================================================
+-- Sprint 2 Day 1 additions: fixed-price job persistence
+CREATE TABLE IF NOT EXISTS public.job_catalog_items (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  job_id UUID NOT NULL REFERENCES public.jobs(id) ON DELETE CASCADE,
+  service_catalog_item_id UUID REFERENCES public.service_catalog_items(id) ON DELETE SET NULL,
+  name TEXT NOT NULL,
+  name_ar TEXT,
+  unit_price NUMERIC(10,2) NOT NULL,
+  quantity INTEGER NOT NULL DEFAULT 1,
+  line_total NUMERIC(10,2) NOT NULL,
+  currency_code TEXT NOT NULL DEFAULT 'LYD',
+  item_snapshot JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT job_catalog_items_quantity_positive CHECK (quantity > 0),
+  CONSTRAINT job_catalog_items_unit_price_nonnegative CHECK (unit_price >= 0),
+  CONSTRAINT job_catalog_items_line_total_nonnegative CHECK (line_total >= 0)
+);
 
-ALTER TABLE jobs ENABLE ROW LEVEL SECURITY;
-ALTER TABLE wallets ENABLE ROW LEVEL SECURITY;
-ALTER TABLE wallet_transactions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
-
--- Jobs Policies
-DROP POLICY IF EXISTS "Users can view own jobs" ON jobs;
-CREATE POLICY "Users can view own jobs" ON jobs
-    FOR SELECT USING (auth.uid() = customer_id OR auth.uid() = technician_id);
-
-DROP POLICY IF EXISTS "Customers can create jobs" ON jobs;
-CREATE POLICY "Customers can create jobs" ON jobs
-    FOR INSERT WITH CHECK (auth.uid() = customer_id);
-
-DROP POLICY IF EXISTS "Users can update own jobs" ON jobs;
-CREATE POLICY "Users can update own jobs" ON jobs
-    FOR UPDATE USING (auth.uid() = customer_id OR auth.uid() = technician_id);
-
--- Wallet Policies
-DROP POLICY IF EXISTS "Users can view own wallet" ON wallets;
-CREATE POLICY "Users can view own wallet" ON wallets
-    FOR SELECT USING (auth.uid() = user_id);
-
-DROP POLICY IF EXISTS "Users can view own transactions" ON wallet_transactions;
-CREATE POLICY "Users can view own transactions" ON wallet_transactions
-    FOR SELECT USING (wallet_id IN (SELECT id FROM wallets WHERE user_id = auth.uid()));
-
--- Notification Policies
-DROP POLICY IF EXISTS "Users can view own notifications" ON notifications;
-CREATE POLICY "Users can view own notifications" ON notifications
-    FOR SELECT USING (auth.uid() = user_id);
-
--- ==============================================================================
--- 6. TRIGGERS
--- ==============================================================================
-
--- Auto-update updated_at timestamp
-CREATE OR REPLACE FUNCTION update_updated_at_column()
-RETURNS TRIGGER AS $$
-BEGIN
-    NEW.updated_at = CURRENT_TIMESTAMP;
-    RETURN NEW;
-END;
-$$ language 'plpgsql';
-
-DROP TRIGGER IF EXISTS update_jobs_updated_at ON jobs;
-CREATE TRIGGER update_jobs_updated_at BEFORE UPDATE ON jobs FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-DROP TRIGGER IF EXISTS update_wallets_updated_at ON wallets;
-CREATE TRIGGER update_wallets_updated_at BEFORE UPDATE ON wallets FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-DROP TRIGGER IF EXISTS update_users_updated_at ON users;
-CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON users FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+-- Persistence shape note:
+-- One row per selected catalog item at job creation time.
+-- Rows are immutable snapshots and must not depend on future catalog price edits.
+-- service_catalog_item_id is optional over time because the snapshot fields are the source of truth.
 

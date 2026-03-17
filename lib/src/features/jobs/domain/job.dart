@@ -63,6 +63,142 @@ class Job with _$Job {
 
   factory Job.fromJson(Map<String, dynamic> json) => _$JobFromJson(json);
 
+  static Map<String, dynamic>? _asMap(dynamic value) {
+    if (value is Map<String, dynamic>) return value;
+    if (value is Map) {
+      return value.map((key, dynamic val) => MapEntry(key.toString(), val));
+    }
+    return null;
+  }
+
+  static List<Map<String, dynamic>> _asMapList(dynamic value) {
+    if (value is! List) return const [];
+    return value
+        .whereType<Map>()
+        .map(
+          (entry) =>
+              entry.map((key, dynamic val) => MapEntry(key.toString(), val)),
+        )
+        .toList(growable: false);
+  }
+
+  static List<Map<String, dynamic>> _firstNonEmptyMapList(
+    List<dynamic> values,
+  ) {
+    for (final value in values) {
+      final list = _asMapList(value);
+      if (list.isNotEmpty) return list;
+    }
+    return const [];
+  }
+
+  static double? _asDouble(dynamic value) {
+    if (value is num) return value.toDouble();
+    if (value is String) return double.tryParse(value);
+    return null;
+  }
+
+  static int? _asInt(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    if (value is String) return int.tryParse(value);
+    return null;
+  }
+
+  static bool? _asBool(dynamic value) {
+    if (value is bool) return value;
+    if (value is String) {
+      final normalized = value.trim().toLowerCase();
+      if (normalized == 'true') return true;
+      if (normalized == 'false') return false;
+    }
+    return null;
+  }
+
+  Map<String, dynamic>? get pricingContextData =>
+      _asMap(priceSummary?['pricingContext']) ??
+      _asMap(priceSummary?['pricing_context']);
+
+  String get effectivePricingMode {
+    final rawValue =
+        pricingContextData?['pricingMode'] ??
+        pricingContextData?['pricing_mode'] ??
+        priceSummary?['pricingMode'] ??
+        priceSummary?['pricing_mode'];
+    final normalized = rawValue?.toString().trim();
+    if (normalized == null || normalized.isEmpty) {
+      return 'technician_quote';
+    }
+    return normalized;
+  }
+
+  bool get isCatalogFixed => effectivePricingMode == 'catalog_fixed';
+
+  String? get effectiveDispatchMode {
+    final rawValue =
+        pricingContextData?['dispatchMode'] ??
+        pricingContextData?['dispatch_mode'] ??
+        priceSummary?['dispatchMode'] ??
+        priceSummary?['dispatch_mode'];
+    final normalized = rawValue?.toString().trim();
+    if (normalized == null || normalized.isEmpty) return null;
+    return normalized;
+  }
+
+  bool get effectiveQuoteRequired =>
+      _asBool(
+        pricingContextData?['quoteRequired'] ??
+            pricingContextData?['quote_required'] ??
+            priceSummary?['quoteRequired'] ??
+            priceSummary?['quote_required'],
+      ) ??
+      true;
+
+  double? get effectiveCatalogSubtotal => _asDouble(
+    pricingContextData?['catalogSubtotal'] ??
+        pricingContextData?['catalog_subtotal'] ??
+        priceSummary?['catalogSubtotal'] ??
+        priceSummary?['catalog_subtotal'],
+  );
+
+  int get effectiveCatalogItemCount =>
+      _asInt(
+        pricingContextData?['catalogItemCount'] ??
+            pricingContextData?['catalog_item_count'] ??
+            priceSummary?['catalogItemCount'] ??
+            priceSummary?['catalog_item_count'],
+      ) ??
+      effectiveJobCatalogItems.length;
+
+  Map<String, dynamic>? get effectivePricingSummary =>
+      _asMap(pricingContextData?['pricingSummary']) ??
+      _asMap(pricingContextData?['pricing_summary']) ??
+      _asMap(priceSummary?['pricingSummary']) ??
+      _asMap(priceSummary?['pricing_summary']);
+
+  List<Map<String, dynamic>> get effectiveJobCatalogItems =>
+      _firstNonEmptyMapList([
+        pricingContextData?['jobCatalogItems'],
+        pricingContextData?['job_catalog_items'],
+        priceSummary?['jobCatalogItems'],
+        priceSummary?['job_catalog_items'],
+      ]);
+
+  double get effectiveRuntimePrice =>
+      finalPrice ??
+      technicianPrice ??
+      effectiveCatalogSubtotal ??
+      initialPrice ??
+      0;
+
+  bool get canSetPrice => permissions?['canSetPrice'] == true;
+
+  bool get canConfirmPrice => permissions?['canConfirmPrice'] == true;
+
+  bool get canStartTravel => permissions?['canStartTravel'] == true;
+
+  bool get canAcceptDirectly => permissions?['canAccept'] == true;
+
   @override
   @JsonKey(name: 'customer_id')
   String get customerId => throw UnimplementedError();

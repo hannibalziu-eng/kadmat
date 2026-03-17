@@ -5,9 +5,9 @@ import 'package:kadmat/src/core/app_theme.dart';
 void main() {
   group('AppTheme Tests', () {
     test('should have consistent primary colors', () {
-      expect(AppTheme.primaryColor, const Color(0xFF13b6ec));
-      expect(AppTheme.secondaryColor, const Color(0xFF0e8cb5));
-      expect(AppTheme.accentColor, const Color(0xFFebf9fc));
+      expect(AppTheme.primaryColor, const Color(0xFF0066FF));
+      expect(AppTheme.secondaryColor, const Color(0xFF2284FF));
+      expect(AppTheme.accentColor, const Color(0xFFEAF2FF));
     });
 
     test('should create glass decoration with default parameters', () {
@@ -40,7 +40,7 @@ void main() {
 
       expect(lightTheme.brightness, Brightness.light);
       expect(lightTheme.primaryColor, AppTheme.primaryColor);
-      expect(lightTheme.scaffoldBackgroundColor, const Color(0xFFF2F6F7));
+      expect(lightTheme.scaffoldBackgroundColor, const Color(0xFFF9FAFB));
     });
 
     test('should have valid dark theme', () {

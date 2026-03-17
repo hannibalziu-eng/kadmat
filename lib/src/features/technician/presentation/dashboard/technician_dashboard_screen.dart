@@ -26,6 +26,7 @@ import '../../../../core/services/location/location_service.dart';
 import '../../../../core/widgets/location_status_indicator.dart';
 import '../../../../core/services/presence/presence_service.dart';
 import '../providers/technician_dispatch_feed_provider.dart';
+import '../providers/technician_providers.dart';
 import '../providers/technician_tab_provider.dart';
 import '../utils/technician_dispatch_queue.dart';
 
@@ -197,8 +198,12 @@ class _TechnicianDashboardScreenState
       await ref.read(presenceServiceProvider).initialize(userId);
 
       if (_isOnline) {
-        await LocationService().startTracking(userId);
-        await LocationService().setTrackingMode(LocationTrackingMode.idle);
+        try {
+          await LocationService().startTracking(userId);
+          await LocationService().setTrackingMode(LocationTrackingMode.idle);
+        } catch (e) {
+          debugPrint('⚠️ Location tracking unavailable during bootstrap: $e');
+        }
         await ref
             .read(presenceServiceProvider)
             .setStatus(UserPresenceStatus.online, userId);
@@ -209,9 +214,6 @@ class _TechnicianDashboardScreenState
       }
     } catch (e) {
       debugPrint('⚠️ Failed to bootstrap realtime services: $e');
-      if (mounted && _isOnline) {
-        setState(() => _isOnline = false);
-      }
     }
   }
 
@@ -289,30 +291,48 @@ class _TechnicianDashboardScreenState
           if (userId == null) return;
 
           setState(() => _isOnline = !_isOnline);
+          ref.read(authRepositoryProvider).mergeCachedUserProfile({
+            'is_online': _isOnline,
+          });
 
           try {
             await ref.read(presenceServiceProvider).initialize(userId);
 
             if (_isOnline) {
-              await LocationService().startTracking(userId);
-              await LocationService().setTrackingMode(
-                LocationTrackingMode.idle,
-              );
-              // Set Presence Online
+              var locationStarted = true;
+              try {
+                await LocationService().startTracking(userId);
+                await LocationService().setTrackingMode(
+                  LocationTrackingMode.idle,
+                );
+              } catch (e) {
+                locationStarted = false;
+                debugPrint('⚠️ Location tracking unavailable while going online: $e');
+              }
+
               await ref
                   .read(presenceServiceProvider)
                   .setStatus(UserPresenceStatus.online, userId);
 
               if (context.mounted) {
-                KadmatToast.showSuccess(
-                  context,
-                  title: 'أنت الآن متصل',
-                  message: 'تم تفعيل تتبع الموقع',
-                );
+                if (locationStarted) {
+                  KadmatToast.showSuccess(
+                    context,
+                    title: 'أنت الآن متصل',
+                    message: 'تم تفعيل تتبع الموقع.',
+                  );
+                } else {
+                  KadmatToast.showInfo(
+                    context,
+                    title: 'تم تفعيل الاتصال',
+                    message:
+                        'اسمح بالموقع أو حدده يدويًا من شاشة الطلبات لإظهار الطلبات القريبة.',
+                  );
+                }
               }
             } else {
               await LocationService().stopTracking();
-              // Set Presence Offline
+              ref.read(technicianManualLocationProvider.notifier).state = null;
               await ref
                   .read(presenceServiceProvider)
                   .setStatus(UserPresenceStatus.offline, userId);
@@ -325,9 +345,15 @@ class _TechnicianDashboardScreenState
                 );
               }
             }
+
+            ref.invalidate(technicianResolvedLocationProvider);
+            ref.invalidate(technicianDispatchFeedProvider);
+            ref.invalidate(watchNearbyJobsStreamProvider);
           } catch (e) {
-            // Revert state if permission denied or error
             setState(() => _isOnline = !_isOnline);
+            ref.read(authRepositoryProvider).mergeCachedUserProfile({
+              'is_online': _isOnline,
+            });
             if (context.mounted) {
               KadmatToast.showError(
                 context,
@@ -1406,7 +1432,7 @@ class _TechnicianDashboardScreenState
               SizedBox(width: 4.w),
               Text(
                 (job.initialPrice != null && job.initialPrice! > 0)
-                    ? '${job.initialPrice!.toStringAsFixed(0)} ر.س'
+                    ? '${job.initialPrice!.toStringAsFixed(0)} د.ل'
                     : 'غير محدد',
                 style: TextStyle(
                   fontSize: 15.fz,

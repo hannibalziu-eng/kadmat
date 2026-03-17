@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_scalify/flutter_scalify.dart';
 
+import '../design/kadmat_tokens.dart';
+
 enum ToastType { success, warning, info, error }
 
 enum ToastPosition { top, bottom }
@@ -146,20 +148,19 @@ class _ToastWidgetState extends State<_ToastWidget>
   }
 
   Color _getBackgroundColor() {
-    // Using dark glassmorphism style as base, but tinting slightly based on type
-    return const Color(0xFF1E1E1E).withValues(alpha: 0.95);
+    return KadmatColors.lightSurface.withValues(alpha: 0.98);
   }
 
   Color _getIconColor() {
     switch (widget.type) {
       case ToastType.success:
-        return const Color(0xFF4CAF50); // Green
+        return KadmatColors.stateSuccess;
       case ToastType.warning:
-        return const Color(0xFFFFB74D); // Orange
+        return KadmatColors.stateWarning;
       case ToastType.error:
-        return const Color(0xFFEF5350); // Red
+        return KadmatColors.stateError;
       case ToastType.info:
-        return Colors.blueAccent;
+        return KadmatColors.stateInfo;
     }
   }
 
@@ -205,15 +206,14 @@ class _ToastWidgetState extends State<_ToastWidget>
                   color: _getBackgroundColor(),
                   borderRadius: BorderRadius.circular(16.r),
                   border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.1),
+                    color: KadmatColors.lightBorderStrong,
                     width: 1,
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.3),
-                      blurRadius: 20,
+                      color: Colors.black.withValues(alpha: 0.08),
+                      blurRadius: 18,
                       offset: const Offset(0, 10),
-                      spreadRadius: 2,
                     ),
                   ],
                 ),
@@ -242,7 +242,7 @@ class _ToastWidgetState extends State<_ToastWidget>
                           Text(
                             widget.title,
                             style: TextStyle(
-                              color: Colors.white,
+                              color: KadmatColors.lightTextPrimary,
                               fontSize: 14.fz,
                               fontWeight: FontWeight.bold,
                               fontFamily: 'Tajawal', // Assuming app font
@@ -254,7 +254,7 @@ class _ToastWidgetState extends State<_ToastWidget>
                             Text(
                               widget.message,
                               style: TextStyle(
-                                color: Colors.white70,
+                                color: KadmatColors.lightTextSecondary,
                                 fontSize: 12.fz,
                                 height: 1.4,
                               ),

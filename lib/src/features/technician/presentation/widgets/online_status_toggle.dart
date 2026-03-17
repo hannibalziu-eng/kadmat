@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_scalify/flutter_scalify.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../../core/design/kadmat_tokens.dart';
+import '../../../../core/services/location/location_service.dart';
 import '../../../../core/widgets/kadmat_toast.dart';
 import 'package:kadmat/src/features/technician/domain/technician_status.dart';
+import 'package:kadmat/src/features/technician/presentation/providers/technician_dispatch_feed_provider.dart';
 import 'package:kadmat/src/features/technician/presentation/providers/technician_providers.dart';
+import '../../../jobs/presentation/job_controller.dart';
 
 class OnlineStatusToggle extends ConsumerWidget {
   const OnlineStatusToggle({super.key});
@@ -66,15 +70,61 @@ class OnlineStatusToggle extends ConsumerWidget {
             activeThumbColor: KadmatColors.stateSuccess,
             activeTrackColor: KadmatColors.stateSuccess.withValues(alpha: 0.35),
             onChanged: (_) async {
+              final userId = Supabase.instance.client.auth.currentUser?.id;
+              if (userId == null) return;
+
               try {
                 await ref
                     .read(technicianOnlineStatusProvider.notifier)
                     .toggle();
+                final becameOnline =
+                    ref.read(technicianOnlineStatusProvider) ==
+                    TechnicianStatus.online;
+
+                if (becameOnline) {
+                  try {
+                    await LocationService().startTracking(userId);
+                    await LocationService().setTrackingMode(
+                      LocationTrackingMode.idle,
+                    );
+                    if (context.mounted) {
+                      KadmatToast.showSuccess(
+                        context,
+                        title: 'أنت الآن متصل',
+                        message: 'سيتم تحديث الطلبات القريبة تلقائياً.',
+                      );
+                    }
+                  } catch (_) {
+                    if (context.mounted) {
+                      KadmatToast.showInfo(
+                        context,
+                        title: 'تم تفعيل الاتصال',
+                        message:
+                            'اسمح بالموقع أو حدده يدويًا من شاشة الطلبات لإظهار الطلبات القريبة.',
+                      );
+                    }
+                  }
+                } else {
+                  await LocationService().stopTracking();
+                  ref.read(technicianManualLocationProvider.notifier).state =
+                      null;
+                  if (context.mounted) {
+                    KadmatToast.showInfo(
+                      context,
+                      title: 'تم قطع الاتصال',
+                      message: 'لن تصلك طلبات جديدة حتى تعود إلى وضع المتصل.',
+                    );
+                  }
+                }
+
+                ref.invalidate(technicianResolvedLocationProvider);
+                ref.invalidate(technicianDispatchFeedProvider);
+                ref.invalidate(watchNearbyJobsStreamProvider);
               } catch (e) {
                 if (context.mounted) {
                   final normalized = e.toString().toLowerCase();
                   final message = normalized.contains('permission')
-                      ? 'تعذر تحديث الحالة. اسمح للموقع أولاً.'
+                      ? 'تم تفعيل الاتصال، لكن يلزم السماح بالموقع أو تحديده يدويًا.'
                       : 'تعذر تحديث الحالة حالياً. حاول مرة أخرى.';
                   KadmatToast.showError(
                     context,

@@ -16,7 +16,7 @@ void main() {
       expect(wallet.userId, 'user-1');
       expect(wallet.balance, 0);
       expect(wallet.totalEarnings, 0);
-      expect(wallet.currency, 'SAR');
+      expect(wallet.currency, 'د.ل');
       expect(wallet.updatedAt, DateTime.parse('2026-03-07T00:00:00.000Z'));
       expect(wallet.createdAt, wallet.updatedAt);
     });

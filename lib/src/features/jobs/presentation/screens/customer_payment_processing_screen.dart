@@ -260,7 +260,7 @@ class _CustomerPaymentProcessingScreenState
                         : Text(
                             _selectedPaymentMethod == 'cash'
                                 ? 'تأكيد التسليم النقدي'
-                                : 'تأكيد دفع ${amount.toStringAsFixed(2)} ريال',
+                                : 'تأكيد دفع ${amount.toStringAsFixed(2)} د.ل',
                             style: TextStyle(
                               fontSize: 18.fz,
                               fontWeight: FontWeight.bold,
@@ -361,7 +361,7 @@ class _CustomerPaymentProcessingScreenState
               _buildHeroPill(Icons.work_outline_rounded, serviceName),
               _buildHeroPill(
                 Icons.attach_money_rounded,
-                '${amount.toStringAsFixed(0)} ر.س',
+                '${amount.toStringAsFixed(0)} د.ل',
               ),
             ],
           ),

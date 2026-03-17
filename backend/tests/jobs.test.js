@@ -3,9 +3,12 @@
  * Uses mocked Supabase to test API logic without real database
  */
 
-import { jest, describe, it, expect, beforeAll, afterAll } from '@jest/globals';
+import { jest, describe, it, expect, beforeEach } from '@jest/globals';
 import request from 'supertest';
 import express from 'express';
+
+let currentJob;
+let currentCatalogItems;
 
 // Mock Supabase BEFORE importing routes
 jest.unstable_mockModule('../src/config/supabase.js', () => ({
@@ -16,7 +19,7 @@ jest.unstable_mockModule('../src/config/supabase.js', () => ({
                 error: null
             }))
         },
-        from: jest.fn(() => ({
+        from: jest.fn((table) => ({
             select: jest.fn().mockReturnThis(),
             insert: jest.fn().mockReturnThis(),
             update: jest.fn().mockReturnThis(),
@@ -26,22 +29,22 @@ jest.unstable_mockModule('../src/config/supabase.js', () => ({
             neq: jest.fn().mockReturnThis(),
             is: jest.fn().mockReturnThis(),
             limit: jest.fn(async () => ({
-                data: [],
+                data: table === 'job_catalog_items' ? currentCatalogItems : [],
                 error: null
             })),
             single: jest.fn(() => ({
-                data: { id: 'mock-job-id', status: 'pending', customer_id: 'mock-customer-id-001' },
+                data: currentJob,
                 error: null
             })),
             maybeSingle: jest.fn(() => ({
-                data: { id: 'mock-job-id', status: 'pending', customer_id: 'mock-customer-id-001' },
+                data: table === 'job_catalog_items' ? null : currentJob,
                 error: null
             }))
         }))
     },
     supabaseAdmin: {
         rpc: jest.fn(() => Promise.resolve({ data: [], error: null })),
-        from: jest.fn(() => ({
+        from: jest.fn((table) => ({
             select: jest.fn().mockReturnThis(),
             insert: jest.fn().mockReturnThis(),
             update: jest.fn().mockReturnThis(),
@@ -51,15 +54,15 @@ jest.unstable_mockModule('../src/config/supabase.js', () => ({
             neq: jest.fn().mockReturnThis(),
             is: jest.fn().mockReturnThis(),
             limit: jest.fn(async () => ({
-                data: [],
+                data: table === 'job_catalog_items' ? currentCatalogItems : [],
                 error: null
             })),
             single: jest.fn(() => ({
-                data: { id: 'mock-job-id', status: 'pending', customer_id: 'mock-customer-id-001' },
+                data: currentJob,
                 error: null
             })),
             maybeSingle: jest.fn(() => ({
-                data: { id: 'mock-job-id', status: 'pending', customer_id: 'mock-customer-id-001' },
+                data: table === 'job_catalog_items' ? null : currentJob,
                 error: null
             }))
         }))
@@ -101,6 +104,23 @@ app.use(express.json());
 app.use('/api/jobs', jobRoutes);
 
 describe('Jobs API Unit Tests', () => {
+    beforeEach(() => {
+        currentJob = {
+            id: 'mock-job-id',
+            status: 'pending',
+            customer_id: 'mock-customer-id-001',
+            technician_id: null,
+            pricing_mode: 'technician_quote',
+            quote_required: true,
+            initial_price: 100,
+            technician_price: null,
+            final_price: null,
+            catalog_subtotal: null,
+            catalog_item_count: 0,
+            pricing_summary: null,
+        };
+        currentCatalogItems = [];
+    });
 
     describe('POST /api/jobs - Create Job', () => {
         it('should require authentication', async () => {
@@ -140,6 +160,46 @@ describe('Jobs API Unit Tests', () => {
                 .set('Authorization', 'Bearer mock-token');
 
             expect(res.status).toBe(200);
+        });
+
+        it('returns fixed-price read fields including catalog items', async () => {
+            currentJob = {
+                ...currentJob,
+                id: 'fixed-job-id',
+                pricing_mode: 'catalog_fixed',
+                quote_required: false,
+                catalog_subtotal: 80,
+                catalog_item_count: 2,
+                pricing_summary: {
+                    pricing_mode: 'catalog_fixed',
+                    catalog_subtotal: 80,
+                    catalog_item_count: 2,
+                    currency_code: 'LYD',
+                },
+            };
+            currentCatalogItems = [
+                {
+                    id: 'line-1',
+                    job_id: 'fixed-job-id',
+                    service_catalog_item_id: 'item-1',
+                    quantity: 2,
+                    line_total: 80,
+                },
+            ];
+
+            const res = await request(app)
+                .get('/api/jobs/fixed-job-id')
+                .set('Authorization', 'Bearer mock-token');
+
+            expect(res.status).toBe(200);
+            expect(res.body?.data?.job_catalog_items).toHaveLength(1);
+            expect(res.body?.data?.pricingContext).toMatchObject({
+                pricingMode: 'catalog_fixed',
+                quoteRequired: false,
+                catalogSubtotal: 80,
+                catalogItemCount: 2,
+            });
+            expect(res.body?.data?.permissions?.canSetPrice).toBe(false);
         });
     });
 });

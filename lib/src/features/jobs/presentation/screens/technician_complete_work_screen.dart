@@ -165,7 +165,7 @@ class _TechnicianCompleteWorkScreenState
                             TechnicianFlowPill(
                               icon: Icons.attach_money_outlined,
                               label:
-                                  '${_priceController.text.isEmpty ? '0' : _priceController.text} ر.س',
+                                  '${_priceController.text.isEmpty ? '0' : _priceController.text} د.ل',
                             ),
                           ],
                         ),
@@ -265,7 +265,7 @@ class _TechnicianCompleteWorkScreenState
                                 fontWeight: FontWeight.bold,
                               ),
                               decoration: InputDecoration(
-                                suffixText: 'ر.س',
+                                suffixText: 'د.ل',
                                 suffixStyle: TextStyle(
                                   color: Colors.grey,
                                   fontSize: 16.fz,

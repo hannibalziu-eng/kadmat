@@ -270,7 +270,7 @@ class _TransactionCard extends StatelessWidget {
           ),
           SizedBox(width: 12.w),
           Text(
-            '${isDebit ? '' : '+'}${transaction.amount.toStringAsFixed(2)} ر.س',
+            '${isDebit ? '' : '+'}${transaction.amount.toStringAsFixed(2)} د.ل',
             style: TextStyle(
               color: accent,
               fontSize: 15.fz,

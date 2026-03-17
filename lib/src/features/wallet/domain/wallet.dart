@@ -29,7 +29,7 @@ class Wallet with _$Wallet {
       'totalEarnings': _asDouble(
         json['total_earnings'] ?? json['totalEarnings'],
       ),
-      'currency': json['currency']?.toString() ?? 'SAR',
+      'currency': _normalizeCurrency(json['currency']),
       'created_at':
           _asDateTimeString(json['created_at']) ??
           _asDateTimeString(json['updated_at']) ??
@@ -131,7 +131,7 @@ class WithdrawRequest {
       userId: json['user_id']?.toString() ?? '',
       walletId: json['wallet_id']?.toString() ?? '',
       amount: (json['amount'] as num?)?.toDouble() ?? 0,
-      currency: json['currency']?.toString() ?? 'SAR',
+      currency: _normalizeCurrency(json['currency']),
       status: json['status']?.toString() ?? 'pending',
       bankAccount: json['bank_account']?.toString(),
       notes: json['notes']?.toString(),
@@ -153,6 +153,19 @@ class WithdrawRequest {
       default:
         return 'قيد المراجعة';
     }
+  }
+}
+
+String _normalizeCurrency(Object? value) {
+  final raw = value?.toString().trim();
+  if (raw == null || raw.isEmpty) return 'د.ل';
+
+  switch (raw.toUpperCase()) {
+    case 'SAR':
+    case 'LYD':
+      return 'د.ل';
+    default:
+      return raw;
   }
 }
 

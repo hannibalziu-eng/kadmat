@@ -155,9 +155,13 @@ class _CustomerSearchingScreenState
         : null;
     final mediaCount = job.images?.length ?? 0;
     final hasMapLocation = lat != 0 && lng != 0;
+    final hasOffers = _offers.isNotEmpty;
+    final isCatalogFixed = job.isCatalogFixed;
+    final catalogSubtotal = job.effectiveCatalogSubtotal;
+    final catalogItemCount = job.effectiveCatalogItemCount;
 
     return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      backgroundColor: const Color(0xFFF6F8FB),
       appBar: AppBar(
         title: Text(serviceName),
         backgroundColor: Colors.transparent,
@@ -177,7 +181,7 @@ class _CustomerSearchingScreenState
                   ),
                 ),
                 child: Text(
-                  '${_offers.length} عرض',
+                  isCatalogFixed ? 'سعر ثابت' : '${_offers.length} عرض',
                   style: TextStyle(
                     fontSize: 12.fz,
                     fontWeight: FontWeight.w700,
@@ -194,159 +198,186 @@ class _CustomerSearchingScreenState
         child: Column(
           children: [
             Padding(
-              padding: EdgeInsets.fromLTRB(18.w, 10.h, 18.w, 14.h),
+              padding: EdgeInsets.fromLTRB(18.w, 10.h, 18.w, 10.h),
               child: _buildSearchingHero(
                 serviceName: serviceName,
                 expectedPrice: expectedPrice,
                 mediaCount: mediaCount,
-              ),
-            ),
-            Padding(
-              padding: EdgeInsets.fromLTRB(18.w, 0, 18.w, 14.h),
-              child: _CustomerFlowSurface(
-                child: _CustomerFlowNextStepCard(
-                  icon: _offers.isEmpty
-                      ? Icons.hourglass_top_rounded
-                      : Icons.touch_app_rounded,
-                  title: _offers.isEmpty
-                      ? 'لا تحتاج إلى إجراء الآن'
-                      : 'الخطوة التالية: اختر فنيًا واحدًا',
-                  description: _offers.isEmpty
-                      ? 'طلبك نشط الآن ويظهر للفنيين القريبين. أبقِ الشاشة مفتوحة أو عد لاحقًا وستصل العروض هنا تلقائيًا.'
-                      : 'ابدأ بأفضل عرض ظاهر أولًا، ثم افتح ملف الفني فقط إذا احتجت مقارنة إضافية قبل القبول.',
-                ),
+                hasOffers: hasOffers,
+                isCatalogFixed: isCatalogFixed,
+                catalogSubtotal: catalogSubtotal,
+                catalogItemCount: catalogItemCount,
               ),
             ),
             Expanded(
-              child: Stack(
-                children: [
-                  Padding(
-                    padding: EdgeInsetsDirectional.fromSTEB(14.w, 8.h, 14.w, 0),
-                    child: hasMapLocation
-                        ? ClipRRect(
-                            borderRadius: BorderRadius.circular(24.r),
-                            child: FlutterMap(
-                              options: MapOptions(
-                                initialCenter: LatLng(lat, lng),
-                                initialZoom: _zoomForRadius(searchRadius),
-                                interactionOptions: const InteractionOptions(
-                                  flags:
-                                      InteractiveFlag.drag |
-                                      InteractiveFlag.pinchZoom,
+              child: Padding(
+                padding: EdgeInsetsDirectional.fromSTEB(18.w, 4.h, 18.w, 0),
+                child: Stack(
+                  children: [
+                    Positioned.fill(
+                      child: hasMapLocation
+                          ? ClipRRect(
+                              borderRadius: BorderRadius.circular(30.r),
+                              child: FlutterMap(
+                                options: MapOptions(
+                                  initialCenter: LatLng(lat, lng),
+                                  initialZoom: _zoomForRadius(searchRadius),
+                                  interactionOptions: const InteractionOptions(
+                                    flags:
+                                        InteractiveFlag.drag |
+                                        InteractiveFlag.pinchZoom |
+                                        InteractiveFlag.doubleTapZoom,
+                                  ),
                                 ),
+                                children: [
+                                  TileLayer(
+                                    urlTemplate:
+                                        'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+                                    subdomains: const ['a', 'b', 'c', 'd'],
+                                    retinaMode: true,
+                                    userAgentPackageName: 'com.kadmat.app',
+                                  ),
+                                  CircleLayer(
+                                    circles: [
+                                      CircleMarker(
+                                        point: LatLng(lat, lng),
+                                        radius: searchRadius,
+                                        useRadiusInMeter: true,
+                                        color: AppTheme.primaryColor.withValues(
+                                          alpha: 0.08,
+                                        ),
+                                        borderColor: AppTheme.primaryColor
+                                            .withValues(alpha: 0.32),
+                                        borderStrokeWidth: 2,
+                                      ),
+                                    ],
+                                  ),
+                                  MarkerLayer(
+                                    markers: [
+                                      Marker(
+                                        point: LatLng(lat, lng),
+                                        width: 84.w,
+                                        height: 84.h,
+                                        child: AnimatedBuilder(
+                                          animation: _pulseController,
+                                          builder: (context, child) {
+                                            final scale =
+                                                1 +
+                                                (_pulseController.value * 0.14);
+                                            return Transform.scale(
+                                              scale: scale,
+                                              child: Center(
+                                                child: Container(
+                                                  width: 62.w,
+                                                  height: 62.w,
+                                                  decoration: BoxDecoration(
+                                                    shape: BoxShape.circle,
+                                                    gradient:
+                                                        const LinearGradient(
+                                                          begin: Alignment
+                                                              .topCenter,
+                                                          end: Alignment
+                                                              .bottomCenter,
+                                                          colors: [
+                                                            Color(0xFF2CC5F1),
+                                                            Color(0xFF1299C5),
+                                                          ],
+                                                        ),
+                                                    border: Border.all(
+                                                      color: Colors.white,
+                                                      width: 3,
+                                                    ),
+                                                    boxShadow: [
+                                                      BoxShadow(
+                                                        color: AppTheme
+                                                            .primaryColor
+                                                            .withValues(
+                                                              alpha: 0.28,
+                                                            ),
+                                                        blurRadius: 18,
+                                                        offset: const Offset(
+                                                          0,
+                                                          8,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                  child: Icon(
+                                                    Icons.home_repair_service,
+                                                    color: Colors.white,
+                                                    size: 26.s,
+                                                  ),
+                                                ),
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
                               ),
-                              children: [
-                                TileLayer(
-                                  urlTemplate:
-                                      'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-                                  subdomains: const ['a', 'b', 'c', 'd'],
-                                  retinaMode: true,
-                                  userAgentPackageName: 'com.kadmat.app',
-                                ),
-                                CircleLayer(
-                                  circles: [
-                                    CircleMarker(
-                                      point: LatLng(lat, lng),
-                                      radius: searchRadius,
-                                      useRadiusInMeter: true,
-                                      color: AppTheme.primaryColor.withValues(
-                                        alpha: 0.12,
-                                      ),
-                                      borderColor: AppTheme.primaryColor
-                                          .withValues(alpha: 0.65),
-                                      borderStrokeWidth: 2,
-                                    ),
-                                  ],
-                                ),
-                                MarkerLayer(
-                                  markers: [
-                                    Marker(
-                                      point: LatLng(lat, lng),
-                                      width: 60.w,
-                                      height: 60.h,
-                                      child: AnimatedBuilder(
-                                        animation: _pulseController,
-                                        builder: (context, child) {
-                                          final scale =
-                                              1 +
-                                              (_pulseController.value * 0.15);
-                                          return Transform.scale(
-                                            scale: scale,
-                                            child: Container(
-                                              decoration: BoxDecoration(
-                                                shape: BoxShape.circle,
-                                                color: AppTheme.primaryColor
-                                                    .withValues(alpha: 0.22),
-                                              ),
-                                              child: Icon(
-                                                Icons.home_repair_service,
-                                                color: Colors.white,
-                                                size: 30.s,
-                                              ),
-                                            ),
-                                          );
-                                        },
-                                      ),
-                                    ),
-                                  ],
-                                ),
+                            )
+                          : _buildPendingLocationCard(),
+                    ),
+                    PositionedDirectional(
+                      top: 18.h,
+                      start: 18.w,
+                      child: _buildMapOverlayChip(
+                        icon: Icons.radar,
+                        label:
+                            'بحث ضمن ${(searchRadius / 1000).toStringAsFixed(0)} كم',
+                      ),
+                    ),
+                    PositionedDirectional(
+                      top: 18.h,
+                      end: 18.w,
+                      child: _buildMapOverlayChip(
+                        icon: isCatalogFixed
+                            ? Icons.sell_outlined
+                            : Icons.place_outlined,
+                        label: isCatalogFixed
+                            ? 'سعر ثابت'
+                            : hasOffers
+                            ? 'العروض وصلت'
+                            : 'الخريطة نشطة',
+                      ),
+                    ),
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      child: IgnorePointer(
+                        child: Container(
+                          height: 132.h,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.vertical(
+                              bottom: Radius.circular(30.r),
+                            ),
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [
+                                Colors.transparent,
+                                Colors.white.withValues(alpha: 0.92),
                               ],
                             ),
-                          )
-                        : _buildPendingLocationCard(),
-                  ),
-                  PositionedDirectional(
-                    top: 20.h,
-                    start: 28.w,
-                    child: Container(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: 12.w,
-                        vertical: 8.h,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.65),
-                        borderRadius: BorderRadius.circular(16.r),
-                        border: Border.all(
-                          color: AppTheme.primaryColor.withValues(alpha: 0.55),
+                          ),
                         ),
                       ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.radar,
-                            size: 16.s,
-                            color: AppTheme.primaryColor,
-                          ),
-                          SizedBox(width: 6.w),
-                          Text(
-                            'بحث ضمن ${(searchRadius / 1000).toStringAsFixed(0)} كم',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 12.fz,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ],
-                      ),
                     ),
-                  ),
-                  PositionedDirectional(
-                    start: 28.w,
-                    end: 28.w,
-                    bottom: 18.h,
-                    child: _buildSearchSummaryCard(
-                      address:
-                          job.addressText ??
-                          'سيتم تحديث الموقع بعد تثبيت نقطة الطلب',
-                      expectedPrice: expectedPrice,
-                      mediaCount: mediaCount,
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
-            _buildOffersPanel(),
+            _buildOffersPanel(
+              job: job,
+              address:
+                  job.addressText ??
+                  'سيتم تحديث موقع الطلب بعد تثبيت نقطة الخدمة',
+              expectedPrice: expectedPrice,
+              mediaCount: mediaCount,
+            ),
           ],
         ),
       ),
@@ -357,34 +388,47 @@ class _CustomerSearchingScreenState
     required String serviceName,
     required double? expectedPrice,
     required int mediaCount,
+    required bool hasOffers,
+    required bool isCatalogFixed,
+    required double? catalogSubtotal,
+    required int catalogItemCount,
   }) {
     return Container(
       width: double.infinity,
-      padding: EdgeInsets.all(20.w),
+      padding: EdgeInsets.symmetric(horizontal: 18.w, vertical: 16.h),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(28.r),
+        borderRadius: BorderRadius.circular(24.r),
         gradient: const LinearGradient(
           begin: Alignment.topRight,
           end: Alignment.bottomLeft,
-          colors: [Color(0xFF17313B), Color(0xFF0D1E25)],
+          colors: [Color(0xFFEFF8FC), Color(0xFFDFF1F8)],
         ),
+        border: Border.all(color: const Color(0xFFD5E7EE)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                width: 48.w,
-                height: 48.w,
+                width: 46.w,
+                height: 46.w,
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.1),
+                  color: Colors.white,
                   borderRadius: BorderRadius.circular(16.r),
                 ),
                 child: Icon(
                   Icons.radar_rounded,
                   size: 22.s,
-                  color: Colors.white,
+                  color: AppTheme.primaryColor,
                 ),
               ),
               SizedBox(width: 12.w),
@@ -393,20 +437,26 @@ class _CustomerSearchingScreenState
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'جاري البحث عن الفني المناسب',
+                      isCatalogFixed
+                          ? 'جاري إسناد الطلب الثابت'
+                          : 'جاري البحث عن فني مناسب',
                       style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 22.fz,
+                        color: KadmatColors.lightTextPrimary,
+                        fontSize: 19.fz,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
                     SizedBox(height: 4.h),
                     Text(
-                      'وصل طلب $serviceName. نبحث الآن عن أقرب الفنيين المناسبين ثم نعرض لك العروض بشكل واضح للاختيار.',
+                      isCatalogFixed
+                          ? 'نبحث الآن عن فني مناسب لطلب $serviceName بالسعر الثابت المحدد. ستبقى الخريطة واضحة وسنحدّثك عند تثبيت الفني مباشرة.'
+                          : hasOffers
+                          ? 'وصلت عروض على طلب $serviceName. راجع الخريطة أولًا ثم اختر العرض الأنسب للمتابعة.'
+                          : 'نبحث الآن عن أقرب الفنيين المناسبين لطلب $serviceName، وستظهر العروض هنا فور وصولها.',
                       style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.74),
-                        fontSize: 12.5.fz,
-                        height: 1.55,
+                        color: KadmatColors.lightTextSecondary,
+                        fontSize: 12.2.fz,
+                        height: 1.5,
                       ),
                     ),
                   ],
@@ -414,22 +464,65 @@ class _CustomerSearchingScreenState
               ),
             ],
           ),
-          SizedBox(height: 16.h),
+          SizedBox(height: 12.h),
           Wrap(
             spacing: 8.w,
             runSpacing: 8.h,
             children: [
               _buildInfoChip(
-                _offers.isEmpty
-                    ? 'بانتظار أول عرض'
-                    : '${_offers.length} عروض وصلت',
+                isCatalogFixed
+                    ? (catalogItemCount > 0
+                          ? '$catalogItemCount عناصر مختارة'
+                          : 'طلب ثابت')
+                    : hasOffers
+                    ? '${_offers.length} عروض وصلت'
+                    : 'بانتظار أول عرض',
               ),
+              if (isCatalogFixed && catalogSubtotal != null)
+                _buildInfoChip(
+                  'الإجمالي ${catalogSubtotal.toStringAsFixed(0)} د.ل',
+                ),
               if (expectedPrice != null)
                 _buildInfoChip(
-                  'السعر المتوقع ${expectedPrice.toStringAsFixed(0)} ر.س',
+                  'السعر المتوقع ${expectedPrice.toStringAsFixed(0)} د.ل',
                 ),
               if (mediaCount > 0) _buildInfoChip('مرفقات $mediaCount'),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMapOverlayChip({required IconData icon, required String label}) {
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 8.h),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.94),
+        borderRadius: BorderRadius.circular(16.r),
+        border: Border.all(
+          color: AppTheme.primaryColor.withValues(alpha: 0.14),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16.s, color: AppTheme.primaryColor),
+          SizedBox(width: 6.w),
+          Text(
+            label,
+            style: TextStyle(
+              color: KadmatColors.lightTextPrimary,
+              fontSize: 12.fz,
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ],
       ),
@@ -444,9 +537,9 @@ class _CustomerSearchingScreenState
         gradient: const LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [Color(0xFF172A32), Color(0xFF0C1A21)],
+          colors: [Color(0xFFEAF5FA), Color(0xFFDCEFF7)],
         ),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+        border: Border.all(color: const Color(0xFFD5E7EE)),
       ),
       padding: EdgeInsets.all(24.w),
       child: Column(
@@ -471,7 +564,7 @@ class _CustomerSearchingScreenState
             style: TextStyle(
               fontSize: 20.fz,
               fontWeight: FontWeight.bold,
-              color: Colors.white,
+              color: KadmatColors.lightTextPrimary,
             ),
           ),
           SizedBox(height: 8.h),
@@ -480,7 +573,7 @@ class _CustomerSearchingScreenState
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 13.fz,
-              color: Colors.white70,
+              color: KadmatColors.lightTextSecondary,
               height: 1.6,
             ),
           ),
@@ -494,35 +587,42 @@ class _CustomerSearchingScreenState
     required double? expectedPrice,
     required int mediaCount,
   }) {
-    return Container(
-      padding: EdgeInsets.all(14.w),
-      decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.76),
-        borderRadius: BorderRadius.circular(18.r),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.location_on, color: AppTheme.primaryColor, size: 18.s),
-          SizedBox(width: 6.w),
-          Expanded(
-            child: Text(
-              address,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: Colors.white, fontSize: 12.fz),
-            ),
+    return Wrap(
+      spacing: 8.w,
+      runSpacing: 8.h,
+      children: [
+        Container(
+          padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 9.h),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF7FAFD),
+            borderRadius: BorderRadius.circular(14.r),
+            border: Border.all(color: const Color(0xFFE0E8EC)),
           ),
-          if (expectedPrice != null) ...[
-            SizedBox(width: 8.w),
-            _buildInfoChip('متوقع ${expectedPrice.toStringAsFixed(0)} ر.س'),
-          ],
-          if (mediaCount > 0) ...[
-            SizedBox(width: 8.w),
-            _buildInfoChip('مرفقات $mediaCount'),
-          ],
-        ],
-      ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.location_on, color: AppTheme.primaryColor, size: 16.s),
+              SizedBox(width: 5.w),
+              ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: 210.w),
+                child: Text(
+                  address,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: KadmatColors.lightTextPrimary,
+                    fontSize: 11.8.fz,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (expectedPrice != null)
+          _buildInfoChip('متوقع ${expectedPrice.toStringAsFixed(0)} د.ل'),
+        if (mediaCount > 0) _buildInfoChip('مرفقات $mediaCount'),
+      ],
     );
   }
 
@@ -530,8 +630,11 @@ class _CustomerSearchingScreenState
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 5.h),
       decoration: BoxDecoration(
-        color: AppTheme.primaryColor.withValues(alpha: 0.14),
+        color: KadmatColors.brandAccent,
         borderRadius: BorderRadius.circular(12.r),
+        border: Border.all(
+          color: AppTheme.primaryColor.withValues(alpha: 0.16),
+        ),
       ),
       child: Text(
         text,
@@ -544,9 +647,118 @@ class _CustomerSearchingScreenState
     );
   }
 
-  Widget _buildOffersPanel() {
-    return Container(
-      height: 322.h,
+  Widget _buildOffersPanel({
+    required Job job,
+    required String address,
+    required double? expectedPrice,
+    required int mediaCount,
+  }) {
+    if (job.isCatalogFixed) {
+      final catalogSubtotal = job.effectiveCatalogSubtotal;
+      final catalogItemCount = job.effectiveCatalogItemCount;
+      return AnimatedContainer(
+        duration: KadmatMotion.medium,
+        curve: Curves.easeOutCubic,
+        height: 196.h,
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(24.r),
+            topRight: Radius.circular(24.r),
+          ),
+          border: Border(top: BorderSide(color: KadmatColors.lightBorder)),
+        ),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1120),
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(16.w, 14.h, 16.w, 18.h),
+              child: Container(
+                width: double.infinity,
+                padding: EdgeInsets.all(16.w),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FBFD),
+                  borderRadius: BorderRadius.circular(20.r),
+                  border: Border.all(color: const Color(0xFFE0E8EC)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'ننسق الطلب الثابت من أجلك',
+                                style: TextStyle(
+                                  fontSize: 15.5.fz,
+                                  fontWeight: FontWeight.w800,
+                                  color: KadmatColors.lightTextPrimary,
+                                ),
+                              ),
+                              SizedBox(height: 4.h),
+                              Text(
+                                'لا توجد عروض في هذا النوع من الطلبات. سنثبت الفني مباشرة ثم نأخذك تلقائيًا إلى المرحلة التالية.',
+                                style: TextStyle(
+                                  color: KadmatColors.lightTextSecondary,
+                                  fontSize: 11.8.fz,
+                                  height: 1.45,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        TextButton.icon(
+                          onPressed: _cancelJob,
+                          icon: const Icon(Icons.close, color: Colors.red),
+                          label: Text(
+                            'إلغاء الطلب',
+                            style: TextStyle(
+                              color: Colors.red,
+                              fontSize: 13.fz,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: 12.h),
+                    Wrap(
+                      spacing: 8.w,
+                      runSpacing: 8.h,
+                      children: [
+                        _buildSearchSummaryCard(
+                          address: address,
+                          expectedPrice: expectedPrice,
+                          mediaCount: mediaCount,
+                        ),
+                        if (catalogItemCount > 0)
+                          _buildInfoChip('$catalogItemCount عناصر'),
+                        if (catalogSubtotal != null)
+                          _buildInfoChip(
+                            'الإجمالي ${catalogSubtotal.toStringAsFixed(0)} د.ل',
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    final hasOffers = _offers.isNotEmpty;
+    final panelHeight = hasOffers ? 308.h : 146.h;
+
+    return AnimatedContainer(
+      duration: KadmatMotion.medium,
+      curve: Curves.easeOutCubic,
+      height: panelHeight,
       width: double.infinity,
       decoration: BoxDecoration(
         color: Colors.white,
@@ -571,26 +783,34 @@ class _CustomerSearchingScreenState
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            _offers.isEmpty
-                                ? 'نراقب العروض من أجلك'
-                                : 'اختر فنيًا واحدًا للمتابعة',
+                            hasOffers
+                                ? 'وصلت عروض جديدة'
+                                : 'نراقب العروض من أجلك',
                             style: TextStyle(
-                              fontSize: 18.fz,
+                              fontSize: 15.5.fz,
                               fontWeight: FontWeight.w800,
                               color: KadmatColors.lightTextPrimary,
                             ),
                           ),
                           SizedBox(height: 4.h),
                           Text(
-                            _offers.isEmpty
-                                ? 'لا تحتاج إلى تحديث الصفحة. ستظهر هنا العروض الحقيقية بمجرد وصولها من الفنيين القريبين.'
-                                : 'ابدأ بأعلى عرض مناسب، ثم راجع الملف الشخصي فقط إذا احتجت قرارًا أدق.',
+                            hasOffers
+                                ? 'اختر فنيًا واحدًا فقط. أبقينا الخريطة واضحة حتى تراجع الموقع أثناء المقارنة.'
+                                : 'ستبقى الخريطة أمامك، وسنضيف أول عرض هنا فور وصوله بدون أن نغطيها.',
                             style: TextStyle(
                               color: KadmatColors.lightTextSecondary,
-                              fontSize: 12.fz,
+                              fontSize: 11.8.fz,
                               height: 1.45,
                             ),
                           ),
+                          if (hasOffers) ...[
+                            SizedBox(height: 10.h),
+                            _buildSearchSummaryCard(
+                              address: address,
+                              expectedPrice: expectedPrice,
+                              mediaCount: mediaCount,
+                            ),
+                          ],
                         ],
                       ),
                     ),
@@ -607,35 +827,50 @@ class _CustomerSearchingScreenState
               ),
               if (_offers.isEmpty)
                 Expanded(
-                  child: Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.local_offer_outlined,
-                          color: KadmatColors.lightTextSecondary,
-                          size: 38.s,
-                        ),
-                        SizedBox(height: 10.h),
-                        Text(
-                          'بانتظار عروض الفنيين القريبين',
-                          style: TextStyle(
-                            color: KadmatColors.lightTextPrimary,
-                            fontSize: 15.fz,
-                            fontWeight: FontWeight.w700,
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(16.w, 0, 16.w, 16.h),
+                    child: Container(
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8FBFD),
+                        borderRadius: BorderRadius.circular(20.r),
+                        border: Border.all(color: const Color(0xFFE0E8EC)),
+                      ),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 16.w,
+                        vertical: 14.h,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildSearchSummaryCard(
+                            address: address,
+                            expectedPrice: expectedPrice,
+                            mediaCount: mediaCount,
                           ),
-                        ),
-                        SizedBox(height: 6.h),
-                        Text(
-                          'يمكنك الإبقاء على الشاشة مفتوحة أو العودة لاحقاً، وسيبقى الطلب قيد المتابعة.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: KadmatColors.lightTextSecondary,
-                            fontSize: 12.fz,
-                            height: 1.5,
+                          SizedBox(height: 12.h),
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.local_offer_outlined,
+                                color: KadmatColors.lightTextSecondary,
+                                size: 20.s,
+                              ),
+                              SizedBox(width: 10.w),
+                              Expanded(
+                                child: Text(
+                                  'بانتظار أول عرض من الفنيين القريبين.',
+                                  style: TextStyle(
+                                    color: KadmatColors.lightTextPrimary,
+                                    fontSize: 13.fz,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 )
@@ -695,13 +930,20 @@ class _CustomerSearchingScreenState
       width: 320.w,
       padding: EdgeInsets.all(14.w),
       decoration: BoxDecoration(
-        color: const Color(0xFF132B35),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(20.r),
         border: Border.all(
           color: isBestPrice
-              ? AppTheme.primaryColor.withValues(alpha: 0.8)
-              : Colors.white.withValues(alpha: 0.16),
+              ? AppTheme.primaryColor.withValues(alpha: 0.6)
+              : const Color(0xFFDDE7EC),
         ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 16,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -710,12 +952,16 @@ class _CustomerSearchingScreenState
             children: [
               CircleAvatar(
                 radius: 22.r,
-                backgroundColor: Colors.white10,
+                backgroundColor: KadmatColors.brandAccent,
                 backgroundImage: technician.profileImageUrl != null
                     ? NetworkImage(technician.profileImageUrl!)
                     : null,
                 child: technician.profileImageUrl == null
-                    ? Icon(Icons.person, color: Colors.white, size: 20.s)
+                    ? Icon(
+                        Icons.person,
+                        color: KadmatColors.brandSecondary,
+                        size: 20.s,
+                      )
                     : null,
               ),
               SizedBox(width: 10.w),
@@ -723,11 +969,11 @@ class _CustomerSearchingScreenState
               Container(
                 padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 6.h),
                 decoration: BoxDecoration(
-                  color: AppTheme.primaryColor.withValues(alpha: 0.16),
+                  color: KadmatColors.brandAccent,
                   borderRadius: BorderRadius.circular(12.r),
                 ),
                 child: Text(
-                  '${price.toStringAsFixed(0)} ر.س',
+                  '${price.toStringAsFixed(0)} د.ل',
                   style: TextStyle(
                     color: AppTheme.primaryColor,
                     fontSize: 15.fz,
@@ -748,7 +994,7 @@ class _CustomerSearchingScreenState
               child: Text(
                 'أفضل سعر حالياً',
                 style: TextStyle(
-                  color: Colors.greenAccent,
+                  color: const Color(0xFF157A48),
                   fontSize: 11.fz,
                   fontWeight: FontWeight.w700,
                 ),
@@ -763,9 +1009,7 @@ class _CustomerSearchingScreenState
                       ? null
                       : () => _openTechnicianProfile(technicianId),
                   style: OutlinedButton.styleFrom(
-                    side: BorderSide(
-                      color: Colors.white.withValues(alpha: 0.28),
-                    ),
+                    side: const BorderSide(color: Color(0xFFD5E1E8)),
                   ),
                   child: const Text('ملف الفني'),
                 ),
@@ -827,11 +1071,14 @@ class _CustomerSearchingScreenState
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppTheme.surfaceDark,
-        title: const Text('إلغاء الطلب', style: TextStyle(color: Colors.white)),
+        backgroundColor: Colors.white,
+        title: const Text(
+          'إلغاء الطلب',
+          style: TextStyle(color: Color(0xFF0C171C)),
+        ),
         content: const Text(
           'هل أنت متأكد من إلغاء الطلب؟',
-          style: TextStyle(color: Colors.white70),
+          style: TextStyle(color: Color(0xFF58727D)),
         ),
         actions: [
           TextButton(
@@ -998,8 +1245,8 @@ class _CustomerTechnicianFoundScreenState
 
       setState(() => _job = job);
 
-      // Auto-navigate when price is set
-      if (job != null && job.status == 'price_pending') {
+      // Auto-navigate when price is set for quote-based jobs only.
+      if (job != null && !job.isCatalogFixed && job.status == 'price_pending') {
         _pollTimer?.cancel();
         context.go(AppRoutes.buildCustomerPriceOfferPath(widget.jobId));
       }
@@ -1033,20 +1280,27 @@ class _CustomerTechnicianFoundScreenState
                   _CustomerFlowHero(
                     icon: Icons.verified_rounded,
                     eyebrow: 'تم تثبيت الفني',
-                    title: 'تم العثور على فني مناسب',
-                    subtitle:
-                        'لا تحتاج إلى إجراء الآن. ننتظر من الفني تحديد السعر أو الانتقال إلى المرحلة التالية، وسيتم نقلك تلقائيًا.',
+                    title: job.isCatalogFixed
+                        ? 'تم تثبيت الفني على الطلب الثابت'
+                        : 'تم العثور على فني مناسب',
+                    subtitle: job.isCatalogFixed
+                        ? 'تم تثبيت الفني على طلبك بالسعر الثابت المحدد مسبقًا. سننقلك تلقائيًا عندما يبدأ التوجّه أو ينتقل الطلب إلى المرحلة التالية.'
+                        : 'لا تحتاج إلى إجراء الآن. ننتظر من الفني تحديد السعر أو الانتقال إلى المرحلة التالية، وسيتم نقلك تلقائيًا.',
                     bottom: Wrap(
                       spacing: 8.w,
                       runSpacing: 8.h,
-                      children: const [
-                        _CustomerFlowPill(
+                      children: [
+                        const _CustomerFlowPill(
                           icon: Icons.verified_user_outlined,
                           label: 'تم تثبيت الفني',
                         ),
                         _CustomerFlowPill(
-                          icon: Icons.receipt_long_outlined,
-                          label: 'بانتظار السعر',
+                          icon: job.isCatalogFixed
+                              ? Icons.sell_outlined
+                              : Icons.receipt_long_outlined,
+                          label: job.isCatalogFixed
+                              ? '${job.effectiveRuntimePrice.toStringAsFixed(0)} د.ل ثابتة'
+                              : 'بانتظار السعر',
                         ),
                       ],
                     ),
@@ -1055,9 +1309,12 @@ class _CustomerTechnicianFoundScreenState
                   _CustomerFlowSurface(
                     child: _CustomerFlowNextStepCard(
                       icon: Icons.pause_circle_outline_rounded,
-                      title: 'الخطوة التالية: انتظر السعر فقط',
-                      description:
-                          'الطلب مثبت الآن على فني واحد. سننقلك تلقائيًا إلى شاشة مراجعة السعر عند وصوله، لذلك لا تحتاج إلى التنقل بين الشاشات.',
+                      title: job.isCatalogFixed
+                          ? 'الخطوة التالية: انتظر بدء التنفيذ'
+                          : 'الخطوة التالية: انتظر السعر فقط',
+                      description: job.isCatalogFixed
+                          ? 'السعر ثابت ومثبت بالفعل. لا توجد عروض أو مراجعة سعر في هذه المرحلة، وسننقلك تلقائيًا بمجرد أن يبدأ الفني التوجّه أو التنفيذ.'
+                          : 'الطلب مثبت الآن على فني واحد. سننقلك تلقائيًا إلى شاشة مراجعة السعر عند وصوله، لذلك لا تحتاج إلى التنقل بين الشاشات.',
                     ),
                   ),
                   SizedBox(height: 16.h),
@@ -1075,7 +1332,9 @@ class _CustomerTechnicianFoundScreenState
                         ),
                         SizedBox(height: 6.h),
                         Text(
-                          'سنتابع نقل الطلب تلقائيًا بمجرد أن يحدد الفني السعر أو ينتقل إلى المرحلة التالية.',
+                          job.isCatalogFixed
+                              ? 'سنتابع انتقال الطلب تلقائيًا عندما يبدأ الفني التوجّه أو التنفيذ، مع إبقاء السعر الثابت وملخص العناصر واضحين لك.'
+                              : 'سنتابع نقل الطلب تلقائيًا بمجرد أن يحدد الفني السعر أو ينتقل إلى المرحلة التالية.',
                           style: TextStyle(
                             color: KadmatColors.lightTextSecondary,
                             fontSize: 12.5.fz,
@@ -1084,6 +1343,24 @@ class _CustomerTechnicianFoundScreenState
                         ),
                         SizedBox(height: 14.h),
                         JobTimeline(currentStatus: job.status),
+                        if (job.isCatalogFixed) ...[
+                          SizedBox(height: 14.h),
+                          Wrap(
+                            spacing: 8.w,
+                            runSpacing: 8.h,
+                            children: [
+                              _CustomerFlowPill(
+                                icon: Icons.shopping_bag_outlined,
+                                label: '${job.effectiveCatalogItemCount} عناصر',
+                              ),
+                              _CustomerFlowPill(
+                                icon: Icons.payments_outlined,
+                                label:
+                                    '${job.effectiveRuntimePrice.toStringAsFixed(0)} د.ل',
+                              ),
+                            ],
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -1215,13 +1492,14 @@ class _CustomerPriceOfferScreenState
       job?.service,
       fallback: 'الخدمة المطلوبة',
     );
-    final proposedPrice = job?.technicianPrice ?? job?.finalPrice ?? 0;
+    final proposedPrice = job?.effectiveRuntimePrice ?? 0;
     final referencePrice = job?.initialPrice ?? job?.customerOffer;
     final hasReferencePrice = referencePrice != null && referencePrice > 0;
     final comparisonDelta = hasReferencePrice
         ? proposedPrice - referencePrice
         : null;
     final isWithinReference = comparisonDelta != null && comparisonDelta <= 0;
+    final isCatalogFixed = job?.isCatalogFixed ?? false;
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -1241,11 +1519,16 @@ class _CustomerPriceOfferScreenState
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       _CustomerFlowHero(
-                        icon: Icons.receipt_long_rounded,
-                        eyebrow: 'قرار العميل',
-                        title: 'السعر جاهز للمراجعة',
-                        subtitle:
-                            'أرسل الفني السعر النهائي بعد مراجعة حالة الخدمة في الموقع. راجع التفاصيل ثم قرر المتابعة أو الإلغاء.',
+                        icon: isCatalogFixed
+                            ? Icons.sell_outlined
+                            : Icons.receipt_long_rounded,
+                        eyebrow: isCatalogFixed ? 'سعر ثابت' : 'قرار العميل',
+                        title: isCatalogFixed
+                            ? 'تفاصيل السعر الثابت'
+                            : 'السعر جاهز للمراجعة',
+                        subtitle: isCatalogFixed
+                            ? 'هذا الطلب ثابت السعر، لذلك لا توجد خطوة قبول عرض أو رفضه. راجع الملخص فقط ثم تابع حالة التنفيذ من نفس الفلو.'
+                            : 'أرسل الفني السعر النهائي بعد مراجعة حالة الخدمة في الموقع. راجع التفاصيل ثم قرر المتابعة أو الإلغاء.',
                         bottom: Wrap(
                           spacing: 8.w,
                           runSpacing: 8.h,
@@ -1256,7 +1539,7 @@ class _CustomerPriceOfferScreenState
                             ),
                             _CustomerFlowPill(
                               icon: Icons.attach_money_rounded,
-                              label: '${proposedPrice.toStringAsFixed(0)} ر.س',
+                              label: '${proposedPrice.toStringAsFixed(0)} د.ل',
                             ),
                           ],
                         ),
@@ -1264,10 +1547,15 @@ class _CustomerPriceOfferScreenState
                       SizedBox(height: 16.h),
                       _CustomerFlowSurface(
                         child: _CustomerFlowNextStepCard(
-                          icon: Icons.rule_folder_outlined,
-                          title: 'القرار المطلوب الآن',
-                          description:
-                              'اقبل السعر إذا كان مناسبًا لك وابدأ التنفيذ، أو ارفض فقط إذا كنت مستعدًا لإلغاء الطلب الحالي بالكامل.',
+                          icon: isCatalogFixed
+                              ? Icons.visibility_outlined
+                              : Icons.rule_folder_outlined,
+                          title: isCatalogFixed
+                              ? 'الخطوة التالية: تابع التنفيذ'
+                              : 'القرار المطلوب الآن',
+                          description: isCatalogFixed
+                              ? 'لا يوجد قرار تسعير في هذا المسار. استخدم هذه الشاشة لمراجعة الملخص الثابت فقط، ثم تابع انتقال الطلب إلى التنفيذ.'
+                              : 'اقبل السعر إذا كان مناسبًا لك وابدأ التنفيذ، أو ارفض فقط إذا كنت مستعدًا لإلغاء الطلب الحالي بالكامل.',
                         ),
                       ),
                       SizedBox(height: 16.h),
@@ -1276,7 +1564,9 @@ class _CustomerPriceOfferScreenState
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'تفاصيل العرض',
+                              isCatalogFixed
+                                  ? 'تفاصيل السعر الثابت'
+                                  : 'تفاصيل العرض',
                               style: TextStyle(
                                 color: KadmatColors.lightTextPrimary,
                                 fontSize: 18.fz,
@@ -1285,7 +1575,9 @@ class _CustomerPriceOfferScreenState
                             ),
                             SizedBox(height: 6.h),
                             Text(
-                              'كل ما تحتاجه للمقارنة واتخاذ قرار سريع بدون مفاجآت.',
+                              isCatalogFixed
+                                  ? 'هذا هو الملخص المثبت مع الطلب. لا توجد مقارنة عروض أو تفاوض في هذا المسار.'
+                                  : 'كل ما تحتاجه للمقارنة واتخاذ قرار سريع بدون مفاجآت.',
                               style: TextStyle(
                                 color: KadmatColors.lightTextSecondary,
                                 fontSize: 12.5.fz,
@@ -1297,27 +1589,33 @@ class _CustomerPriceOfferScreenState
                               children: [
                                 Expanded(
                                   child: _CustomerFlowMetricTile(
-                                    label: 'السعر المرسل',
+                                    label: isCatalogFixed
+                                        ? 'السعر الثابت'
+                                        : 'السعر المرسل',
                                     value:
-                                        '${proposedPrice.toStringAsFixed(0)} ر.س',
+                                        '${proposedPrice.toStringAsFixed(0)} د.ل',
                                     tone: AppTheme.primaryColor,
                                   ),
                                 ),
                                 SizedBox(width: 10.w),
                                 Expanded(
                                   child: _CustomerFlowMetricTile(
-                                    label: hasReferencePrice
+                                    label: isCatalogFixed
+                                        ? 'عدد العناصر'
+                                        : hasReferencePrice
                                         ? 'السعر المرجعي'
                                         : 'مرجع التسعير',
-                                    value: hasReferencePrice
-                                        ? '${referencePrice.toStringAsFixed(0)} ر.س'
+                                    value: isCatalogFixed
+                                        ? '${job.effectiveCatalogItemCount}'
+                                        : hasReferencePrice
+                                        ? '${referencePrice.toStringAsFixed(0)} د.ل'
                                         : 'غير متوفر',
                                     tone: KadmatColors.stateInfo,
                                   ),
                                 ),
                               ],
                             ),
-                            if (comparisonDelta != null) ...[
+                            if (!isCatalogFixed && comparisonDelta != null) ...[
                               SizedBox(height: 14.h),
                               Container(
                                 width: double.infinity,
@@ -1353,7 +1651,7 @@ class _CustomerPriceOfferScreenState
                                       child: Text(
                                         isWithinReference
                                             ? 'السعر ضمن أو أقل من السعر المرجعي المتوقع للخدمة.'
-                                            : 'السعر أعلى من المرجع بمقدار ${comparisonDelta.toStringAsFixed(0)} ر.س، راجع التفاصيل قبل القبول.',
+                                            : 'السعر أعلى من المرجع بمقدار ${comparisonDelta.toStringAsFixed(0)} د.ل، راجع التفاصيل قبل القبول.',
                                         style: TextStyle(
                                           color: isWithinReference
                                               ? const Color(0xFF1E7551)
@@ -1368,7 +1666,8 @@ class _CustomerPriceOfferScreenState
                                 ),
                               ),
                             ],
-                            if (job.priceNotes != null &&
+                            if (!isCatalogFixed &&
+                                job.priceNotes != null &&
                                 job.priceNotes!.trim().isNotEmpty) ...[
                               SizedBox(height: 14.h),
                               Container(
@@ -1409,9 +1708,12 @@ class _CustomerPriceOfferScreenState
                       if (job.technician != null)
                         _CustomerFlowSurface(
                           child: _CustomerFlowTechnicianCard(
-                            heading: 'الفني الذي أرسل العرض',
-                            helperText:
-                                'سيبدأ التنفيذ والمتابعة الحية مباشرة بعد موافقتك على السعر.',
+                            heading: isCatalogFixed
+                                ? 'الفني المثبت على الطلب'
+                                : 'الفني الذي أرسل العرض',
+                            helperText: isCatalogFixed
+                                ? 'بمجرد أن يبدأ الفني التوجّه أو التنفيذ ستنتقل المتابعة الحية تلقائيًا من نفس الفلو.'
+                                : 'سيبدأ التنفيذ والمتابعة الحية مباشرة بعد موافقتك على السعر.',
                             technician: job.technician!,
                           ),
                         ),
@@ -1421,7 +1723,7 @@ class _CustomerPriceOfferScreenState
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'قبل أن تقرر',
+                              isCatalogFixed ? 'قبل أن تتابع' : 'قبل أن تقرر',
                               style: TextStyle(
                                 color: KadmatColors.lightTextPrimary,
                                 fontSize: 18.fz,
@@ -1429,62 +1731,92 @@ class _CustomerPriceOfferScreenState
                               ),
                             ),
                             SizedBox(height: 12.h),
-                            const _CustomerFlowBullet(
-                              text:
-                                  'قبول السعر ينقلك مباشرة إلى مرحلة تنفيذ الطلب والتتبع.',
-                            ),
-                            SizedBox(height: 10.h),
-                            const _CustomerFlowBullet(
-                              text:
-                                  'رفض السعر يلغي هذا الطلب الحالي، وليس مجرد تجاهل العرض.',
-                            ),
-                            SizedBox(height: 10.h),
-                            const _CustomerFlowBullet(
-                              text:
-                                  'إذا كانت لديك ملاحظة على التسعير، راجع ملاحظات الفني أولاً ثم قرر.',
-                            ),
+                            if (isCatalogFixed) ...[
+                              const _CustomerFlowBullet(
+                                text:
+                                    'هذا الطلب ثابت السعر، لذلك لا توجد عروض أو قبول سعر في هذه المرحلة.',
+                              ),
+                              SizedBox(height: 10.h),
+                              const _CustomerFlowBullet(
+                                text:
+                                    'يمكنك استخدام هذه الشاشة كمرجع سريع للسعر الثابت وعدد العناصر فقط.',
+                              ),
+                              SizedBox(height: 10.h),
+                              const _CustomerFlowBullet(
+                                text:
+                                    'ستنتقل المتابعة تلقائيًا عندما يبدأ الفني التوجّه أو التنفيذ.',
+                              ),
+                            ] else ...[
+                              const _CustomerFlowBullet(
+                                text:
+                                    'قبول السعر ينقلك مباشرة إلى مرحلة تنفيذ الطلب والتتبع.',
+                              ),
+                              SizedBox(height: 10.h),
+                              const _CustomerFlowBullet(
+                                text:
+                                    'رفض السعر يلغي هذا الطلب الحالي، وليس مجرد تجاهل العرض.',
+                              ),
+                              SizedBox(height: 10.h),
+                              const _CustomerFlowBullet(
+                                text:
+                                    'إذا كانت لديك ملاحظة على التسعير، راجع ملاحظات الفني أولاً ثم قرر.',
+                              ),
+                            ],
                           ],
                         ),
                       ),
                       SizedBox(height: 22.h),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton(
-                              onPressed: _isLoading ? null : _rejectPrice,
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: KadmatColors.stateError,
-                                side: const BorderSide(
-                                  color: KadmatColors.stateError,
+                      if (isCatalogFixed)
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            onPressed: () => context.go(
+                              AppRoutes.buildCustomerInProgressPath(
+                                widget.jobId,
+                              ),
+                            ),
+                            child: const Text('متابعة الطلب'),
+                          ),
+                        )
+                      else
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed: _isLoading ? null : _rejectPrice,
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: KadmatColors.stateError,
+                                  side: const BorderSide(
+                                    color: KadmatColors.stateError,
+                                  ),
+                                  padding: EdgeInsets.symmetric(vertical: 16.h),
                                 ),
-                                padding: EdgeInsets.symmetric(vertical: 16.h),
+                                child: const Text('رفض وإلغاء الطلب'),
                               ),
-                              child: const Text('رفض وإلغاء الطلب'),
                             ),
-                          ),
-                          SizedBox(width: 16.w),
-                          Expanded(
-                            flex: 2,
-                            child: ElevatedButton(
-                              onPressed: _isLoading ? null : _confirmPrice,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.green,
-                                padding: EdgeInsets.symmetric(vertical: 16.h),
+                            SizedBox(width: 16.w),
+                            Expanded(
+                              flex: 2,
+                              child: ElevatedButton(
+                                onPressed: _isLoading ? null : _confirmPrice,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.green,
+                                  padding: EdgeInsets.symmetric(vertical: 16.h),
+                                ),
+                                child: _isLoading
+                                    ? const SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(
+                                          color: Colors.white,
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                    : const Text('قبول السعر والمتابعة'),
                               ),
-                              child: _isLoading
-                                  ? const SizedBox(
-                                      width: 20,
-                                      height: 20,
-                                      child: CircularProgressIndicator(
-                                        color: Colors.white,
-                                        strokeWidth: 2,
-                                      ),
-                                    )
-                                  : const Text('قبول السعر والمتابعة'),
                             ),
-                          ),
-                        ],
-                      ),
+                          ],
+                        ),
                     ],
                   ),
                 ),
@@ -1562,7 +1894,7 @@ class _CustomerInProgressScreenState
       job?.service,
       fallback: 'الخدمة المطلوبة',
     );
-    final agreedPrice = job?.finalPrice ?? job?.technicianPrice ?? 0;
+    final agreedPrice = job?.effectiveRuntimePrice ?? 0;
     final canUseCommunication =
         job?.technicianId != null &&
         job != null &&
@@ -1636,7 +1968,7 @@ class _CustomerInProgressScreenState
                                 _CustomerFlowPill(
                                   icon: Icons.attach_money_rounded,
                                   label:
-                                      '${agreedPrice.toStringAsFixed(0)} ر.س متفق عليها',
+                                      '${agreedPrice.toStringAsFixed(0)} د.ل متفق عليها',
                                 ),
                               ],
                             ),
@@ -1660,8 +1992,16 @@ class _CustomerInProgressScreenState
                         width: double.infinity,
                         padding: EdgeInsets.all(18.w),
                         decoration: BoxDecoration(
-                          color: AppTheme.surfaceDark,
+                          color: Colors.white,
                           borderRadius: BorderRadius.circular(26.r),
+                          border: Border.all(color: KadmatColors.lightBorder),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.03),
+                              blurRadius: 18,
+                              offset: const Offset(0, 8),
+                            ),
+                          ],
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1669,7 +2009,7 @@ class _CustomerInProgressScreenState
                             Text(
                               'تقدم التنفيذ',
                               style: TextStyle(
-                                color: Colors.white,
+                                color: KadmatColors.lightTextPrimary,
                                 fontSize: 18.fz,
                                 fontWeight: FontWeight.w800,
                               ),
@@ -1678,7 +2018,7 @@ class _CustomerInProgressScreenState
                             Text(
                               'هذا الشريط يلخص المرحلة الحالية ويبيّن ما هي الخطوة التالية المتوقعة.',
                               style: TextStyle(
-                                color: Colors.white70,
+                                color: KadmatColors.lightTextSecondary,
                                 fontSize: 12.5.fz,
                                 height: 1.45,
                               ),
@@ -1709,7 +2049,7 @@ class _CustomerInProgressScreenState
                             SizedBox(height: 10.h),
                             _CustomerFlowSummaryRow(
                               label: 'السعر المتفق عليه',
-                              value: '${agreedPrice.toStringAsFixed(0)} ر.س',
+                              value: '${agreedPrice.toStringAsFixed(0)} د.ل',
                               valueColor: const Color(0xFF13795B),
                             ),
                             SizedBox(height: 10.h),
@@ -2154,7 +2494,7 @@ class _CustomerCompletedScreenState
       job?.service,
       fallback: 'الخدمة المطلوبة',
     );
-    final finalPrice = job?.finalPrice ?? job?.technicianPrice ?? 0;
+    final finalPrice = job?.effectiveRuntimePrice ?? 0;
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -2189,7 +2529,7 @@ class _CustomerCompletedScreenState
                             ),
                             _CustomerFlowPill(
                               icon: Icons.payments_outlined,
-                              label: '${finalPrice.toStringAsFixed(0)} ر.س',
+                              label: '${finalPrice.toStringAsFixed(0)} د.ل',
                             ),
                           ],
                         ),
@@ -2224,7 +2564,7 @@ class _CustomerCompletedScreenState
                             SizedBox(height: 10.h),
                             _CustomerFlowSummaryRow(
                               label: 'السعر النهائي',
-                              value: '${finalPrice.toStringAsFixed(0)} ر.س',
+                              value: '${finalPrice.toStringAsFixed(0)} د.ل',
                               valueColor: const Color(0xFF13795B),
                             ),
                             if (job.paymentMethod != null &&
@@ -2339,8 +2679,15 @@ class _CustomerFlowHero extends StatelessWidget {
         gradient: const LinearGradient(
           begin: Alignment.topRight,
           end: Alignment.bottomLeft,
-          colors: [Color(0xFF17313B), Color(0xFF0D1E25)],
+          colors: [KadmatColors.heroPrimaryStart, KadmatColors.heroPrimaryEnd],
         ),
+        boxShadow: [
+          BoxShadow(
+            color: KadmatColors.brandPrimary.withValues(alpha: 0.16),
+            blurRadius: 24,
+            offset: const Offset(0, 12),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2358,7 +2705,7 @@ class _CustomerFlowHero extends StatelessWidget {
           Text(
             eyebrow,
             style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.72),
+              color: Colors.white.withValues(alpha: 0.82),
               fontSize: 12.fz,
               fontWeight: FontWeight.w600,
             ),
@@ -2376,7 +2723,7 @@ class _CustomerFlowHero extends StatelessWidget {
           Text(
             subtitle,
             style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.74),
+              color: Colors.white.withValues(alpha: 0.86),
               fontSize: 12.8.fz,
               height: 1.55,
             ),
@@ -2443,9 +2790,9 @@ class _CustomerFlowSurface extends StatelessWidget {
         border: Border.all(color: KadmatColors.lightBorder),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 18,
-            offset: const Offset(0, 10),
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
           ),
         ],
       ),

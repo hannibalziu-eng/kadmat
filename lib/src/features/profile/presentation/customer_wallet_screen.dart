@@ -9,6 +9,14 @@ import '../../../core/navigation/app_routes.dart';
 import '../../../core/utils/error_handler.dart';
 import '../../wallet/presentation/wallet_controller.dart';
 
+String _displayCurrency(String currency) {
+  final normalized = currency.trim().toUpperCase();
+  if (normalized == 'SAR' || normalized == 'LYD' || currency.trim() == 'د.ل') {
+    return 'د.ل';
+  }
+  return currency;
+}
+
 class CustomerWalletScreen extends ConsumerWidget {
   const CustomerWalletScreen({super.key});
 
@@ -56,7 +64,7 @@ class CustomerWalletScreen extends ConsumerWidget {
                     ),
                     SizedBox(height: 8.h),
                     Text(
-                      '${wallet.balance.toStringAsFixed(2)} ${wallet.currency}',
+                      '${wallet.balance.toStringAsFixed(2)} ${_displayCurrency(wallet.currency)}',
                       style: TextStyle(
                         fontSize: 36.fz,
                         fontWeight: FontWeight.bold,

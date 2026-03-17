@@ -414,7 +414,7 @@ class _PriceConfirmationScreenState
                 ),
                 SizedBox(height: 8.h),
                 Text(
-                  '${_finalPrice.toStringAsFixed(0)} ريال',
+                  '${_finalPrice.toStringAsFixed(0)} د.ل',
                   style: TextStyle(
                     fontSize: 32.fz,
                     fontWeight: FontWeight.bold,
@@ -445,7 +445,7 @@ class _PriceConfirmationScreenState
                       style: TextStyle(color: Colors.white70),
                     ),
                     Text(
-                      '- ${_commission.toStringAsFixed(0)} ريال',
+                      '- ${_commission.toStringAsFixed(0)} د.ل',
                       style: TextStyle(color: Colors.redAccent),
                     ),
                   ],
@@ -462,7 +462,7 @@ class _PriceConfirmationScreenState
                       ),
                     ),
                     Text(
-                      '${_technicianEarnings.toStringAsFixed(0)} ريال',
+                      '${_technicianEarnings.toStringAsFixed(0)} د.ل',
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         color: Colors.greenAccent,

@@ -4,9 +4,15 @@ import 'package:flutter/material.dart';
 class KadmatColors {
   const KadmatColors._();
 
-  static const Color brandPrimary = Color(0xFF13B6EC);
-  static const Color brandSecondary = Color(0xFF0E8CB5);
-  static const Color brandAccent = Color(0xFFEBF9FC);
+  static const Color brandPrimary = Color(0xFF0066FF);
+  static const Color brandSecondary = Color(0xFF2284FF);
+  static const Color brandAccent = Color(0xFFEAF2FF);
+  static const Color brandAccentStrong = Color(0xFFD8E7FF);
+  static const Color heroPrimaryStart = Color(0xFF1EAEF0);
+  static const Color heroPrimaryEnd = Color(0xFF0066FF);
+  static const Color lightSurfaceMuted = Color(0xFFF3F7FB);
+  static const Color lightSurfaceSoft = Color(0xFFF5F9FF);
+  static const Color lightBorderStrong = Color(0xFFD6E0EC);
 
   static const Color darkBackground = Color(0xFF101D22);
   static const Color darkSurface = Color(0xFF1A2B32);
@@ -14,16 +20,16 @@ class KadmatColors {
   static const Color darkTextPrimary = Colors.white;
   static const Color darkTextSecondary = Color(0xFF92BBC9);
 
-  static const Color lightBackground = Color(0xFFF6F8F8);
+  static const Color lightBackground = Color(0xFFF9FAFB);
   static const Color lightSurface = Colors.white;
-  static const Color lightBorder = Color(0xFFDCE5E8);
-  static const Color lightTextPrimary = Color(0xFF0C171C);
-  static const Color lightTextSecondary = Color(0xFF58727D);
+  static const Color lightBorder = Color(0xFFE3EAF2);
+  static const Color lightTextPrimary = Color(0xFF0F172A);
+  static const Color lightTextSecondary = Color(0xFF667085);
 
   static const Color stateSuccess = Color(0xFF2DB980);
   static const Color stateWarning = Color(0xFFFFA33A);
   static const Color stateError = Color(0xFFE05353);
-  static const Color stateInfo = Color(0xFF3A8DFF);
+  static const Color stateInfo = Color(0xFF2F80FF);
 }
 
 class KadmatSpacing {

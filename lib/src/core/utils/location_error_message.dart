@@ -36,5 +36,14 @@ String resolveLocationErrorMessage(dynamic error) {
     return 'التحديد التلقائي للموقع غير مدعوم في هذا المتصفح حالياً.';
   }
 
+  final isSecureContextIssue =
+      message.contains('secure') ||
+      message.contains('https') ||
+      message.contains('origin') ||
+      message.contains('geolocation api can only be used in secure contexts');
+  if (isSecureContextIssue) {
+    return 'تحديد الموقع من متصفح الهاتف يحتاج رابط HTTPS. النسخة المحلية المفتوحة عبر الشبكة لا تسمح للموقع بالعمل تلقائيًا على أغلب الهواتف.';
+  }
+
   return 'تعذر تحديد الموقع الحالي الآن. أعد المحاولة بعد السماح بالموقع.';
 }

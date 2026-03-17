@@ -1,0 +1,85 @@
+# Kadmat Professional Enhancement Prompts
+
+## 1. Advanced AppBar Implementation
+Create a fully-featured AppBar component with:
+- Circular profile avatar (40px) with fallback image
+- Technician name (Arabic/English RTL support) in bold font
+- Dynamic online/offline status indicator (green/red dot)
+- Notification badge counter with ripple animation
+- Three-dot menu with: Settings, Profile, Logout, Help
+- Gradient background matching app theme
+- Smooth animations for state transitions
+- Accessibility labels in Arabic
+- Proper widget lifecycle management
+- Error handling for missing profile data
+
+## 2. Comprehensive Statistics Dashboard
+Design 6 detailed stat cards with:
+- Average rating (4.8 ⭐) with star icons
+- Total completed jobs (127) with assignment icon
+- Current active jobs (3) with timer icon
+- Acceptance rate percentage (94%) with chart icon
+- Total working hours (120h) with clock icon
+- Monthly earnings (2,400 LD) with money icon
+- Color-coded backgrounds (orange, blue, green, purple)
+- Real-time data fetching with loading states
+- Interactive hover effects
+- Data refresh every 30 seconds
+- Error boundaries for failed requests
+- Responsive grid (2x3 on mobile, 3x2 on tablet)
+
+## 3. Professional Theme Management System
+Implement complete theme switching solution:
+- Three theme modes: Light, Dark, System-default
+- Theme persistence using SharedPreferences
+- 12+ customizable color schemes
+- Font scaling options (small/normal/large)
+- High contrast mode for accessibility
+- Material 3 design compliance
+- Smooth theme transition animations (300ms)
+- Theme-aware widgets throughout app
+- Automatic theme based on system time (night mode)
+- Custom theme editor interface
+
+## 4. Enterprise-Level Location Services
+Build robust GPS tracking system:
+- Continuous location monitoring with 5-second intervals
+- Distance-based filtering (minimum 10 meters)
+- Battery optimization with adaptive intervals
+- Fallback to network location if GPS unavailable
+- Real-time server synchronization via WebSocket
+- Offline queue for location updates
+- Privacy compliance (GDPR) data handling
+- Location accuracy indicators
+- Geofencing capabilities
+- Error recovery for disabled location services
+- Background location access permissions
+
+## 5. Real-Time Online Status Management
+Create live connectivity system:
+- Instant online/offline toggle with immediate server sync
+- WebSocket connection with auto-reconnect
+- Status change notifications to clients
+- Presence indicators (online, away, busy)
+- Last seen timestamp display
+- Push notification triggers
+- Connection quality monitoring
+- Offline-first architecture
+- Status history logging
+- Concurrent session management
+- Auto-status based on activity
+
+## 6. Technical Implementation Standards
+Adhere to enterprise development requirements:
+- Riverpod 2.0+ state management patterns
+- Repository pattern with abstract classes
+- Clean architecture (domain/data/presentation layers)
+- Comprehensive error handling (try-catch, sealed classes)
+- Performance optimization (memoization, lazy loading)
+- Security best practices (secure storage, encryption)
+- Internationalization (i18n) readiness
+- Unit and widget testing coverage (>80%)
+- Code documentation (dartdoc standards)
+- Type safety with strict null safety
+- Async/await best practices
+- Resource cleanup and memory management

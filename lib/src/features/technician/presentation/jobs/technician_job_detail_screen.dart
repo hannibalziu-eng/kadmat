@@ -951,6 +951,104 @@ class _TechnicianJobDetailScreenState
 
   // Price Summary Card showing all price information
   Widget _buildPriceSummaryCard() {
+    if (_job!.isCatalogFixed) {
+      final catalogItems = _job!.effectiveJobCatalogItems;
+      final subtotal =
+          _job!.effectiveCatalogSubtotal ?? _job!.effectiveRuntimePrice;
+
+      return Container(
+        padding: EdgeInsets.all(16.w),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(24.r),
+          border: Border.all(color: KadmatColors.lightBorder),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 18,
+              offset: const Offset(0, 10),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.sell_outlined,
+                  color: AppTheme.primaryColor,
+                  size: 20.s,
+                ),
+                SizedBox(width: 8.w),
+                Text(
+                  'ملخص السعر الثابت',
+                  style: TextStyle(
+                    fontSize: 14.fz,
+                    color: KadmatColors.lightTextSecondary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: 16.h),
+            _buildPriceRow('الإجمالي', subtotal, AppTheme.primaryColor),
+            SizedBox(height: 12.h),
+            _buildPriceRow(
+              'عدد العناصر',
+              _job!.effectiveCatalogItemCount.toDouble(),
+              KadmatColors.stateInfo,
+            ),
+            if (catalogItems.isNotEmpty) ...[
+              SizedBox(height: 16.h),
+              ...catalogItems.map((item) {
+                final title =
+                    (item['item_name'] ??
+                            item['name_ar'] ??
+                            item['name'] ??
+                            item['title'] ??
+                            'عنصر خدمة')
+                        .toString();
+                final quantity = ((item['quantity'] as num?)?.toInt() ?? 1)
+                    .clamp(1, 999);
+                final total =
+                    (item['line_total'] as num?)?.toDouble() ??
+                    (item['price'] as num?)?.toDouble() ??
+                    (item['unit_price'] as num?)?.toDouble();
+
+                return Padding(
+                  padding: EdgeInsets.only(bottom: 10.h),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          quantity > 1 ? '$title × $quantity' : title,
+                          style: TextStyle(
+                            fontSize: 13.fz,
+                            fontWeight: FontWeight.w700,
+                            color: KadmatColors.lightTextPrimary,
+                          ),
+                        ),
+                      ),
+                      if (total != null)
+                        Text(
+                          '${total.toStringAsFixed(0)} د.ل',
+                          style: TextStyle(
+                            fontSize: 13.fz,
+                            fontWeight: FontWeight.w700,
+                            color: KadmatColors.lightTextSecondary,
+                          ),
+                        ),
+                    ],
+                  ),
+                );
+              }),
+            ],
+          ],
+        ),
+      );
+    }
+
     final initialPriceRaw = _job!.initialPrice;
     final initialPrice = (initialPriceRaw != null && initialPriceRaw > 0)
         ? initialPriceRaw
@@ -1048,7 +1146,7 @@ class _TechnicianJobDetailScreenState
                     ],
                   ),
                   Text(
-                    '${technicianPrice ?? initialPrice} ريال',
+                    '${technicianPrice ?? initialPrice} د.ل',
                     style: TextStyle(
                       fontSize: 18.fz,
                       fontWeight: FontWeight.w800,
@@ -1074,7 +1172,7 @@ class _TechnicianJobDetailScreenState
                   Icon(Icons.info_outline, size: 16.s, color: Colors.amber),
                   SizedBox(width: 8.w),
                   Text(
-                    'عمولة التطبيق: ${(technicianPrice * 0.15).toStringAsFixed(0)} ريال (15%)',
+                    'عمولة التطبيق: ${(technicianPrice * 0.15).toStringAsFixed(0)} د.ل (15%)',
                     style: TextStyle(
                       fontSize: 12.fz,
                       color: const Color(0xFF946200),
@@ -1102,7 +1200,7 @@ class _TechnicianJobDetailScreenState
           ),
         ),
         Text(
-          '$price ريال',
+          '$price د.ل',
           style: TextStyle(
             fontSize: 16.fz,
             fontWeight: FontWeight.bold,
@@ -1120,10 +1218,23 @@ class _TechnicianJobDetailScreenState
       case 'pending':
       case 'searching':
       case 'no_technician_found':
+        if (_job!.isCatalogFixed) {
+          return _job!.canAcceptDirectly
+              ? _buildDirectAcceptButton()
+              : const SizedBox.shrink();
+        }
         return _buildSubmitOfferButton();
       case 'accepted':
+        if (_job!.isCatalogFixed) {
+          return _job!.canStartTravel
+              ? _buildStartTravelButton()
+              : _buildFixedPriceAcceptedNotice();
+        }
         return _buildPriceInput();
       case 'price_pending':
+        if (_job!.isCatalogFixed) {
+          return _buildFixedPriceAcceptedNotice();
+        }
         return _buildWaitingForCustomer();
       case 'on_the_way':
         return _buildArrivedButton();
@@ -1134,6 +1245,73 @@ class _TechnicianJobDetailScreenState
       default:
         return const SizedBox.shrink();
     }
+  }
+
+  Widget _buildDirectAcceptButton() {
+    return ElevatedButton.icon(
+      onPressed: _isLoading ? null : _acceptFixedPriceJob,
+      icon: const Icon(Icons.check_circle_outline_rounded),
+      label: Text(
+        'قبول الطلب الثابت',
+        style: TextStyle(fontSize: 16.fz, fontWeight: FontWeight.bold),
+      ),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: AppTheme.primaryColor,
+        foregroundColor: Colors.white,
+        padding: EdgeInsets.symmetric(vertical: 16.h),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12.r),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStartTravelButton() {
+    return ElevatedButton.icon(
+      onPressed: _isLoading
+          ? null
+          : () => _updateTechnicianProgress('on_the_way'),
+      icon: const Icon(Icons.navigation_outlined),
+      label: Text(
+        'بدء التوجّه',
+        style: TextStyle(fontSize: 16.fz, fontWeight: FontWeight.bold),
+      ),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: AppTheme.primaryColor,
+        foregroundColor: Colors.white,
+        padding: EdgeInsets.symmetric(vertical: 16.h),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12.r),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFixedPriceAcceptedNotice() {
+    return Container(
+      padding: EdgeInsets.all(16.w),
+      decoration: BoxDecoration(
+        color: KadmatColors.brandAccent,
+        borderRadius: BorderRadius.circular(18.r),
+        border: Border.all(color: KadmatColors.lightBorder),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.sell_outlined, color: AppTheme.primaryColor, size: 22.s),
+          SizedBox(width: 10.w),
+          Expanded(
+            child: Text(
+              'الطلب ثابت السعر بالفعل. لا توجد خطوة تسعير في هذه المرحلة.',
+              style: TextStyle(
+                fontSize: 13.fz,
+                fontWeight: FontWeight.w700,
+                color: KadmatColors.lightTextPrimary,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildSubmitOfferButton() {
@@ -1179,7 +1357,7 @@ class _TechnicianJobDetailScreenState
               keyboardType: TextInputType.number,
               style: TextStyle(color: Colors.white),
               decoration: InputDecoration(
-                hintText: 'السعر المقترح (ريال)',
+                hintText: 'السعر المقترح (د.ل)',
                 hintStyle: TextStyle(color: Colors.white54),
                 filled: true,
                 fillColor: Colors.black12,
@@ -1230,7 +1408,7 @@ class _TechnicianJobDetailScreenState
                 keyboardType: TextInputType.number,
                 style: const TextStyle(color: Colors.white),
                 decoration: InputDecoration(
-                  hintText: 'أدخل السعر (ريال)',
+                  hintText: 'أدخل السعر (د.ل)',
                   hintStyle: TextStyle(color: Colors.white38),
                   prefixIcon: const Icon(
                     Icons.attach_money,
@@ -1334,7 +1512,7 @@ class _TechnicianJobDetailScreenState
           ),
           SizedBox(height: 8.h),
           Text(
-            '${_job!.technicianPrice ?? 0} ريال',
+            '${_job!.technicianPrice ?? 0} د.ل',
             style: TextStyle(
               fontSize: 24.fz,
               fontWeight: FontWeight.bold,
@@ -1441,6 +1619,14 @@ class _TechnicianJobDetailScreenState
   }
 
   IconData _detailHeroIcon() {
+    if (_job!.isCatalogFixed) {
+      switch (_job!.status) {
+        case 'accepted':
+          return Icons.navigation_outlined;
+        case 'price_pending':
+          return Icons.sell_outlined;
+      }
+    }
     switch (_job!.status) {
       case 'accepted':
         return Icons.sell_outlined;
@@ -1462,6 +1648,18 @@ class _TechnicianJobDetailScreenState
   }
 
   String _detailStatusLabel() {
+    if (_job!.isCatalogFixed) {
+      switch (_job!.status) {
+        case 'pending':
+        case 'searching':
+        case 'no_technician_found':
+          return 'طلب ثابت متاح';
+        case 'accepted':
+          return 'تم تثبيت الطلب';
+        case 'price_pending':
+          return 'سعر ثابت جاهز';
+      }
+    }
     switch (_job!.status) {
       case 'pending':
       case 'searching':
@@ -1487,6 +1685,18 @@ class _TechnicianJobDetailScreenState
   }
 
   String _detailHeroTitle() {
+    if (_job!.isCatalogFixed) {
+      switch (_job!.status) {
+        case 'pending':
+        case 'searching':
+        case 'no_technician_found':
+          return 'راجع الطلب الثابت قبل القبول';
+        case 'accepted':
+          return 'حان وقت بدء التوجّه';
+        case 'price_pending':
+          return 'السعر ثابت ولا ينتظر مراجعة';
+      }
+    }
     switch (_job!.status) {
       case 'pending':
       case 'searching':
@@ -1512,6 +1722,18 @@ class _TechnicianJobDetailScreenState
   }
 
   String _detailHeroSubtitle() {
+    if (_job!.isCatalogFixed) {
+      switch (_job!.status) {
+        case 'pending':
+        case 'searching':
+        case 'no_technician_found':
+          return 'هذا الطلب لا يحتاج عرضًا أو تفاوضًا. راجع العناصر والسعر الثابت ثم اقبل الطلب إذا كان مناسبًا لك.';
+        case 'accepted':
+          return 'السعر مثبت مسبقًا لهذا الطلب. لا ترسل سعرًا جديدًا، فقط راجع الموقع وابدأ التوجّه عندما تكون جاهزًا.';
+        case 'price_pending':
+          return 'هذه شاشة توافق قديمة بالنسبة للطلب الثابت. افتح تفاصيل الطلب أو واصل إلى التنفيذ عند ظهور الخطوة التالية.';
+      }
+    }
     switch (_job!.status) {
       case 'pending':
       case 'searching':
@@ -1537,6 +1759,14 @@ class _TechnicianJobDetailScreenState
   }
 
   IconData _detailNextStepIcon() {
+    if (_job!.isCatalogFixed) {
+      switch (_job!.status) {
+        case 'accepted':
+          return Icons.navigation_outlined;
+        case 'price_pending':
+          return Icons.info_outline_rounded;
+      }
+    }
     switch (_job!.status) {
       case 'pending':
       case 'searching':
@@ -1562,6 +1792,18 @@ class _TechnicianJobDetailScreenState
   }
 
   String _detailNextStepTitle() {
+    if (_job!.isCatalogFixed) {
+      switch (_job!.status) {
+        case 'pending':
+        case 'searching':
+        case 'no_technician_found':
+          return 'القرار التالي: اقبل الطلب أو تجاوزه';
+        case 'accepted':
+          return 'القرار التالي: ابدأ التوجّه';
+        case 'price_pending':
+          return 'لا توجد خطوة تسعير هنا';
+      }
+    }
     switch (_job!.status) {
       case 'pending':
       case 'searching':
@@ -1587,6 +1829,18 @@ class _TechnicianJobDetailScreenState
   }
 
   String _detailNextStepDescription() {
+    if (_job!.isCatalogFixed) {
+      switch (_job!.status) {
+        case 'pending':
+        case 'searching':
+        case 'no_technician_found':
+          return 'لا تستخدم منطق العروض هنا. راجع الموقع والعناصر والسعر الثابت، ثم اقبل الطلب إذا كان مناسبًا لك.';
+        case 'accepted':
+          return 'الطلب مثبت على الفني بالفعل. استخدم نفس الشاشة كمرجع سريع ثم انتقل إلى التوجّه بدل فتح شاشة تسعير.';
+        case 'price_pending':
+          return 'السعر مثبت مسبقًا لهذا الطلب، لذلك لا تحتاج إلى انتظار موافقة عميل على تسعير جديد.';
+      }
+    }
     switch (_job!.status) {
       case 'pending':
       case 'searching':
@@ -1642,6 +1896,29 @@ class _TechnicianJobDetailScreenState
           message: _friendlyActionError(e),
         );
       }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _acceptFixedPriceJob() async {
+    setState(() => _isLoading = true);
+    try {
+      await ref.read(jobRepositoryProvider).acceptJob(widget.jobId);
+      await _fetchJob();
+      if (!mounted) return;
+      KadmatToast.showSuccess(
+        context,
+        title: 'تم قبول الطلب',
+        message: '✅ تم تثبيت الطلب الثابت على حسابك بنجاح.',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      KadmatToast.showError(
+        context,
+        title: 'تعذر قبول الطلب',
+        message: _friendlyActionError(e),
+      );
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }

@@ -33,12 +33,12 @@ class KadmatShellBottomBar extends StatelessWidget {
       margin: EdgeInsets.fromLTRB(16.w, 0, 16.w, 18.h),
       padding: EdgeInsets.all(8.w),
       decoration: BoxDecoration(
-        color: Theme.of(context).cardColor.withValues(alpha: 0.96),
+        color: KadmatColors.lightSurface.withValues(alpha: 0.96),
         borderRadius: BorderRadius.circular(28.r),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+        border: Border.all(color: KadmatColors.lightBorder),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
+            color: Colors.black.withValues(alpha: 0.06),
             blurRadius: 18.r,
             offset: Offset(0, 10.h),
           ),
@@ -104,7 +104,7 @@ class _KadmatShellNavItem extends StatelessWidget {
                     Icon(
                       data.icon,
                       size: 22.s,
-                      color: isSelected ? primary : Colors.grey.shade500,
+                      color: isSelected ? primary : KadmatColors.lightTextSecondary,
                     ),
                     if (data.badgeCount > 0)
                       Positioned(

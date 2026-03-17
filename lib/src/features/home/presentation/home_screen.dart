@@ -583,6 +583,7 @@ class _ServiceCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final title = service.nameAr ?? service.name;
     final palette = _paletteForService(title);
+    final basePrice = service.basePrice ?? 0;
 
     return Material(
       color: Colors.transparent,
@@ -628,7 +629,7 @@ class _ServiceCard extends StatelessWidget {
                         borderRadius: BorderRadius.circular(999.r),
                       ),
                       child: Text(
-                        'من ${service.basePrice.toStringAsFixed(0)} ر.س',
+                        'من ${basePrice.toStringAsFixed(0)} د.ل',
                         style: TextStyle(
                           color: Colors.white,
                           fontSize: 11.fz,

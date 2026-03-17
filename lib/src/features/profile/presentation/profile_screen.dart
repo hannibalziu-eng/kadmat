@@ -29,6 +29,7 @@ class ProfileScreen extends ConsumerWidget {
     final wallet = walletAsync?.valueOrNull;
 
     return Scaffold(
+      backgroundColor: const Color(0xFFF6F8FB),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: EdgeInsets.fromLTRB(18.w, 12.h, 18.w, 28.h),
@@ -160,8 +161,16 @@ class ProfileScreen extends ConsumerWidget {
         gradient: const LinearGradient(
           begin: Alignment.topRight,
           end: Alignment.bottomLeft,
-          colors: [Color(0xFF19323C), Color(0xFF0E2028)],
+          colors: [Color(0xFFEFF8FC), Color(0xFFDFF1F8)],
         ),
+        border: Border.all(color: const Color(0xFFD5E7EE)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -178,7 +187,7 @@ class ProfileScreen extends ConsumerWidget {
                     Text(
                       displayName,
                       style: TextStyle(
-                        color: Colors.white,
+                        color: KadmatColors.lightTextPrimary,
                         fontSize: 24.fz,
                         fontWeight: FontWeight.w800,
                         height: 1.15,
@@ -188,7 +197,7 @@ class ProfileScreen extends ConsumerWidget {
                     Text(
                       subtitle,
                       style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.74),
+                        color: KadmatColors.lightTextSecondary,
                         fontSize: 13.fz,
                         height: 1.5,
                       ),
@@ -206,8 +215,8 @@ class ProfileScreen extends ConsumerWidget {
                   ),
                   icon: const Icon(Icons.edit_outlined),
                   style: IconButton.styleFrom(
-                    backgroundColor: Colors.white.withValues(alpha: 0.14),
-                    foregroundColor: Colors.white,
+                    backgroundColor: Colors.white,
+                    foregroundColor: KadmatColors.brandSecondary,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(18.r),
                     ),
@@ -221,9 +230,9 @@ class ProfileScreen extends ConsumerWidget {
               width: double.infinity,
               padding: EdgeInsets.all(16.w),
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.08),
+                color: Colors.white,
                 borderRadius: BorderRadius.circular(22.r),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                border: Border.all(color: const Color(0xFFD6E7ED)),
               ),
               child: Row(
                 children: [
@@ -231,12 +240,12 @@ class ProfileScreen extends ConsumerWidget {
                     width: 44.w,
                     height: 44.w,
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.12),
+                      color: KadmatColors.brandAccent,
                       borderRadius: BorderRadius.circular(16.r),
                     ),
                     child: Icon(
                       Icons.account_balance_wallet_outlined,
-                      color: Colors.white,
+                      color: KadmatColors.brandSecondary,
                       size: 20.s,
                     ),
                   ),
@@ -248,7 +257,7 @@ class ProfileScreen extends ConsumerWidget {
                         Text(
                           'رصيد المحفظة',
                           style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.7),
+                            color: KadmatColors.lightTextSecondary,
                             fontSize: 12.fz,
                           ),
                         ),
@@ -258,7 +267,7 @@ class ProfileScreen extends ConsumerWidget {
                               ? 'جاري تحميل الرصيد...'
                               : '${wallet.balance.toStringAsFixed(2)} ${wallet.currency}',
                           style: TextStyle(
-                            color: Colors.white,
+                            color: KadmatColors.lightTextPrimary,
                             fontSize: 20.fz,
                             fontWeight: FontWeight.w800,
                           ),
@@ -383,10 +392,19 @@ class _SectionCard extends StatelessWidget {
             title,
             style: Theme.of(
               context,
-            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+            ).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  color: KadmatColors.lightTextPrimary,
+                ),
           ),
           SizedBox(height: 6.h),
-          Text(subtitle, style: Theme.of(context).textTheme.bodyMedium),
+          Text(
+            subtitle,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: KadmatColors.lightTextSecondary,
+              height: 1.55,
+            ),
+          ),
           SizedBox(height: 14.h),
           ...children,
         ],
@@ -415,7 +433,7 @@ class _ActionTile extends StatelessWidget {
     return Padding(
       padding: EdgeInsets.only(bottom: 12.h),
       child: Material(
-        color: Theme.of(context).scaffoldBackgroundColor,
+        color: const Color(0xFFF8FBFD),
         borderRadius: BorderRadius.circular(20.r),
         child: InkWell(
           borderRadius: BorderRadius.circular(20.r),
@@ -441,12 +459,18 @@ class _ActionTile extends StatelessWidget {
                       Text(
                         title,
                         style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w800),
+                            ?.copyWith(
+                              fontWeight: FontWeight.w800,
+                              color: KadmatColors.lightTextPrimary,
+                            ),
                       ),
                       SizedBox(height: 4.h),
                       Text(
                         subtitle,
-                        style: Theme.of(context).textTheme.bodyMedium,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: KadmatColors.lightTextSecondary,
+                          height: 1.45,
+                        ),
                       ),
                     ],
                   ),
@@ -477,13 +501,13 @@ class _ProfileAvatar extends StatelessWidget {
 
     return CircleAvatar(
       radius: 34.r,
-      backgroundColor: Colors.white.withValues(alpha: 0.12),
+      backgroundColor: Colors.white,
       backgroundImage: hasImage ? NetworkImage(imageUrl!) : null,
       child: !hasImage
           ? Text(
               name.characters.first.toUpperCase(),
               style: TextStyle(
-                color: Colors.white,
+                color: KadmatColors.brandSecondary,
                 fontSize: 22.fz,
                 fontWeight: FontWeight.w800,
               ),
@@ -511,7 +535,7 @@ class _StatCard extends StatelessWidget {
     return Container(
       padding: EdgeInsets.all(16.w),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: const Color(0xFFF9FBFC),
         borderRadius: BorderRadius.circular(22.r),
         border: Border.all(color: KadmatColors.lightBorder),
       ),
@@ -534,7 +558,10 @@ class _StatCard extends StatelessWidget {
             value,
             style: Theme.of(
               context,
-            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+            ).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  color: KadmatColors.lightTextPrimary,
+                ),
           ),
         ],
       ),

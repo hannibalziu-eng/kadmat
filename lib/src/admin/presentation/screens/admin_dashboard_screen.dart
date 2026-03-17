@@ -90,7 +90,7 @@ class AdminDashboardScreen extends ConsumerWidget {
         ),
         _buildStatCard(
           title: 'إجمالي الإيرادات',
-          value: '${stats.totalRevenue.toStringAsFixed(2)} ر.س',
+          value: '${stats.totalRevenue.toStringAsFixed(2)} د.ل',
           icon: Icons.monetization_on,
           color: Colors.teal,
         ),

@@ -28,4 +28,15 @@ void main() {
       expect(message, ErrorMessages.noInternetConnection);
     });
   });
+
+  group('ErrorMessages.fromException', () {
+    test(
+      'maps images validation payloads to invalid input instead of photo upload failure',
+      () {
+        final message = ErrorMessages.fromException('"images" must be an array');
+
+        expect(message, ErrorMessages.invalidInput);
+      },
+    );
+  });
 }

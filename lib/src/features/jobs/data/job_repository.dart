@@ -65,6 +65,97 @@ class JobRepository implements IJobRepository {
     return message == ErrorMessages.unknownError ? fallback : message;
   }
 
+  Map<String, dynamic>? _asMap(dynamic value) {
+    if (value is Map<String, dynamic>) return Map<String, dynamic>.from(value);
+    if (value is Map) {
+      return value.map((key, dynamic val) => MapEntry(key.toString(), val));
+    }
+    return null;
+  }
+
+  Map<String, dynamic> _normalizeJobPayload(Map<String, dynamic> source) {
+    final data = Map<String, dynamic>.from(source);
+    final existingPriceSummary = _asMap(data['priceSummary']) ?? {};
+    final existingPricingContext =
+        _asMap(data['pricingContext']) ??
+        _asMap(existingPriceSummary['pricingContext']) ??
+        {};
+
+    void putIfPresent(Map<String, dynamic> target, String key, dynamic value) {
+      if (value == null) return;
+      if (value is String && value.trim().isEmpty) return;
+      target[key] = value;
+    }
+
+    putIfPresent(
+      existingPricingContext,
+      'pricingMode',
+      data['pricing_mode'] ?? existingPriceSummary['pricingMode'],
+    );
+    putIfPresent(
+      existingPricingContext,
+      'dispatchMode',
+      data['dispatch_mode'] ?? existingPriceSummary['dispatchMode'],
+    );
+    putIfPresent(
+      existingPricingContext,
+      'quoteRequired',
+      data['quote_required'] ?? existingPriceSummary['quoteRequired'],
+    );
+    putIfPresent(
+      existingPricingContext,
+      'catalogSubtotal',
+      data['catalog_subtotal'] ?? existingPriceSummary['catalogSubtotal'],
+    );
+    putIfPresent(
+      existingPricingContext,
+      'catalogItemCount',
+      data['catalog_item_count'] ?? existingPriceSummary['catalogItemCount'],
+    );
+
+    final pricingSummary =
+        _asMap(data['pricing_summary']) ??
+        _asMap(existingPriceSummary['pricing_summary']) ??
+        _asMap(existingPriceSummary['pricingSummary']);
+    if (pricingSummary != null && pricingSummary.isNotEmpty) {
+      existingPricingContext['pricingSummary'] = pricingSummary;
+      existingPriceSummary['pricingSummary'] = pricingSummary;
+    }
+
+    final jobCatalogItems =
+        data['job_catalog_items'] ??
+        existingPricingContext['jobCatalogItems'] ??
+        existingPriceSummary['jobCatalogItems'];
+    if (jobCatalogItems is List && jobCatalogItems.isNotEmpty) {
+      existingPricingContext['jobCatalogItems'] = List<dynamic>.from(
+        jobCatalogItems,
+      );
+      existingPriceSummary['jobCatalogItems'] = List<dynamic>.from(
+        jobCatalogItems,
+      );
+    }
+
+    if (existingPricingContext.isNotEmpty) {
+      existingPriceSummary['pricingContext'] = existingPricingContext;
+    }
+
+    if (existingPriceSummary.isNotEmpty) {
+      data['priceSummary'] = existingPriceSummary;
+    }
+
+    return data;
+  }
+
+  Job _jobFromData(dynamic data) {
+    return Job.fromJson(
+      _normalizeJobPayload(Map<String, dynamic>.from(data as Map)),
+    );
+  }
+
+  List<Job> _jobsFromData(List<dynamic> data) {
+    return data.map(_jobFromData).toList(growable: false);
+  }
+
   /// Fetch nearby jobs using Supabase RPC for scalable server-side filtering
 
   @override
@@ -97,7 +188,7 @@ class JobRepository implements IJobRepository {
         debugPrint('🕵️ No jobs found via RPC. Check Backend/Location/Radius.');
       }
 
-      var jobs = data.map((e) => Job.fromJson(e)).toList();
+      var jobs = _jobsFromData(data);
 
       // LOG ALL JOB SERVICE IDs
       for (var j in jobs) {
@@ -148,28 +239,45 @@ class JobRepository implements IJobRepository {
     required double initialPrice,
     String? description,
     List<String>? images,
+    String? pricingMode,
+    List<Map<String, dynamic>>? catalogItems,
   }) async {
     debugPrint('🚀 [createJob] Starting job creation...');
     debugPrint('📍 [createJob] Location: lat=$lat, lng=$lng');
     debugPrint('🔧 [createJob] ServiceId: $serviceId');
 
     try {
-      final response = await _client.post(
-        '/jobs',
-        data: {
-          'service_id': serviceId,
-          'lat': lat,
-          'lng': lng,
-          'address_text': addressText,
-          'initial_price': initialPrice,
-          'description': description,
-          'images': images,
-        },
-      );
+      final payload = <String, dynamic>{
+        'service_id': serviceId,
+        'lat': lat,
+        'lng': lng,
+        'address_text': addressText,
+        'initial_price': initialPrice,
+      };
+
+      final normalizedPricingMode = pricingMode?.trim();
+      if (normalizedPricingMode != null && normalizedPricingMode.isNotEmpty) {
+        payload['pricing_mode'] = normalizedPricingMode;
+      }
+
+      final normalizedDescription = description?.trim();
+      if (normalizedDescription != null && normalizedDescription.isNotEmpty) {
+        payload['description'] = normalizedDescription;
+      }
+
+      if (images != null && images.isNotEmpty) {
+        payload['images'] = images;
+      }
+
+      if (catalogItems != null && catalogItems.isNotEmpty) {
+        payload['catalog_items'] = catalogItems;
+      }
+
+      final response = await _client.post('/jobs', data: payload);
 
       if (response.statusCode == 201 && response.data['success'] == true) {
         debugPrint('✅ [createJob] Job created successfully');
-        return Job.fromJson(response.data['data']);
+        return _jobFromData(response.data['data']);
       }
 
       // Instead of returning null, throw a detailed exception
@@ -245,7 +353,7 @@ class JobRepository implements IJobRepository {
       if (body == null || body['success'] != true || body['data'] == null) {
         return null;
       }
-      return Job.fromJson(body['data']);
+      return _jobFromData(body['data']);
     } catch (e) {
       if (e is DioException && e.response?.statusCode == 404) {
         return null;
@@ -261,7 +369,7 @@ class JobRepository implements IJobRepository {
             .maybeSingle();
 
         if (data == null) return null;
-        return Job.fromJson(data);
+        return _jobFromData(data);
       } catch (_) {
         return null;
       }
@@ -282,7 +390,7 @@ class JobRepository implements IJobRepository {
 
       if (response.statusCode == 200 && response.data['success'] == true) {
         final List data = response.data['data'];
-        return data.map((e) => Job.fromJson(e)).toList();
+        return _jobsFromData(data.cast<dynamic>());
       }
       return [];
     } catch (e) {
@@ -297,7 +405,7 @@ class JobRepository implements IJobRepository {
               .eq('status', 'pending')
               .isFilter('technician_id', null)
               .order('created_at', ascending: false);
-          return (data as List).map((e) => Job.fromJson(e)).toList();
+          return _jobsFromData((data as List).cast<dynamic>());
         } catch (_) {}
       }
 
@@ -314,7 +422,7 @@ class JobRepository implements IJobRepository {
 
       if (response.statusCode == 200 && response.data['success'] == true) {
         final List data = response.data['data'];
-        return data.map((e) => Job.fromJson(e)).toList();
+        return _jobsFromData(data.cast<dynamic>());
       }
       return [];
     } catch (e) {
@@ -330,7 +438,7 @@ class JobRepository implements IJobRepository {
                 )
                 .or('customer_id.eq.$userId,technician_id.eq.$userId')
                 .order('created_at', ascending: false);
-            return (data as List).map((e) => Job.fromJson(e)).toList();
+            return _jobsFromData((data as List).cast<dynamic>());
           }
         } catch (_) {}
       }
@@ -366,7 +474,7 @@ class JobRepository implements IJobRepository {
       }
 
       if (body['success'] == true) {
-        return Job.fromJson(body['data']);
+        return _jobFromData(body['data']);
       }
 
       // Handle specific error codes from backend
@@ -457,7 +565,7 @@ class JobRepository implements IJobRepository {
         Endpoints.setPrice(jobId),
         data: {'price': price, 'notes': notes, 'paymentMethod': paymentMethod},
       );
-      return Job.fromJson(response.data['data']);
+      return _jobFromData(response.data['data']);
     } catch (e) {
       if (e is DioException) {
         // Handle Dio errors specifically if needed
@@ -475,7 +583,7 @@ class JobRepository implements IJobRepository {
       if (body == null || body['success'] != true) {
         throw Exception(body?['error']?['message'] ?? 'فشل تأكيد السعر');
       }
-      return Job.fromJson(body['data']);
+      return _jobFromData(body['data']);
     } catch (e) {
       if (e is DioException && e.response?.statusCode != 404) {
         // Fallback: Update directly in Supabase
@@ -501,7 +609,7 @@ class JobRepository implements IJobRepository {
                 '*, customer:users!customer_id(*), technician:users!technician_id(*), service:services!service_id(*)',
               )
               .single();
-          return Job.fromJson(data);
+          return _jobFromData(data);
         } catch (dbError) {
           throw Exception('فشل تأكيد السعر: $dbError');
         }
@@ -540,7 +648,7 @@ class JobRepository implements IJobRepository {
         throw Exception(message);
       }
 
-      return Job.fromJson(body['data']);
+      return _jobFromData(body['data']);
     } on DioException catch (e) {
       final apiError = ApiError.fromDioException(e);
       final message = ErrorMessages.fromApiCode(
@@ -585,7 +693,7 @@ class JobRepository implements IJobRepository {
           ),
         );
       }
-      return Job.fromJson(body['data']);
+      return _jobFromData(body['data']);
     } catch (e) {
       if (e is Exception) rethrow;
       throw Exception(_friendlyJobError(e, fallback: 'فشل إرسال طلب الإكمال'));
@@ -618,7 +726,7 @@ class JobRepository implements IJobRepository {
           ),
         );
       }
-      return Job.fromJson(body['data']);
+      return _jobFromData(body['data']);
     } catch (e) {
       if (e is Exception) rethrow;
       throw Exception(_friendlyJobError(e, fallback: 'فشل تأكيد الإكمال'));
@@ -648,7 +756,7 @@ class JobRepository implements IJobRepository {
           ),
         );
       }
-      return Job.fromJson(body['data']);
+      return _jobFromData(body['data']);
     } catch (e) {
       if (e is Exception) rethrow;
       throw Exception(_friendlyJobError(e, fallback: 'فشل إرسال التقييم'));
@@ -731,10 +839,10 @@ class JobRepository implements IJobRepository {
       if (response.statusCode == 200 && body != null && body is Map) {
         final jobData = body['data'] ?? body['job'];
         if (jobData is Map<String, dynamic>) {
-          return Job.fromJson(jobData);
+          return _jobFromData(jobData);
         }
         if (jobData is Map) {
-          return Job.fromJson(Map<String, dynamic>.from(jobData));
+          return _jobFromData(Map<String, dynamic>.from(jobData));
         }
       }
       return null;
@@ -765,12 +873,12 @@ class JobRepository implements IJobRepository {
                 .eq('id', jobId)
                 .single();
 
-            return Job.fromJson(fullData);
+            return _jobFromData(fullData);
           } catch (e) {
             debugPrint('⚠️ Error fetching full job details: $e');
             // Fallback to basic data if fetch fails
             try {
-              return Job.fromJson(data.first);
+              return _jobFromData(data.first);
             } catch (parseError) {
               debugPrint('⚠️ Error parsing fallback job: $parseError');
               rethrow;
@@ -787,7 +895,7 @@ class JobRepository implements IJobRepository {
         .order('created_at', ascending: false)
         .map((data) {
           return data
-              .map((e) => Job.fromJson(e))
+              .map(_jobFromData)
               .where(
                 (j) =>
                     (j.customerId == userId || j.technicianId == userId) &&
@@ -875,7 +983,7 @@ class JobRepository implements IJobRepository {
 
       final body = response.data;
       if (body['success'] == true) {
-        return Job.fromJson(body['data']);
+        return _jobFromData(body['data']);
       }
       final apiError = ApiError.fromData(body, statusCode: response.statusCode);
       final message = ErrorMessages.fromApiCode(
@@ -1389,7 +1497,7 @@ class JobRepository implements IJobRepository {
       }
 
       debugPrint('✅ Payment confirmed for job $jobId');
-      return Job.fromJson(body['data']);
+      return _jobFromData(body['data']);
     } catch (e) {
       if (e is DioException) {
         // Fallback: Update job status directly in Supabase
@@ -1407,7 +1515,7 @@ class JobRepository implements IJobRepository {
               .single();
 
           debugPrint('✅ Payment confirmed via fallback');
-          return Job.fromJson(data);
+          return _jobFromData(data);
         } catch (dbError) {
           debugPrint('❌ Fallback payment confirmation failed: $dbError');
           rethrow;
@@ -1436,7 +1544,7 @@ class JobRepository implements IJobRepository {
         return (job: null, customerPhotos: <String>[]);
       }
 
-      final job = Job.fromJson(data);
+      final job = _jobFromData(data);
 
       // Extract customer photos from job_images
       final List<String> customerPhotos = [];

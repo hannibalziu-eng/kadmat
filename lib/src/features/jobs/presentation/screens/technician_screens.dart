@@ -71,9 +71,12 @@ class _TechnicianAcceptedScreenState
                       TechnicianFlowHero(
                         icon: Icons.check_circle_outline_rounded,
                         eyebrow: 'تم تثبيت الطلب',
-                        title: 'الخطوة التالية: حدّد السعر',
-                        subtitle:
-                            'العميل اختارك لهذه المهمة. راجع الطلب بسرعة ثم أرسل سعرًا واضحًا حتى ينتقل الفلو إلى انتظار الموافقة.',
+                        title: _job!.isCatalogFixed
+                            ? 'الخطوة التالية: ابدأ التوجّه'
+                            : 'الخطوة التالية: حدّد السعر',
+                        subtitle: _job!.isCatalogFixed
+                            ? 'الطلب ثابت السعر، لذلك لا تحتاج إلى إرسال عرض أو تحديد قيمة جديدة. راجع التفاصيل ثم انتقل إلى التوجّه عندما تكون جاهزًا.'
+                            : 'العميل اختارك لهذه المهمة. راجع الطلب بسرعة ثم أرسل سعرًا واضحًا حتى ينتقل الفلو إلى انتظار الموافقة.',
                         bottom: Wrap(
                           spacing: 8.w,
                           runSpacing: 8.h,
@@ -83,20 +86,29 @@ class _TechnicianAcceptedScreenState
                               label:
                                   _job?.service?['name'] ?? 'الخدمة المطلوبة',
                             ),
-                            const TechnicianFlowPill(
-                              icon: Icons.attach_money_outlined,
-                              label: 'المرحلة الحالية: تحديد السعر',
+                            TechnicianFlowPill(
+                              icon: _job!.isCatalogFixed
+                                  ? Icons.sell_outlined
+                                  : Icons.attach_money_outlined,
+                              label: _job!.isCatalogFixed
+                                  ? 'سعر ثابت جاهز'
+                                  : 'المرحلة الحالية: تحديد السعر',
                             ),
                           ],
                         ),
                       ),
                       SizedBox(height: 16.h),
-                      const TechnicianFlowSurface(
+                      TechnicianFlowSurface(
                         child: TechnicianFlowNextStepCard(
-                          icon: Icons.rule_folder_outlined,
-                          title: 'أرسل السعر فقط',
-                          description:
-                              'لا تحتاج إلى بدء التنفيذ الآن. راجع تفاصيل الطلب، ثم افتح شاشة التسعير وأرسل قيمة واحدة واضحة للعميل.',
+                          icon: _job!.isCatalogFixed
+                              ? Icons.navigation_outlined
+                              : Icons.rule_folder_outlined,
+                          title: _job!.isCatalogFixed
+                              ? 'ابدأ التوجّه فقط'
+                              : 'أرسل السعر فقط',
+                          description: _job!.isCatalogFixed
+                              ? 'السعر مثبت مسبقًا لهذا الطلب. لا تبدأ التنفيذ من هنا إلا بعد فتح تفاصيل الطلب أو بدء التوجّه حسب الحالة.'
+                              : 'لا تحتاج إلى بدء التنفيذ الآن. راجع تفاصيل الطلب، ثم افتح شاشة التسعير وأرسل قيمة واحدة واضحة للعميل.',
                         ),
                       ),
                       SizedBox(height: 16.h),
@@ -193,11 +205,23 @@ class _TechnicianAcceptedScreenState
                         width: double.infinity,
                         child: ElevatedButton.icon(
                           onPressed: () => context.go(
-                            AppRoutes.buildTechnicianSetPricePath(widget.jobId),
+                            _job!.isCatalogFixed
+                                ? AppRoutes.buildTechnicianJobDetailPath(
+                                    widget.jobId,
+                                  )
+                                : AppRoutes.buildTechnicianSetPricePath(
+                                    widget.jobId,
+                                  ),
                           ),
-                          icon: const Icon(Icons.attach_money),
+                          icon: Icon(
+                            _job!.isCatalogFixed
+                                ? Icons.visibility_outlined
+                                : Icons.attach_money,
+                          ),
                           label: Text(
-                            'فتح شاشة تحديد السعر',
+                            _job!.isCatalogFixed
+                                ? 'فتح تفاصيل الطلب'
+                                : 'فتح شاشة تحديد السعر',
                             style: TextStyle(
                               fontSize: 18.fz,
                               fontWeight: FontWeight.bold,
@@ -317,15 +341,22 @@ class _TechnicianWaitingScreenState
                     TechnicianFlowHero(
                       icon: Icons.hourglass_top_rounded,
                       eyebrow: 'بانتظار رد العميل',
-                      title: 'لا تحتاج إلى إجراء الآن',
-                      subtitle:
-                          'السعر أُرسل بالفعل. انتظر موافقة العميل أو تعديلك للسعر فقط إذا احتجت تصحيحًا قبل الرد.',
+                      title: job.isCatalogFixed
+                          ? 'السعر ثابت، لا يوجد انتظار سعر'
+                          : 'لا تحتاج إلى إجراء الآن',
+                      subtitle: job.isCatalogFixed
+                          ? 'هذا الطلب لا يمر بمرحلة موافقة سعر. استخدم هذه الشاشة كمراجعة سريعة فقط، ثم افتح تفاصيل الطلب إذا احتجت متابعة التنفيذ.'
+                          : 'السعر أُرسل بالفعل. انتظر موافقة العميل أو تعديلك للسعر فقط إذا احتجت تصحيحًا قبل الرد.',
                       bottom: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const TechnicianFlowPill(
-                            icon: Icons.receipt_long_outlined,
-                            label: 'السعر عند المراجعة الآن',
+                          TechnicianFlowPill(
+                            icon: job.isCatalogFixed
+                                ? Icons.sell_outlined
+                                : Icons.receipt_long_outlined,
+                            label: job.isCatalogFixed
+                                ? 'سعر ثابت جاهز'
+                                : 'السعر عند المراجعة الآن',
                           ),
                           SizedBox(width: 8.w),
                           _buildAnimatedDots(),
@@ -333,12 +364,17 @@ class _TechnicianWaitingScreenState
                       ),
                     ),
                     SizedBox(height: 16.h),
-                    const TechnicianFlowSurface(
+                    TechnicianFlowSurface(
                       child: TechnicianFlowNextStepCard(
-                        icon: Icons.pause_circle_outline_rounded,
-                        title: 'انتظر موافقة العميل فقط',
-                        description:
-                            'لا تبدأ التنفيذ بعد. إذا احتجت تعديل السعر استخدم زر التعديل، وإلا اترك الطلب في هذه المرحلة حتى يصل رد العميل.',
+                        icon: job.isCatalogFixed
+                            ? Icons.visibility_outlined
+                            : Icons.pause_circle_outline_rounded,
+                        title: job.isCatalogFixed
+                            ? 'راجع الطلب فقط'
+                            : 'انتظر موافقة العميل فقط',
+                        description: job.isCatalogFixed
+                            ? 'الطلب ثابت السعر ولا يحتاج موافقة تسعير. افتح التفاصيل لمتابعة الحالة الفعلية بدل الاعتماد على شاشة الانتظار هذه.'
+                            : 'لا تبدأ التنفيذ بعد. إذا احتجت تعديل السعر استخدم زر التعديل، وإلا اترك الطلب في هذه المرحلة حتى يصل رد العميل.',
                       ),
                     ),
                     SizedBox(height: 16.h),
@@ -362,8 +398,8 @@ class _TechnicianWaitingScreenState
                     SizedBox(height: 16.h),
                     TechnicianFlowSurface(
                       child: PriceCard(
-                        proposedPrice: job.technicianPrice,
-                        showBreakdown: true,
+                        proposedPrice: job.effectiveRuntimePrice,
+                        showBreakdown: !job.isCatalogFixed,
                       ),
                     ),
                     if (job.customer != null) ...[
@@ -381,10 +417,22 @@ class _TechnicianWaitingScreenState
                     SizedBox(height: 24.h),
                     OutlinedButton.icon(
                       onPressed: () => context.go(
-                        AppRoutes.buildTechnicianSetPricePath(widget.jobId),
+                        job.isCatalogFixed
+                            ? AppRoutes.buildTechnicianJobDetailPath(
+                                widget.jobId,
+                              )
+                            : AppRoutes.buildTechnicianSetPricePath(
+                                widget.jobId,
+                              ),
                       ),
-                      icon: const Icon(Icons.edit),
-                      label: const Text('تعديل السعر'),
+                      icon: Icon(
+                        job.isCatalogFixed
+                            ? Icons.visibility_outlined
+                            : Icons.edit,
+                      ),
+                      label: Text(
+                        job.isCatalogFixed ? 'فتح التفاصيل' : 'تعديل السعر',
+                      ),
                     ),
                   ],
                 ),
@@ -1347,11 +1395,11 @@ class _TechnicianCompletedScreenState
                           children: [
                             TechnicianFlowPill(
                               icon: Icons.payments_outlined,
-                              label: '${earnings.toStringAsFixed(0)} ر.س أرباح',
+                              label: '${earnings.toStringAsFixed(0)} د.ل أرباح',
                             ),
                             TechnicianFlowPill(
                               icon: Icons.receipt_long_outlined,
-                              label: '${price.toStringAsFixed(0)} ر.س إجمالي',
+                              label: '${price.toStringAsFixed(0)} د.ل إجمالي',
                             ),
                           ],
                         ),
@@ -1388,7 +1436,7 @@ class _TechnicianCompletedScreenState
                               ),
                             ),
                             Text(
-                              'ريال سعودي',
+                              'دينار ليبي',
                               style: TextStyle(
                                 fontSize: 16.fz,
                                 color: Colors.green,
@@ -1456,7 +1504,7 @@ class _TechnicianCompletedScreenState
           ),
         ),
         Text(
-          '${isNegative ? "-" : ""}${amount.toStringAsFixed(0)} ر.س',
+          '${isNegative ? "-" : ""}${amount.toStringAsFixed(0)} د.ل',
           style: TextStyle(
             fontSize: 14.fz,
             color: isNegative ? Colors.red : KadmatColors.lightTextPrimary,

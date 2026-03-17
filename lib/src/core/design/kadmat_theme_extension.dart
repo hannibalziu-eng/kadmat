@@ -33,7 +33,7 @@ class KadmatSemanticColors extends ThemeExtension<KadmatSemanticColors> {
         warning: KadmatColors.stateWarning,
         error: KadmatColors.stateError,
         info: KadmatColors.stateInfo,
-        softOverlay: const Color(0xB3F6F8F8),
+        softOverlay: const Color(0xB3F9FAFB),
       );
 
   @override

@@ -87,7 +87,7 @@ class CustomerPriceConfirmationDialog extends StatelessWidget {
                 ),
                 SizedBox(height: 24.h),
                 Text(
-                  '$price ر.س',
+                  '$price د.ل',
                   style: TextStyle(
                     fontSize: 36.fz,
                     fontWeight: FontWeight.bold,

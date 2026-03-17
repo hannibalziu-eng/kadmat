@@ -7,6 +7,7 @@ import '../../../core/api/endpoints.dart';
 import '../../../core/api/response_utils.dart';
 import '../../../core/utils/error_messages.dart';
 import '../domain/service.dart';
+import '../domain/service_catalog_item.dart';
 
 part 'service_repository.g.dart';
 
@@ -40,15 +41,22 @@ class ServiceRepository {
     try {
       final response = await _client.get(Endpoints.services);
       final List data = responseListField(response.data, 'services');
-      return data.map((e) => Service.fromJson(e)).toList();
+      return data
+          .whereType<Map>()
+          .map((e) => Service.fromJson(
+              e.map((key, value) => MapEntry(key.toString(), value))))
+          .toList();
     } catch (e) {
-      // Fallback to Supabase if API fails (e.g. 429 Rate Limit)
       try {
         final data = await Supabase.instance.client
             .from('services')
             .select()
             .order('name');
-        return (data as List).map((e) => Service.fromJson(e)).toList();
+        return (data as List)
+            .whereType<Map>()
+            .map((e) => Service.fromJson(
+                e.map((key, value) => MapEntry(key.toString(), value))))
+            .toList();
       } catch (_) {
         throw Exception(_friendlyServiceError(e));
       }
@@ -64,7 +72,51 @@ class ServiceRepository {
       }
       return Service.fromJson(service);
     } catch (e) {
-      throw Exception('فشل جلب بيانات الخدمة');
+      try {
+        final data = await Supabase.instance.client
+            .from('services')
+            .select()
+            .eq('id', id)
+            .maybeSingle();
+        if (data == null) {
+          throw Exception('بيانات الخدمة غير متاحة');
+        }
+        return Service.fromJson(
+          data.map((key, value) => MapEntry(key.toString(), value)),
+        );
+      } catch (_) {
+        throw Exception('فشل جلب بيانات الخدمة');
+      }
+    }
+  }
+
+  Future<List<ServiceCatalogItem>> getServiceCatalogItems(String serviceId) async {
+    try {
+      final response = await _client.get(Endpoints.serviceCatalogItems(serviceId));
+      final rawItems = responseListField(response.data, 'items');
+      return rawItems
+          .whereType<Map>()
+          .map((item) => ServiceCatalogItem.fromJson(
+              item.map((key, value) => MapEntry(key.toString(), value))))
+          .toList();
+    } catch (_) {
+      try {
+        final fallback = await Supabase.instance.client
+            .from('service_catalog_items')
+            .select()
+            .eq('service_id', serviceId)
+            .eq('is_active', true)
+            .order('sort_order', ascending: true)
+            .order('name', ascending: true);
+
+        return (fallback as List)
+            .whereType<Map>()
+            .map((item) => ServiceCatalogItem.fromJson(
+                item.map((key, value) => MapEntry(key.toString(), value))))
+            .toList();
+      } catch (_) {
+        return const [];
+      }
     }
   }
 }

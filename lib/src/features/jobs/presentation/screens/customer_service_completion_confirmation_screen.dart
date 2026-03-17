@@ -173,7 +173,7 @@ class _CustomerServiceCompletionConfirmationScreenState
                       _buildSummaryRow(
                         Icons.payments_outlined,
                         'السعر المتفق عليه',
-                        '${price.toStringAsFixed(2)} ريال',
+                        '${price.toStringAsFixed(2)} د.ل',
                         isBold: true,
                       ),
                     ],
@@ -334,7 +334,7 @@ class _CustomerServiceCompletionConfirmationScreenState
               _buildHeroPill(Icons.work_outline_rounded, serviceName),
               _buildHeroPill(
                 Icons.payments_outlined,
-                '${price.toStringAsFixed(0)} ر.س',
+                '${price.toStringAsFixed(0)} د.ل',
               ),
             ],
           ),

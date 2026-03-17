@@ -316,6 +316,7 @@ describe('JobService critical flow', () => {
       customer_id: 'customer-1',
       technician_id: null,
       status: 'pending',
+      pricing_mode: 'technician_quote',
       metadata: {},
       final_price: null,
       technician_price: null,
@@ -512,6 +513,36 @@ describe('JobService critical flow', () => {
     });
   });
 
+  it('notifies the customer when a fixed-price job is directly accepted', async () => {
+    mockJob = {
+      ...mockJob,
+      status: 'pending',
+      pricing_mode: 'catalog_fixed',
+      quote_required: false,
+    };
+
+    const accepted = await jobService.accept('job-1', 'tech-1');
+
+    expect(accepted.status).toBe('accepted');
+    expect(accepted.technician_id).toBe('tech-1');
+    expect(notifications).toContainEqual(
+      expect.objectContaining({
+        user_id: 'customer-1',
+        type: 'job_accepted',
+      }),
+    );
+    expect(fcmMocks.sendPushNotification).toHaveBeenCalledWith(
+      'customer-1',
+      expect.objectContaining({
+        data: expect.objectContaining({
+          type: 'job_accepted',
+          job_id: 'job-1',
+          pricing_mode: 'catalog_fixed',
+        }),
+      }),
+    );
+  });
+
   it('rejects taking new work when technician wallet has debt', async () => {
     walletsByUserId['tech-1'] = {
       ...walletsByUserId['tech-1'],
@@ -546,6 +577,89 @@ describe('JobService critical flow', () => {
 
     expect(notifications.some((n) => n.type == 'new_offer')).toBe(true);
     expect(notifications.some((n) => n.type == 'offer_accepted')).toBe(true);
+  });
+
+  it('rejects submit-offer for catalog_fixed jobs', async () => {
+    mockJob = {
+      ...mockJob,
+      pricing_mode: 'catalog_fixed',
+    };
+
+    await expect(
+      jobService.submitOffer('job-1', 'tech-2', 90),
+    ).rejects.toMatchObject({
+      code: 'INVALID_STATUS_TRANSITION',
+      pricingMode: 'catalog_fixed',
+      currentStatus: 'pending',
+    });
+  });
+
+  it('rejects accept-offer for catalog_fixed jobs', async () => {
+    mockJob = {
+      ...mockJob,
+      pricing_mode: 'catalog_fixed',
+    };
+
+    await expect(
+      jobService.acceptOffer('job-1', 'customer-1', 'offer-1'),
+    ).rejects.toMatchObject({
+      code: 'INVALID_STATUS_TRANSITION',
+      pricingMode: 'catalog_fixed',
+      currentStatus: 'pending',
+    });
+  });
+
+  it('rejects set-price for catalog_fixed jobs', async () => {
+    mockJob = {
+      ...mockJob,
+      status: 'accepted',
+      technician_id: 'tech-1',
+      pricing_mode: 'catalog_fixed',
+    };
+
+    await expect(
+      jobService.setPrice('job-1', 'tech-1', 120, 'fixed service', 'cash'),
+    ).rejects.toMatchObject({
+      code: 'INVALID_STATUS_TRANSITION',
+      pricingMode: 'catalog_fixed',
+      currentStatus: 'accepted',
+    });
+  });
+
+  it('rejects confirm-price for catalog_fixed jobs', async () => {
+    mockJob = {
+      ...mockJob,
+      status: 'accepted',
+      technician_id: 'tech-1',
+      pricing_mode: 'catalog_fixed',
+    };
+
+    await expect(
+      jobService.confirmPrice('job-1', 'customer-1'),
+    ).rejects.toMatchObject({
+      code: 'INVALID_STATUS_TRANSITION',
+      pricingMode: 'catalog_fixed',
+      currentStatus: 'accepted',
+    });
+  });
+
+  it('allows catalog_fixed jobs to move from accepted to on_the_way', async () => {
+    mockJob = {
+      ...mockJob,
+      status: 'accepted',
+      technician_id: 'tech-1',
+      pricing_mode: 'catalog_fixed',
+    };
+
+    const updated = await jobService.updateTechnicianProgress(
+      'job-1',
+      'tech-1',
+      'on_the_way',
+    );
+
+    expect(updated.status).toBe('on_the_way');
+    expect(notifications.some((n) => n.type === 'technician_on_the_way')).toBe(true);
+    expect(fcmMocks.sendPushNotification).toHaveBeenCalled();
   });
 
   it('falls back to legacy accept flow when atomic RPC returns ACCEPT_FAILED', async () => {
@@ -647,6 +761,44 @@ describe('JobService critical flow', () => {
     expect(cancelled.metadata.cancellation_reason).toBe('customer_cancelled');
     expect(cancelled.metadata.cancelled_by).toBe('customer-1');
     expect(cancelled.metadata.existing).toBe(true);
+  });
+
+  it('reopens a fixed-price accepted job when the technician releases it before travel', async () => {
+    mockJob = {
+      ...mockJob,
+      status: 'accepted',
+      pricing_mode: 'catalog_fixed',
+      technician_id: 'tech-1',
+      accepted_at: '2026-03-12T08:00:00.000Z',
+    };
+
+    const reopened = await jobService.cancel(
+      'job-1',
+      'tech-1',
+      'cannot_reach_customer',
+    );
+
+    expect(reopened.status).toBe('pending');
+    expect(reopened.technician_id).toBeNull();
+    expect(reopened.accepted_at).toBeNull();
+    expect(reopened.metadata.release_reason).toBe('cannot_reach_customer');
+    expect(reopened.metadata.released_by).toBe('tech-1');
+    expect(notifications).toContainEqual(
+      expect.objectContaining({
+        user_id: 'customer-1',
+        type: 'technician_timeout',
+      }),
+    );
+    expect(fcmMocks.sendPushNotification).toHaveBeenCalledWith(
+      'customer-1',
+      expect.objectContaining({
+        data: expect.objectContaining({
+          type: 'technician_timeout',
+          job_id: 'job-1',
+          pricing_mode: 'catalog_fixed',
+        }),
+      }),
+    );
   });
 
   it('rejects cancel after technician arrived', async () => {
